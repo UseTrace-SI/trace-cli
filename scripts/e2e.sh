@@ -52,6 +52,7 @@ for step in 1 2 3 4 5; do
   done
 done
 "$binary" --repo "$work/nested" --json status | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["daemon_up"] and s["latest_step"] >= 5, s'
+"$binary" --repo "$work" --json show 2 | python3 -c 'import json,re,sys; s=json.load(sys.stdin); assert re.fullmatch(r"turn 2 ⟨redacted:github-token:[0-9a-f]{8}⟩", s["prompt"]), s["prompt"]'
 "$binary" --repo "$work" --json show 5 | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["step"] == 5 and "file.txt" in s["files"] and "Finished turn 5" in s["reasoning"], s'
 "$binary" --repo "$work" --json why file.txt:1 | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s[0]["step"] == 5, s'
 "$binary" --repo "$work" export --format agent-trace --out "$work/.trace/e2e-agent-trace.jsonl" >/dev/null

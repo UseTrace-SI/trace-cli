@@ -32,3 +32,26 @@ func TestNegativesAndPII(t *testing.T) {
 		t.Fatalf("email leaked: %q", got)
 	}
 }
+
+func TestRedactionMarkersAreStable(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, secret string
+	}{
+		{"known token", "turn ghp_abcdefghijklmnopqrstuvwxyz012345", "ghp_abcdefghijklmnopqrstuvwxyz012345"},
+		{"environment value", "API_TOKEN=ordinarysecret", "ordinarysecret"},
+		{"token as environment value", "API_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz012345", "ghp_abcdefghijklmnopqrstuvwxyz012345"},
+		{"value after existing marker", marker("github-token", "example") + " API_TOKEN=ordinarysecret", "ordinarysecret"},
+		{"marker inside environment value", "API_TOKEN=" + marker("github-token", "example") + "ordinarysecret", "ordinarysecret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			redactor := Redactor{}
+			once := redactor.Text(tc.input)
+			if strings.Contains(once, tc.secret) || !strings.Contains(once, "⟨redacted:") {
+				t.Fatalf("secret was not redacted: %q", once)
+			}
+			if twice := redactor.Text(once); twice != once {
+				t.Fatalf("redaction changed on a second pass: %q -> %q", once, twice)
+			}
+		})
+	}
+}
