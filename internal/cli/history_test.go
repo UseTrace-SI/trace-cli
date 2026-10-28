@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,61 @@ func TestUnifiedDiffKeepsUnchangedLines(t *testing.T) {
 	}
 	if strings.Contains(got, "-shared") || strings.Contains(got, "+shared") {
 		t.Fatalf("unchanged line replaced: %s", got)
+	}
+}
+
+func TestWhyReportsUncertainLargeDiff(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	oldText := strings.Repeat("}\n", 3000)
+	updated := make([]string, 3000)
+	for i := range updated {
+		if i%2 == 0 {
+			updated[i] = fmt.Sprintf("new-%d", i)
+		} else {
+			updated[i] = "}"
+		}
+	}
+	newText := strings.Join(updated, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte(newText), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, ".trace")
+	db, err := store.Open(filepath.Join(dir, "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := blob.Open(filepath.Join(dir, "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := bs.PutBytes([]byte(oldText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := bs.PutBytes([]byte(newText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?)",
+		"large-edit", "file.txt", "modify", before, after, "watcher", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	jsonOutput := false
+	cmd := whyCommand(&root, &jsonOutput)
+	cmd.SetArgs([]string{"file.txt:1500"})
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "origin uncertain") {
+		t.Fatalf("expected uncertainty, got %q", output.String())
 	}
 }
 

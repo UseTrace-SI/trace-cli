@@ -27,6 +27,8 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 
 Agent names are `claude-code`, `codex`, `cursor`, and `agy`. Re-run `trace init` to enable another adapter in the same repository.
 
+`trace why` follows unchanged lines across inserts and deletes. If a very large edit leaves a line's origin ambiguous, it reports `origin uncertain after a large edit` instead of guessing at a step.
+
 ## Safe restore workflow
 
 ```sh

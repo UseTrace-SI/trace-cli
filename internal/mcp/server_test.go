@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestReadOnlyTools(t *testing.T) {
@@ -91,5 +91,63 @@ func TestReadOnlyTools(t *testing.T) {
 				t.Fatal("secret leaked")
 			}
 		})
+	}
+}
+
+func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	var hashes []string
+	for _, text := range []string{"a\nB\n", "A\nB\n", "X\nA\nB\n"} {
+		hash, err := e.Blobs.PutBytes([]byte(text))
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashes = append(hashes, string(hash))
+	}
+	for _, op := range []struct {
+		id, before, after string
+		at                int
+	}{
+		{"prior", hashes[0], hashes[1], 1},
+		{"later-1", hashes[1], hashes[2], 2},
+		{"later-2", hashes[1], hashes[2], 2},
+	} {
+		if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?)",
+			op.id, "file.txt", "modify", op.before, op.after, "watcher", op.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := New(e).Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+	defer serverSession.Close()
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "why_line", Arguments: map[string]any{"path": "file.txt", "line": 3}})
+	if err != nil || result.IsError {
+		t.Fatalf("why_line failed: %v, %v", err, result)
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "present at baseline") {
+		t.Fatalf("unchanged line blamed on an edit: %s", b)
 	}
 }

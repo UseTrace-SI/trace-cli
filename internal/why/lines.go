@@ -10,7 +10,8 @@ func split(s string) []string {
 }
 
 // MapLine maps a line in the newer text to its matching line in the older text.
-// A zero old line means the newer line was inserted or replaced.
+// A zero old line means the newer line was inserted or replaced. A negative
+// old line means a large, ambiguous diff could not be mapped reliably.
 func MapLine(oldText, newText string, line int) (int, bool) {
 	a, b := split(oldText), split(newText)
 	if line < 1 || line > len(b) {
@@ -35,8 +36,11 @@ func MapLine(oldText, newText string, line int) (int, bool) {
 	line -= prefix
 	n, m = len(a), len(b)
 	if n > 2000 || m > 2000 {
-		if line <= n && a[line-1] == b[line-1] {
-			return prefix + line, false
+		if oldLine, touched, exact := myersMapLine(a, b, line); exact {
+			if touched {
+				return 0, true
+			}
+			return prefix + oldLine, false
 		}
 		target := b[line-1]
 		oldAt, oldCount, newCount := -1, 0, 0
@@ -53,7 +57,10 @@ func MapLine(oldText, newText string, line int) (int, bool) {
 		if oldCount == 1 && newCount == 1 {
 			return prefix + oldAt + 1, false
 		}
-		return 0, true
+		if oldCount == 0 {
+			return 0, true
+		}
+		return -1, false
 	}
 	dp := make([][]int, n+1)
 	for i := range dp {
@@ -89,4 +96,74 @@ func MapLine(oldText, newText string, line int) (int, bool) {
 		}
 	}
 	return 0, true
+}
+
+// myersMapLine resolves large diffs with a bounded edit distance. Most code
+// changes have few edits even when the surrounding file is long.
+func myersMapLine(a, b []string, line int) (oldLine int, touched, exact bool) {
+	const maxEdits = 512
+	n, m := len(a), len(b)
+	v := map[int]int{1: 0}
+	trace := make([]map[int]int, 0, min(n+m, maxEdits)+1)
+	for d := 0; d <= min(n+m, maxEdits); d++ {
+		next := make(map[int]int, 2*d+1)
+		for k := -d; k <= d; k += 2 {
+			var x int
+			if k == -d || (k != d && v[k-1] < v[k+1]) {
+				x = v[k+1]
+			} else {
+				x = v[k-1] + 1
+			}
+			y := x - k
+			for x < n && y < m && a[x] == b[y] {
+				x++
+				y++
+			}
+			next[k] = x
+			if x == n && y == m {
+				trace = append(trace, next)
+				return backtrackLine(trace, n, m, line)
+			}
+		}
+		trace = append(trace, next)
+		v = next
+	}
+	return 0, false, false
+}
+
+func backtrackLine(trace []map[int]int, n, m, line int) (oldLine int, touched, exact bool) {
+	x, y := n, m
+	for d := len(trace) - 1; d > 0; d-- {
+		previous := trace[d-1]
+		k := x - y
+		var prevK int
+		if k == -d || (k != d && previous[k-1] < previous[k+1]) {
+			prevK = k + 1
+		} else {
+			prevK = k - 1
+		}
+		prevX := previous[prevK]
+		prevY := prevX - prevK
+		snakeX, snakeY := prevX, prevY
+		if prevK == k+1 {
+			snakeY++
+		} else {
+			snakeX++
+		}
+		for x > snakeX && y > snakeY {
+			if y == line {
+				return x, false, true
+			}
+			x--
+			y--
+		}
+		if prevK == k+1 && prevY+1 == line {
+			return 0, true, true
+		}
+		x, y = prevX, prevY
+	}
+	if line <= y {
+		return line, false, true
+	}
+	return 0, true, true
 }

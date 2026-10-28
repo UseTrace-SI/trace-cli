@@ -86,6 +86,7 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		var results []whyResult
+		uncertain := false
 		textCache := map[string]string{"": ""}
 		loadText := func(hash string) (string, error) {
 			if value, ok := textCache[hash]; ok {
@@ -129,6 +130,10 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return err
 			}
 			oldLine, touched := why.MapLine(oldText, newText, line)
+			if oldLine < 0 {
+				uncertain = true
+				break
+			}
 			if touched {
 				symbol := ""
 				for _, candidate := range group {
@@ -164,7 +169,9 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				break
 			}
 		}
-		if len(results) == 0 {
+		if uncertain {
+			results = append(results, whyResult{Agent: "unknown", Message: "origin uncertain after a large edit"})
+		} else if len(results) == 0 {
 			results = append(results, whyResult{Agent: "baseline", Message: "present at baseline"})
 		}
 		if *jsonOutput {

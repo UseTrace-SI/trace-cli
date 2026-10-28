@@ -90,4 +90,82 @@ func TestMapLineLargeFileWithLocalEdit(t *testing.T) {
 	if got != 1500 || touched {
 		t.Errorf("line between distant edits: got %d,%t want 1500,false", got, touched)
 	}
+	withRepeats := slices.Clone(old)
+	for i := 0; i < len(withRepeats); i += 10 {
+		withRepeats[i] = "}"
+	}
+	repeatedEdits := slices.Insert(slices.Clone(withRepeats), 100, "first-insertion")
+	repeatedEdits = slices.Insert(repeatedEdits, 2900, "second-insertion")
+	got, touched = MapLine(strings.Join(withRepeats, "\n")+"\n", strings.Join(repeatedEdits, "\n")+"\n", 1502)
+	if got != 1501 || touched {
+		t.Errorf("repeated line between distant edits: got %d,%t want 1501,false", got, touched)
+	}
+}
+
+func TestMapLineLargeRandomEdits(t *testing.T) {
+	rng := rand.New(rand.NewSource(73))
+	old := make([]string, 3000)
+	for i := range old {
+		old[i] = fmt.Sprintf("original-%04d", i)
+	}
+	before := strings.Join(old, "\n") + "\n"
+	for sequence := 0; sequence < 15; sequence++ {
+		updated := slices.Clone(old)
+		origin := make([]int, len(old))
+		for i := range origin {
+			origin[i] = i + 1
+		}
+		for edit := 0; edit < 20; edit++ {
+			at := rng.Intn(len(updated))
+			switch rng.Intn(3) {
+			case 0:
+				updated = slices.Insert(updated, at, fmt.Sprintf("new-%d-%d", sequence, edit))
+				origin = slices.Insert(origin, at, 0)
+			case 1:
+				updated = slices.Delete(updated, at, at+1)
+				origin = slices.Delete(origin, at, at+1)
+			case 2:
+				updated[at] = fmt.Sprintf("new-%d-%d", sequence, edit)
+				origin[at] = 0
+			}
+		}
+		after := strings.Join(updated, "\n") + "\n"
+		check := map[int]bool{}
+		for line := 1; line <= len(updated); line += 223 {
+			check[line] = true
+		}
+		for i, original := range origin {
+			if original == 0 {
+				for line := max(1, i); line <= min(len(updated), i+2); line++ {
+					check[line] = true
+				}
+			}
+		}
+		for line := range check {
+			got, touched := MapLine(before, after, line)
+			if got != origin[line-1] || touched != (origin[line-1] == 0) {
+				t.Fatalf("sequence %d line %d: got %d,%t want %d,%t", sequence, line, got, touched,
+					origin[line-1], origin[line-1] == 0)
+			}
+		}
+	}
+}
+
+func TestMapLineReportsAmbiguousLargeDiff(t *testing.T) {
+	old := strings.Repeat("}\n", 3000)
+	updated := make([]string, 3000)
+	for i := range updated {
+		if i%2 == 0 {
+			updated[i] = fmt.Sprintf("new-%d", i)
+		} else {
+			updated[i] = "}"
+		}
+	}
+	newText := strings.Join(updated, "\n") + "\n"
+	if oldLine, touched := MapLine(old, newText, 1500); oldLine != -1 || touched {
+		t.Fatalf("ambiguous repeated line = %d,%t; want -1,false", oldLine, touched)
+	}
+	if oldLine, touched := MapLine(old, newText, 1499); oldLine != 0 || !touched {
+		t.Fatalf("new line = %d,%t; want 0,true", oldLine, touched)
+	}
 }

@@ -8,12 +8,12 @@ import (
 	"math"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
 	"github.com/UseTrace-SI/trace-cli/internal/why"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Step struct {
@@ -183,7 +183,12 @@ func New(e *engine.Engine) *mcp.Server {
 			return nil, WhyOutput{}, err
 		}
 		line := in.Line
-		for _, ch := range changes {
+		for i := 0; i < len(changes); {
+			ch := changes[i]
+			i++
+			for i < len(changes) && changes[i].before == ch.before && changes[i].after == ch.after && changes[i].tid == ch.tid {
+				i++
+			}
 			before, after, tid := ch.before, ch.after, ch.tid
 			oldText, err := readBlob(e, blob.Hash(before))
 			if err != nil {
@@ -194,6 +199,9 @@ func New(e *engine.Engine) *mcp.Server {
 				return nil, WhyOutput{}, err
 			}
 			oldLine, touched := why.MapLine(oldText, newText, line)
+			if oldLine < 0 {
+				return nil, WhyOutput{Agent: "unknown", Message: "origin uncertain after a large edit"}, nil
+			}
 			if touched {
 				if tid == "" {
 					return nil, WhyOutput{Agent: "human", Message: "edited by you"}, nil
