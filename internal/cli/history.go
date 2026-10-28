@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
+	"github.com/spf13/cobra"
 )
 
 type logRow struct {
@@ -89,7 +89,7 @@ func blobText(bs *blob.Store, h blob.Hash) (string, error) {
 		return "", err
 	}
 	defer r.Close()
-	b, err := io.ReadAll(io.LimitReader(r, 1<<20))
+	b, err := io.ReadAll(io.LimitReader(r, (1<<20)+1))
 	if err != nil {
 		return "", err
 	}

@@ -150,4 +150,23 @@ func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {
 	if !strings.Contains(string(b), "present at baseline") {
 		t.Fatalf("unchanged line blamed on an edit: %s", b)
 	}
+	largeHash, err := e.Blobs.PutBytes([]byte(strings.Repeat("line\n", 210000)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?)",
+		"large-blob", "file.txt", "modify", hashes[2], largeHash, "watcher", 3); err != nil {
+		t.Fatal(err)
+	}
+	result, err = clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "why_line", Arguments: map[string]any{"path": "file.txt", "line": 3}})
+	if err != nil || result.IsError {
+		t.Fatalf("why_line with large blob failed: %v, %v", err, result)
+	}
+	b, err = json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "origin uncertain") {
+		t.Fatalf("large blob attributed to an edit: %s", b)
+	}
 }

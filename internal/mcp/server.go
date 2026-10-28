@@ -190,13 +190,16 @@ func New(e *engine.Engine) *mcp.Server {
 				i++
 			}
 			before, after, tid := ch.before, ch.after, ch.tid
-			oldText, err := readBlob(e, blob.Hash(before))
+			oldText, oldLarge, err := readBlob(e, blob.Hash(before))
 			if err != nil {
 				return nil, WhyOutput{}, err
 			}
-			newText, err := readBlob(e, blob.Hash(after))
+			newText, newLarge, err := readBlob(e, blob.Hash(after))
 			if err != nil {
 				return nil, WhyOutput{}, err
+			}
+			if oldLarge || newLarge {
+				return nil, WhyOutput{Agent: "unknown", Message: "origin uncertain after a large edit"}, nil
 			}
 			oldLine, touched := why.MapLine(oldText, newText, line)
 			if oldLine < 0 {
@@ -243,18 +246,21 @@ func New(e *engine.Engine) *mcp.Server {
 	return s
 }
 
-func readBlob(e *engine.Engine, h blob.Hash) (string, error) {
+func readBlob(e *engine.Engine, h blob.Hash) (string, bool, error) {
 	if h == "" {
-		return "", nil
+		return "", false, nil
 	}
 	r, err := e.Blobs.Get(h)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer r.Close()
-	b, err := io.ReadAll(io.LimitReader(r, 1<<20))
+	b, err := io.ReadAll(io.LimitReader(r, (1<<20)+1))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	return strings.ToValidUTF8(string(b), ""), nil
+	if len(b) > 1<<20 {
+		return "", true, nil
+	}
+	return strings.ToValidUTF8(string(b), ""), false, nil
 }

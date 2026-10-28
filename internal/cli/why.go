@@ -129,6 +129,10 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if len(oldText) > 1<<20 || len(newText) > 1<<20 {
+				uncertain = true
+				break
+			}
 			oldLine, touched := why.MapLine(oldText, newText, line)
 			if oldLine < 0 {
 				uncertain = true

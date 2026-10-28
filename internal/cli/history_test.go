@@ -82,6 +82,52 @@ func TestWhyReportsUncertainLargeDiff(t *testing.T) {
 	}
 }
 
+func TestWhyReportsTruncatedBlobWithoutGuessing(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	large := strings.Repeat("line\n", 210000)
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte(large), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, ".trace")
+	db, err := store.Open(filepath.Join(dir, "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := blob.Open(filepath.Join(dir, "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := bs.PutBytes([]byte("line\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := bs.PutBytes([]byte(large))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?)",
+		"large-blob", "file.txt", "modify", before, after, "watcher", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	jsonOutput := false
+	cmd := whyCommand(&root, &jsonOutput)
+	cmd.SetArgs([]string{"file.txt:209999"})
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "origin uncertain") {
+		t.Fatalf("expected uncertainty, got %q", output.String())
+	}
+}
+
 func BenchmarkLog5000Steps(b *testing.B) {
 	root := benchmarkRepo(b)
 	dir := filepath.Join(root, ".trace")
