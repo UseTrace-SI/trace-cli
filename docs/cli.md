@@ -1,11 +1,13 @@
 # CLI reference
 
-All commands accept `--repo PATH` and `--json` where they produce user-facing output.
+Run `trace --help` or `trace <command> --help` for the installed version's full flag list. The global `--repo PATH` flag selects a repository; `--json` requests machine-readable output where a command supports it. Step arguments are the numbers shown by `trace log`.
+
+## Commands
 
 | Command | Purpose |
-|---|---|
+| --- | --- |
 | `trace version` | Print build version, commit, and date |
-| `trace init [--agent claude-code\|codex\|cursor\|agy]` | Set up local history and an agent adapter |
+| `trace init [--agent NAME]` | Set up local history and an agent adapter |
 | `trace uninstall [--purge]` | Remove integrations, optionally deleting history |
 | `trace log` | List keyframes |
 | `trace show STEP` | Show a turn and file diff |
@@ -23,4 +25,21 @@ All commands accept `--repo PATH` and `--json` where they produce user-facing ou
 | `trace daemon stop` | Stop the local daemon |
 | `trace mcp` | Serve read-only MCP tools over stdio |
 
-The `--json` output uses the fields shown by each command and is intended for scripts. Step numbers are numeric and remain stable even when retention removes an older step.
+Agent names are `claude-code`, `codex`, `cursor`, and `agy`. Re-run `trace init` to enable another adapter in the same repository.
+
+## Safe restore workflow
+
+```sh
+trace log
+trace show 2
+trace rewind 2 --dry-run
+trace rewind 2
+```
+
+A real rewind saves a safety keyframe first and prints the command to undo it. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
+
+## Automation
+
+`--json` output is intended for scripts. Step numbers remain stable even when retention removes an older step. The global flag does not change the MCP stream or internal agent hooks.
+
+Sync is off until login and an explicit sync command. See the [sync guide](sync.md) for passphrases, access control, and recovery.

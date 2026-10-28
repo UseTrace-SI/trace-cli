@@ -1,5 +1,7 @@
 # Optional sync client
 
+## Connect a repository
+
 Sync is off by default. The CLI never contacts a sync server until `trace login` has completed and you run `trace sync`. The companion Cloudflare server is maintained in a separate private `trace-app` repository.
 
 The GitHub OAuth app must have device flow enabled. Set its client ID and a Trace sync HTTPS endpoint, then authenticate for a repository:
@@ -12,6 +14,8 @@ trace login --remote owner/repo --mode pro
 
 `trace login` shows a GitHub verification code and stores the resulting token in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains only the endpoint, repository, and mode. The OAuth token is never written to Trace's database. The OAuth app requests `read:user` and `repo` scopes so the server can check repository access.
 
+## Encryption modes
+
 For Pro, supply a passphrase of at least 12 characters when syncing:
 
 ```sh
@@ -21,6 +25,8 @@ trace sync --watch
 ```
 
 Trace derives a 256-bit key with scrypt using a random 32-byte salt in `.trace/sync-salt`. Rows and blobs are encrypted with XChaCha20-Poly1305 before upload. The key and passphrase are never uploaded. Losing the passphrase prevents Pro recovery. Team mode uses HTTPS and sends plaintext to the server for its server-side encryption and repository access control.
+
+## Recover history
 
 To recover uploaded history, sign in from an initialized Trace checkout and pull into a separate, existing Git checkout that does not have a `.trace` directory:
 

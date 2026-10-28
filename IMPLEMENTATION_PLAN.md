@@ -1,11 +1,15 @@
 # Trace — Implementation Plan (phase by phase)
 
-Read `AGENTS.md` first. Each phase is a self-contained unit of work that ends in a mergeable PR.
-Do phases in order; each one lists what it depends on. At the end of every phase, `make lint test`
-must pass and the acceptance criteria must be covered by tests.
+Read [AGENTS.md](AGENTS.md) first. This plan records the CLI's original phase scope and
+acceptance criteria. The companion Cloudflare application is maintained in a separate private
+`trace-app` repository. For current user-facing behavior, see the [README](README.md) and
+[CLI reference](docs/cli.md).
 
-| Phase | Name | Week | Depends on |
-|---|---|---|---|
+Implement only a requested phase. Each phase lists its dependencies and ends with a mergeable
+change, passing `make lint test`, and tests for its acceptance criteria.
+
+| Phase | Name | Original week | Depends on |
+| --- | --- | --- | --- |
 | 0 | Scaffold | 1 | — |
 | 1 | Storage: SQLite + blobs + manifests | 1 | 0 |
 | 2 | Events, daemon, socket, spool | 1–2 | 1 |
@@ -471,8 +475,9 @@ Antigravity CLI replaces the discontinued Gemini CLI integration. Its workspace 
 
 ## Phase 14 — Sync client (Pro / Team)
 
-Phase 14 covers the client. The companion Worker is maintained in a separate private `trace-app` repository.
-- `trace login` (GitHub OAuth device flow), `trace sync [--watch]`.
+Phase 14 covers the client. The companion Worker is maintained in the private `trace-app` repository.
+
+- `trace login` (GitHub OAuth device flow), `trace sync [--watch]`, and `trace sync pull --into PATH`.
 - Protocol: append-only. POST rows newer than last-synced ULID; blobs by hash with batched
   `have/need` (500 hashes per request).
 - Pro: client-side encryption, XChaCha20-Poly1305, key derived on device and never uploaded.

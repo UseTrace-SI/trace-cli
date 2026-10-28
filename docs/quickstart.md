@@ -1,9 +1,42 @@
 # Quickstart
 
-Build Trace using the [source instructions](../README.md#build-and-try-it), enter a Git repository, and run `trace init`. By default, Trace installs Claude Code hooks. Run `trace init --agent codex`, `--agent cursor`, or `--agent agy` for those agents. Multiple adapters can be enabled in the same repository. `agy` is Google Antigravity CLI. Cursor Agent CLI is available as `agent` or `cursor agent` even when the Cursor IDE is absent.
+Build Trace using the [source instructions](../README.md#build-and-try-it), put the `bin` directory on your `PATH`, and enter the Git repository whose work you want to record.
 
-Trace stores its database, snapshots, logs, and context files under `.trace/`. Initialization adds that directory to Git's local `info/exclude` file.
+## Start recording
 
-After an agent turn, inspect history with `trace log`, `trace show 1`, or `trace why path/to/file.go:12`. Use `trace rewind 2 --dry-run` to preview a restore. A real rewind saves a safety step and prints the command to undo it.
+```sh
+trace init --agent codex
+trace status
+```
 
-Use `trace fork 2 --no-launch` to create a detached Git worktree at a saved step. Use `trace resume 2 --agent codex --no-launch` to rewind the current tree and write `.trace/context.md` for a different agent.
+`trace init` defaults to Claude Code. Choose `codex`, `cursor`, or `agy` for another adapter; repeat `trace init` to enable more than one. `cursor` refers to Cursor Agent CLI and `agy` to Antigravity CLI.
+
+Initialization creates `.trace/`, adds it to Git's local `info/exclude`, installs the integration, and starts the daemon. Work with your coding agent normally; completed turns become keyframes.
+
+## Inspect a turn
+
+```sh
+trace log
+trace show 1
+trace why path/to/file.go:12
+```
+
+`log` lists numbered steps. `show` displays saved context and a file diff. `why` finds the recorded edit behind a line. The amount of context depends on what the agent makes available to Trace.
+
+## Rewind or fork
+
+```sh
+trace rewind 2 --dry-run
+trace rewind 2
+```
+
+Preview first. A real rewind saves a safety keyframe and prints the command to undo the restore.
+
+```sh
+trace fork 2 --agent codex --no-launch
+trace resume 2 --agent codex --no-launch
+```
+
+`fork` creates a separate Git worktree at that step. `resume` rewinds the current checkout and writes `.trace/context.md`; omit `--no-launch` to start the selected agent.
+
+See the [CLI reference](cli.md) for all commands, [privacy](privacy.md) for local storage, and [sync](sync.md) for optional remote history.

@@ -21,6 +21,17 @@ trace init --agent codex
 
 Choose `claude-code`, `cursor`, or `agy` instead of `codex` to install that agent's hooks. After an agent turn, run `trace log`, `trace show 1`, or `trace why path/to/file.go:12`. Preview a restore with `trace rewind 1 --dry-run`. See the [quickstart](docs/quickstart.md) for fork and resume.
 
+## Documentation
+
+| Guide | Covers |
+| --- | --- |
+| [Quickstart](docs/quickstart.md) | Record, inspect, rewind, and fork |
+| [CLI reference](docs/cli.md) | Commands and flags |
+| [How it works](docs/how-it-works.md) | Keyframes, daemon, adapters, and restore |
+| [Privacy](docs/privacy.md) | Redaction, exclusions, and local storage |
+| [Optional sync](docs/sync.md) | Encryption, recovery, and server protocol |
+| [Release](docs/release.md) | Maintainer checks and packaging |
+
 ## Repository layout
 
 | Path | Purpose |
@@ -30,3 +41,5 @@ Choose `claude-code`, `cursor`, or `agy` instead of `codex` to install that agen
 | `scripts/` | Install, end-to-end, performance, and Homebrew tooling |
 
 The Go module and project Makefile live at the repository root. Run `make lint test` for the CLI and `make test-sync` for its sync client. When the private `trace-app` repository is checked out beside this one, `make test-sync-integration` exercises both sides of the protocol.
+
+Trace is licensed under [Apache 2.0](LICENSE).
