@@ -17,9 +17,41 @@ func MapLine(oldText, newText string, line int) (int, bool) {
 		return 0, true
 	}
 	n, m := len(a), len(b)
+	prefix := 0
+	for prefix < n && prefix < m && a[prefix] == b[prefix] {
+		prefix++
+	}
+	if line <= prefix {
+		return line, false
+	}
+	suffix := 0
+	for suffix < n-prefix && suffix < m-prefix && a[n-suffix-1] == b[m-suffix-1] {
+		suffix++
+	}
+	if line > m-suffix {
+		return line + n - m, false
+	}
+	a, b = a[prefix:n-suffix], b[prefix:m-suffix]
+	line -= prefix
+	n, m = len(a), len(b)
 	if n > 2000 || m > 2000 {
 		if line <= n && a[line-1] == b[line-1] {
-			return line, false
+			return prefix + line, false
+		}
+		target := b[line-1]
+		oldAt, oldCount, newCount := -1, 0, 0
+		for i, value := range a {
+			if value == target {
+				oldAt, oldCount = i, oldCount+1
+			}
+		}
+		for _, value := range b {
+			if value == target {
+				newCount++
+			}
+		}
+		if oldCount == 1 && newCount == 1 {
+			return prefix + oldAt + 1, false
 		}
 		return 0, true
 	}
@@ -41,7 +73,7 @@ func MapLine(oldText, newText string, line int) (int, bool) {
 	for i, j := 0, 0; i < n || j < m; {
 		if i < n && j < m && a[i] == b[j] {
 			if j+1 == line {
-				return i + 1, false
+				return prefix + i + 1, false
 			}
 			i++
 			j++

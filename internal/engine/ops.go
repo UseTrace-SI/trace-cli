@@ -25,8 +25,24 @@ func lines(s string) []string {
 func changedHunks(before, after string) []hunk {
 	a, b := lines(before), lines(after)
 	n, m := len(a), len(b)
+	prefix := 0
+	for prefix < n && prefix < m && a[prefix] == b[prefix] {
+		prefix++
+	}
+	suffix := 0
+	for suffix < n-prefix && suffix < m-prefix && a[n-suffix-1] == b[m-suffix-1] {
+		suffix++
+	}
+	a, b = a[prefix:n-suffix], b[prefix:m-suffix]
+	n, m = len(a), len(b)
+	if n == 0 && m == 0 {
+		return nil
+	}
 	if n > 2000 || m > 2000 {
-		return []hunk{{1, m}}
+		if m == 0 {
+			return []hunk{{0, 0}}
+		}
+		return []hunk{{prefix + 1, prefix + m}}
 	}
 	dp := make([][]int, n+1)
 	for i := range dp {
@@ -62,7 +78,7 @@ func changedHunks(before, after string) []hunk {
 			}
 		}
 		if j > start {
-			out = append(out, hunk{start + 1, j})
+			out = append(out, hunk{prefix + start + 1, prefix + j})
 		} else {
 			out = append(out, hunk{0, 0})
 		}

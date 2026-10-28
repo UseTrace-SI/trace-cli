@@ -67,3 +67,27 @@ func TestMapLineRandomEditSequences(t *testing.T) {
 		}
 	}
 }
+
+func TestMapLineLargeFileWithLocalEdit(t *testing.T) {
+	old := make([]string, 3000)
+	for i := range old {
+		old[i] = fmt.Sprintf("unique-line-%04d", i)
+	}
+	newLines := slices.Insert(slices.Clone(old), 100, "inserted-line")
+	before := strings.Join(old, "\n") + "\n"
+	after := strings.Join(newLines, "\n") + "\n"
+	for _, tc := range []struct {
+		line, want int
+		touched    bool
+	}{{50, 50, false}, {101, 0, true}, {102, 101, false}, {2501, 2500, false}} {
+		got, touched := MapLine(before, after, tc.line)
+		if got != tc.want || touched != tc.touched {
+			t.Errorf("line %d: got %d,%t want %d,%t", tc.line, got, touched, tc.want, tc.touched)
+		}
+	}
+	withTwoEdits := slices.Insert(slices.Clone(newLines), 2900, "another-inserted-line")
+	got, touched := MapLine(before, strings.Join(withTwoEdits, "\n")+"\n", 1501)
+	if got != 1500 || touched {
+		t.Errorf("line between distant edits: got %d,%t want 1500,false", got, touched)
+	}
+}
