@@ -1,0 +1,6 @@
+{"timestamp":"2026-10-28T00:00:00Z","type":"session_meta","payload":{"id":"fixture-session","cwd":"/repo"}}
+{"timestamp":"2026-10-28T00:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Make a change"}]}}
+{"timestamp":"2026-10-28T00:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec","arguments":"{}"}}
+{"timestamp":"2026-10-28T00:00:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"The change needs a guard."}]}}
+{"timestamp":"2026-10-28T00:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Added the guard."}]}}
+{"timestamp":"2026-10-28T00:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"fixture-turn"}}

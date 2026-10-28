@@ -1,0 +1,195 @@
+package cli
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"regexp"
+	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/repo"
+	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
+)
+
+var remoteName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+func loginPath(root string) string { return filepath.Join(repo.TraceDir(root), "login.json") }
+
+func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
+	var remote, mode, endpoint, clientID string
+	cmd := &cobra.Command{Use: "login", Short: "Connect optional sync with GitHub", RunE: func(c *cobra.Command, _ []string) error {
+		root, err := initializedRoot(*repoPath)
+		if err != nil {
+			return err
+		}
+		if !remoteName.MatchString(remote) {
+			return errors.New("--remote must be owner/repo")
+		}
+		cfg := syncclient.Config{Endpoint: endpoint, Remote: remote, Mode: mode}
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+		if clientID == "" {
+			return errors.New("--client-id or TRACE_GITHUB_CLIENT_ID is required")
+		}
+		ctx, stop := signal.NotifyContext(c.Context(), os.Interrupt)
+		defer stop()
+		oauth := syncclient.OAuth{}
+		code, err := oauth.Start(ctx, clientID)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.ErrOrStderr(), "Open %s and enter code %s\n", code.VerifyURL, code.UserCode); err != nil {
+			return err
+		}
+		token, err := oauth.Wait(ctx, clientID, code)
+		if err != nil {
+			return err
+		}
+		if err := syncclient.SaveToken(remote, token); err != nil {
+			return err
+		}
+		b, err := json.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(loginPath(root), b, 0600); err != nil {
+			return fmt.Errorf("saving sync configuration: %w", err)
+		}
+		if *jsonOutput {
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"logged_in": true, "remote": remote, "mode": mode})
+		}
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Sync login saved for %s. Run trace sync when ready.\n", remote)
+		return err
+	}}
+	cmd.Flags().StringVar(&remote, "remote", "", "GitHub owner/repo")
+	cmd.Flags().StringVar(&mode, "mode", "pro", "sync mode: pro or team")
+	cmd.Flags().StringVar(&endpoint, "endpoint", os.Getenv("TRACE_SYNC_URL"), "Trace sync server HTTPS URL")
+	cmd.Flags().StringVar(&clientID, "client-id", os.Getenv("TRACE_GITHUB_CLIENT_ID"), "GitHub OAuth app client ID")
+	return cmd
+}
+
+func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
+	var watch bool
+	cmd := &cobra.Command{Use: "sync", Short: "Upload local history after login", RunE: func(c *cobra.Command, _ []string) error {
+		root, err := initializedRoot(*repoPath)
+		if err != nil {
+			return err
+		}
+		b, err := os.ReadFile(loginPath(root))
+		if os.IsNotExist(err) {
+			return errors.New("sync is off; run trace login first")
+		}
+		if err != nil {
+			return err
+		}
+		var cfg syncclient.Config
+		if err := json.Unmarshal(b, &cfg); err != nil {
+			return fmt.Errorf("reading sync configuration: %w", err)
+		}
+		token, err := syncclient.LoadToken(cfg.Remote)
+		if err != nil {
+			return err
+		}
+		e, err := engine.Open(root)
+		if err != nil {
+			return err
+		}
+		defer e.Close()
+		client := &syncclient.Client{Config: cfg, Token: token, TraceDir: repo.TraceDir(root), DB: e.DB.DB, Blobs: e.Blobs}
+		if cfg.Mode == "pro" {
+			passphrase := os.Getenv("TRACE_SYNC_PASSPHRASE")
+			if passphrase == "" {
+				return errors.New("pro sync requires TRACE_SYNC_PASSPHRASE")
+			}
+			client.Cipher, err = syncclient.LoadCipher(client.TraceDir, passphrase)
+			if err != nil {
+				return err
+			}
+		}
+		ctx, stop := signal.NotifyContext(c.Context(), os.Interrupt)
+		defer stop()
+		for {
+			blobs, rows, err := client.Sync(ctx)
+			if err != nil {
+				return err
+			}
+			if *jsonOutput {
+				if err := json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"blobs": blobs, "rows": rows}); err != nil {
+					return err
+				}
+			} else if _, err := fmt.Fprintf(c.OutOrStdout(), "Synced %d blobs and %d rows.\n", blobs, rows); err != nil {
+				return err
+			}
+			if !watch {
+				return nil
+			}
+			timer := time.NewTimer(15 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil
+			case <-timer.C:
+			}
+		}
+	}}
+	cmd.Flags().BoolVar(&watch, "watch", false, "sync every 15 seconds until interrupted")
+	cmd.AddCommand(pullCommand(repoPath, jsonOutput))
+	return cmd
+}
+
+func pullCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
+	var into string
+	cmd := &cobra.Command{Use: "pull", Short: "Recover synced history into a fresh Git checkout", RunE: func(c *cobra.Command, _ []string) error {
+		root, err := initializedRoot(*repoPath)
+		if err != nil {
+			return err
+		}
+		if into == "" {
+			return errors.New("--into must name an existing Git checkout")
+		}
+		b, err := os.ReadFile(loginPath(root))
+		if err != nil {
+			return fmt.Errorf("reading sync login: %w", err)
+		}
+		var cfg syncclient.Config
+		if err := json.Unmarshal(b, &cfg); err != nil {
+			return fmt.Errorf("decoding sync login: %w", err)
+		}
+		token, err := syncclient.LoadToken(cfg.Remote)
+		if err != nil {
+			return err
+		}
+		target, err := repo.FindRoot(into)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(repo.TraceDir(target)); err == nil {
+			return errors.New("target already has .trace history; choose a fresh checkout")
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("checking target history: %w", err)
+		}
+		if err := addExclude(target); err != nil {
+			return err
+		}
+		client := &syncclient.Client{Config: cfg, Token: token}
+		ctx, stop := signal.NotifyContext(c.Context(), os.Interrupt)
+		defer stop()
+		blobs, rows, err := client.Pull(ctx, repo.TraceDir(target), os.Getenv("TRACE_SYNC_PASSPHRASE"))
+		if err != nil {
+			return err
+		}
+		if *jsonOutput {
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"blobs": blobs, "rows": rows, "repo": target})
+		}
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Recovered %d blobs and %d rows into %s. Use trace --repo %s log to inspect history.\n", blobs, rows, target, target)
+		return err
+	}}
+	cmd.Flags().StringVar(&into, "into", "", "fresh Git checkout to receive downloaded history")
+	return cmd
+}

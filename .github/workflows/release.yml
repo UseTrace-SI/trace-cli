@@ -1,0 +1,47 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: sigstore/cosign-installer@v3
+      - name: Check Homebrew tap token
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$TAP_GITHUB_TOKEN" ]; then
+            echo 'TAP_GITHUB_TOKEN is required to publish the Homebrew formula' >&2
+            exit 1
+          fi
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate Homebrew formula
+        run: go run ./scripts/homebrew --version "${GITHUB_REF_NAME#v}" --checksums dist/checksums.txt --out dist/trace.rb
+      - name: Publish Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          content=$(base64 < dist/trace.rb | tr -d '\n')
+          existing_sha=$(gh api repos/UseTrace-SI/homebrew-tap/contents/Formula/trace.rb --jq .sha 2>/dev/null || true)
+          args=(-f "message=Release trace $GITHUB_REF_NAME" -f "content=$content")
+          if [ -n "$existing_sha" ]; then
+            args+=(-f "sha=$existing_sha")
+          fi
+          gh api --method PUT repos/UseTrace-SI/homebrew-tap/contents/Formula/trace.rb "${args[@]}" >/dev/null

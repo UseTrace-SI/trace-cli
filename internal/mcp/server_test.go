@@ -1,0 +1,95 @@
+package mcpserver
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/event"
+)
+
+func TestReadOnlyTools(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "codex", AgentSessionID: "fixture", Worktree: root, At: time.Now().UnixMilli()}
+	ev.Kind = event.SessionStart
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind = event.TurnStart
+	ev.Prompt = "implement API_TOKEN=abcdefghijklmnopqrstuvwxyz012345"
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(root, "main.go")
+	if err := os.WriteFile(p, []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind = event.ToolEdit
+	ev.Paths = []string{p}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind = event.TurnEnd
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := New(e).Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+	defer serverSession.Close()
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+	}{
+		{"list_checkpoints", map[string]any{"limit": 5}},
+		{"get_turn", map[string]any{"step": 1}},
+		{"get_context", map[string]any{"path": "main.go"}},
+		{"why_line", map[string]any{"path": "main.go", "line": 1}},
+		{"search_history", map[string]any{"query": "implement"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatalf("tool error: %v", result)
+			}
+			b, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(b), "abcdefghijklmnopqrstuvwxyz012345") {
+				t.Fatal("secret leaked")
+			}
+		})
+	}
+}

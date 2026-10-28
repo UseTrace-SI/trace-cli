@@ -1,0 +1,54 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - run: make lint test
+      - run: make test-structure
+      - run: make test-sync
+      - run: make build e2e
+  release-snapshot:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean --skip=sign
+      - name: Verify release archives
+        run: |
+          set -euo pipefail
+          for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
+            ls dist/trace_*_${target}.tar.gz >/dev/null
+          done
+          test -s dist/checksums.txt
+      - run: ./scripts/install_snapshot_test.sh
+  performance:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make perf

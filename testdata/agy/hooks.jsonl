@@ -1,0 +1,4 @@
+{"event":"SessionStart","payload":{"conversationId":"fixture-conversation","workspacePaths":["/repo"],"transcriptPath":"/tmp/fixture/transcript.jsonl","modelName":"gemini-test"}}
+{"event":"PreInvocation","payload":{"conversationId":"fixture-conversation","workspacePaths":["/repo"],"transcriptPath":"/tmp/fixture/transcript.jsonl","invocationNum":0}}
+{"event":"PostToolUse","payload":{"conversationId":"fixture-conversation","toolCall":{"name":"replace_file_content","args":{"TargetFile":"/repo/main.go","ReplacementContent":"secret"}},"stepIdx":2}}
+{"event":"Stop","payload":{"conversationId":"fixture-conversation","transcriptPath":"/tmp/fixture/transcript.jsonl","fullyIdle":true}}

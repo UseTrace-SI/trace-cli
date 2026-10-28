@@ -1,0 +1,12 @@
+.DS_Store
+.trace/
+bin/
+/trace
+/dist/
+.gocache/
+.gomodcache/
+.env
+.env.*
+!.env.example
+*.test
+*.prof
