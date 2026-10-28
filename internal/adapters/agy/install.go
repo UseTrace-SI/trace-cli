@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/hookcmd"
 )
 
-const hookPrefix = "trace hook agy "
+const hookAgent = "agy"
+
+var hookMarker = []byte(" hook " + hookAgent + " ")
 
 func hooksPath(root string) string       { return filepath.Join(root, ".agents", "hooks.json") }
 func statePath(root, name string) string { return filepath.Join(root, ".trace", "agy-hooks."+name) }
@@ -19,7 +22,7 @@ func hash(b []byte) string               { sum := sha256.Sum256(b); return hex.E
 
 func ownHooks() map[string]any {
 	handler := func(name string) map[string]any {
-		return map[string]any{"type": "command", "command": hookPrefix + name, "timeout": 1}
+		return map[string]any{"type": "command", "command": hookcmd.Command(hookAgent, name), "timeout": 1}
 	}
 	return map[string]any{
 		"SessionStart":  []any{handler("SessionStart")},
@@ -49,7 +52,7 @@ func Install(root string) error {
 		settings = map[string]json.RawMessage{}
 	}
 	for _, value := range settings {
-		if bytes.Contains(value, []byte(hookPrefix)) {
+		if bytes.Contains(value, hookMarker) {
 			return nil
 		}
 	}
@@ -116,7 +119,7 @@ func Uninstall(root string) error {
 		return fmt.Errorf("parsing Antigravity hooks: %w", err)
 	}
 	for name, raw := range settings {
-		if !bytes.Contains(raw, []byte(hookPrefix)) {
+		if !bytes.Contains(raw, hookMarker) {
 			continue
 		}
 		var entry map[string]json.RawMessage
@@ -171,5 +174,5 @@ func Uninstall(root string) error {
 
 func commandIsOurs(raw json.RawMessage) bool {
 	var command string
-	return json.Unmarshal(raw, &command) == nil && strings.HasPrefix(command, hookPrefix)
+	return json.Unmarshal(raw, &command) == nil && hookcmd.IsTraceHook(command, hookAgent)
 }

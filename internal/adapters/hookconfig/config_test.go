@@ -38,7 +38,7 @@ func TestInstallUninstall(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Count(string(installed), "trace hook "+tc.agent+" SessionStart") != 1 {
+			if strings.Count(string(installed), " hook "+tc.agent+" SessionStart") != 1 {
 				t.Fatalf("duplicate hook: %s", installed)
 			}
 			if err := Uninstall(root, tc.agent, tc.path, tc.grouped); err != nil {

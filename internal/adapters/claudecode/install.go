@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/hookcmd"
 )
 
 type hook struct {
@@ -60,11 +61,17 @@ func Install(root string) error {
 		}
 	}
 	for _, ev := range events {
-		command := "trace hook claude-code " + ev.name
+		command := hookcmd.Command("claude-code", ev.name)
 		found := false
-		for _, g := range hooks[ev.name] {
-			for _, h := range g.Hooks {
+		for gi := range hooks[ev.name] {
+			for hi := range hooks[ev.name][gi].Hooks {
+				h := &hooks[ev.name][gi].Hooks[hi]
 				if h.Command == command {
+					found = true
+					continue
+				}
+				if hookcmd.IsTraceHookFor(h.Command, "claude-code", ev.name) {
+					h.Command = command
 					found = true
 				}
 			}
@@ -125,7 +132,7 @@ func Uninstall(root string) error {
 		for _, g := range groups {
 			var hh []hook
 			for _, h := range g.Hooks {
-				if !strings.HasPrefix(h.Command, "trace hook claude-code ") {
+				if !hookcmd.IsTraceHook(h.Command, "claude-code") {
 					hh = append(hh, h)
 				}
 			}

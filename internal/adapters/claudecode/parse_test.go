@@ -68,7 +68,7 @@ func TestInstallUninstall(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(first) != string(second) || strings.Count(string(first), "trace hook claude-code Stop") != 1 {
+		if string(first) != string(second) || strings.Count(string(first), " hook claude-code Stop") != 1 {
 			t.Fatal("install not idempotent")
 		}
 		if err := Uninstall(root); err != nil {

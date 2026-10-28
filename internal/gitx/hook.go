@@ -7,10 +7,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/hookcmd"
 )
 
 const begin = "# trace post-commit begin\n"
 const end = "# trace post-commit end\n"
+
+// hookBlock renders the Trace-managed part of the post-commit hook. The
+// executable is absolute so GUI Git clients with a minimal PATH still record
+// commits.
+func hookBlock() string {
+	var b strings.Builder
+	b.WriteString(begin)
+	b.WriteString("sha=$(git rev-parse HEAD 2>/dev/null) || exit 0\n")
+	b.WriteString("printf '{\"git_sha\":\"%s\"}\\n' \"$sha\" | ")
+	b.WriteString(hookcmd.Command("git", "git_commit"))
+	b.WriteString(" >/dev/null 2>&1 || true\n")
+	b.WriteString(end)
+	return b.String()
+}
 
 func hookPaths(root string) (string, string, string, error) {
 	p, err := GitPath(root, "hooks/post-commit")
@@ -31,8 +47,22 @@ func InstallHook(root string) error {
 		return err
 	}
 	existed := err == nil
-	if strings.Contains(string(current), begin) {
-		return nil
+	if start := strings.Index(string(current), begin); start >= 0 {
+		stop := strings.Index(string(current), end)
+		if stop < start {
+			return nil
+		}
+		stop += len(end)
+		// Rewrite only the Trace block so hooks installed by older versions
+		// pick up the absolute executable path.
+		updated := append(append(append([]byte{}, current[:start]...), hookBlock()...), current[stop:]...)
+		if string(updated) == string(current) {
+			return nil
+		}
+		if err := os.WriteFile(p, updated, 0755); err != nil {
+			return fmt.Errorf("updating post-commit hook: %w", err)
+		}
+		return os.WriteFile(installedHash, []byte(hash(updated)), 0600)
 	}
 	backup := ""
 	if existed {
@@ -51,10 +81,7 @@ func InstallHook(root string) error {
 	if backup != "" {
 		script.WriteString("if [ -x \"$0.pre-trace\" ]; then \"$0.pre-trace\" \"$@\"; fi\n")
 	}
-	script.WriteString(begin)
-	script.WriteString("sha=$(git rev-parse HEAD 2>/dev/null) || exit 0\n")
-	script.WriteString("printf '{\"git_sha\":\"%s\"}\\n' \"$sha\" | trace hook git git_commit >/dev/null 2>&1 || true\n")
-	script.WriteString(end)
+	script.WriteString(hookBlock())
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}

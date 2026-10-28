@@ -8,8 +8,35 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/hookcmd"
 )
+
+func rewriteHookCommands(value any, agent, name, command string) bool {
+	found := false
+	switch node := value.(type) {
+	case map[string]any:
+		if current, ok := node["command"].(string); ok && hookcmd.IsTraceHookFor(current, agent, name) {
+			node["command"] = command
+			found = true
+		}
+		for key, child := range node {
+			if key == "command" {
+				continue
+			}
+			if rewriteHookCommands(child, agent, name, command) {
+				found = true
+			}
+		}
+	case []any:
+		for _, child := range node {
+			if rewriteHookCommands(child, agent, name, command) {
+				found = true
+			}
+		}
+	}
+	return found
+}
 
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
@@ -47,17 +74,11 @@ func Install(root, agent, relative string, names []string, grouped bool) error {
 		}
 	}
 	for _, name := range names {
-		command := "trace hook " + agent + " " + name
+		command := hookcmd.Command(agent, name)
 		entries, _ := hooks[name].([]any)
-		found := false
-		for _, entry := range entries {
-			b, _ := json.Marshal(entry)
-			if strings.Contains(string(b), command) {
-				found = true
-				break
-			}
-		}
+		found := rewriteHookCommands(entries, agent, name, command)
 		if found {
+			hooks[name] = entries
 			continue
 		}
 		if grouped {
@@ -125,7 +146,7 @@ func Uninstall(root, agent, relative string, grouped bool) error {
 				for _, child := range children {
 					c, _ := child.(map[string]any)
 					command, _ := c["command"].(string)
-					if !strings.HasPrefix(command, "trace hook "+agent+" ") {
+					if !hookcmd.IsTraceHook(command, agent) {
 						childKeep = append(childKeep, child)
 					}
 				}
@@ -135,7 +156,7 @@ func Uninstall(root, agent, relative string, grouped bool) error {
 				}
 			} else {
 				command, _ := obj["command"].(string)
-				if !strings.HasPrefix(command, "trace hook "+agent+" ") {
+				if !hookcmd.IsTraceHook(command, agent) {
 					kept = append(kept, obj)
 				}
 			}

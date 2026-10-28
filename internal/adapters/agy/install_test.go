@@ -30,7 +30,7 @@ func TestInstallUninstallRestoresOriginal(t *testing.T) {
 			t.Fatal(err)
 		}
 		second, err := os.ReadFile(hooksPath(root))
-		if err != nil || string(first) != string(second) || strings.Count(string(second), hookPrefix+"Stop") != 1 {
+		if err != nil || string(first) != string(second) || strings.Count(string(second), " hook agy Stop") != 1 {
 			t.Fatalf("install not idempotent: %v", err)
 		}
 		if err := Uninstall(root); err != nil {
@@ -72,7 +72,7 @@ func TestUninstallPreservesSubsequentUserEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, err = os.ReadFile(hooksPath(root))
-	if err != nil || !strings.Contains(string(b), "echo keep") || strings.Contains(string(b), hookPrefix) {
+	if err != nil || !strings.Contains(string(b), "echo keep") || strings.Contains(string(b), " hook agy ") {
 		t.Fatalf("remaining hooks=%q err=%v", b, err)
 	}
 }
