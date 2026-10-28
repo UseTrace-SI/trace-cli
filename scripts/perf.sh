@@ -6,18 +6,19 @@ cd "$project_root"
 
 results=$(go test ./internal/engine ./internal/cli -run '^$' \
   -bench 'Benchmark(Keyframe100ChangedFilesIn10000FileRepo|Rewind1000Files|Log5000Steps|Why5000UnrelatedChanges)$' \
-  -benchtime=1x -count=1)
+  -benchtime=1x -count=3)
 printf '%s\n' "$results"
 
 check_benchmark() {
-  local name=$1 limit_ns=$2 measured
-  measured=$(awk -v name="$name" '$1 ~ ("^Benchmark" name "-[0-9]+$") {
-    for (i=2; i<NF; i++) if ($(i+1)=="ns/op") { print $i; exit }
+  local name=$1 limit_ns=$2 measured samples
+  samples=$(awk -v name="$name" '$1 ~ ("^Benchmark" name "-[0-9]+$") {
+    for (i=2; i<NF; i++) if ($(i+1)=="ns/op") { print $i; break }
   }' <<< "$results")
-  if [[ -z "$measured" ]]; then
-    echo "missing benchmark: $name" >&2
+  if [[ $(wc -l <<< "$samples") -ne 3 ]]; then
+    echo "expected three benchmark samples for $name" >&2
     exit 1
   fi
+  measured=$(sort -n <<< "$samples" | sed -n '2p')
   if awk -v measured="$measured" -v limit="$limit_ns" 'BEGIN { exit !(measured > limit) }'; then
     echo "$name exceeded ${limit_ns} ns/op: $measured" >&2
     exit 1
@@ -64,18 +65,21 @@ import time
 
 root = sys.argv[1]
 payload = '{"conversationId":"perf-turn","invocationNum":0}\n'
-durations = []
-for _ in range(200):
-    start = time.perf_counter()
-    result = subprocess.run(
-        ["./bin/trace", "--repo", root, "hook", "agy", "PreInvocation"],
-        input=payload, text=True, capture_output=True,
-    )
-    if result.returncode != 0 or result.stdout.strip() != "{}":
-        raise SystemExit("hook process failed or changed agent output")
-    durations.append((time.perf_counter() - start) * 1000)
-p95 = sorted(durations)[189]
-print(f"full hook process p95: {p95:.2f} ms")
+samples = []
+for _ in range(3):
+    durations = []
+    for _ in range(200):
+        start = time.perf_counter()
+        result = subprocess.run(
+            ["./bin/trace", "--repo", root, "hook", "agy", "PreInvocation"],
+            input=payload, text=True, capture_output=True,
+        )
+        if result.returncode != 0 or result.stdout.strip() != "{}":
+            raise SystemExit("hook process failed or changed agent output")
+        durations.append((time.perf_counter() - start) * 1000)
+    samples.append(sorted(durations)[189])
+p95 = sorted(samples)[1]
+print(f"full hook process p95 (median of 3 runs): {p95:.2f} ms")
 if p95 >= 20:
     raise SystemExit("full hook process exceeded 20 ms p95")
 PY

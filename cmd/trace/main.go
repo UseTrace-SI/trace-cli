@@ -12,4 +12,9 @@ var (
 	date    = "unknown"
 )
 
-func main() { os.Exit(cli.Execute(version, commit, date)) }
+func main() {
+	if cli.TryHook(os.Args[1:]) {
+		return
+	}
+	os.Exit(cli.Execute(version, commit, date))
+}
