@@ -27,9 +27,11 @@ const maxRowRequestBytes = 7 << 20
 var tables = []string{"sessions", "turns", "keyframes", "ops", "commits"}
 
 type Config struct {
-	Endpoint string `json:"endpoint"`
-	Remote   string `json:"remote"`
-	Mode     string `json:"mode"`
+	Endpoint  string `json:"endpoint"`
+	Remote    string `json:"remote"`
+	Mode      string `json:"mode"`
+	ClientID  string `json:"client_id,omitempty"`
+	GitHubApp bool   `json:"github_app,omitempty"`
 }
 
 func (cfg Config) Validate() error {
@@ -42,6 +44,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.Remote == "" {
 		return errors.New("sync remote is required")
+	}
+	if cfg.GitHubApp && cfg.ClientID == "" {
+		return errors.New("GitHub App sync requires a client ID")
 	}
 	return nil
 }
@@ -60,13 +65,14 @@ type Row struct {
 }
 
 type Client struct {
-	HTTP     *http.Client
-	Config   Config
-	Token    string
-	Cipher   *Cipher
-	TraceDir string
-	DB       *sql.DB
-	Blobs    *blob.Store
+	HTTP          *http.Client
+	Config        Config
+	Token         string
+	TokenProvider func(context.Context) (string, error)
+	Cipher        *Cipher
+	TraceDir      string
+	DB            *sql.DB
+	Blobs         *blob.Store
 }
 
 func (c *Client) validate() error {
@@ -91,6 +97,13 @@ func (c *Client) httpClient() *http.Client {
 	}}
 }
 
+func (c *Client) authorizationToken(ctx context.Context) (string, error) {
+	if c.TokenProvider != nil {
+		return c.TokenProvider(ctx)
+	}
+	return c.Token, nil
+}
+
 func (c *Client) post(ctx context.Context, path string, input, output any) error {
 	data, err := json.Marshal(input)
 	if err != nil {
@@ -101,7 +114,11 @@ func (c *Client) post(ctx context.Context, path string, input, output any) error
 	if err != nil {
 		return fmt.Errorf("creating sync request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	token, err := c.authorizationToken(ctx)
+	if err != nil {
+		return fmt.Errorf("refreshing GitHub login: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient().Do(req)
 	if err != nil {

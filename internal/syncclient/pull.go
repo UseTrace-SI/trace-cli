@@ -38,7 +38,11 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, output 
 	if err != nil {
 		return fmt.Errorf("creating download request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	token, err := c.authorizationToken(ctx)
+	if err != nil {
+		return fmt.Errorf("refreshing GitHub login: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("downloading sync data: %w", err)

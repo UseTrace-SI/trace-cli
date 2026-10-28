@@ -4,15 +4,15 @@
 
 Sync is off by default. The CLI never contacts a sync server until `trace login` has completed and you run `trace sync`. The companion Cloudflare server is maintained in a separate private `trace-app` repository.
 
-The GitHub OAuth app must have device flow enabled. Set its client ID and a Trace sync HTTPS endpoint, then authenticate for a repository:
+The recommended GitHub App must have device flow enabled and Metadata read permission on repositories where Trace is installed. Set its client ID and a Trace sync HTTPS endpoint, then authenticate for a repository:
 
 ```sh
 export TRACE_GITHUB_CLIENT_ID=YOUR_PUBLIC_CLIENT_ID
 export TRACE_SYNC_URL=https://sync.example.com
-trace login --remote owner/repo --mode pro
+trace login --remote owner/repo --mode pro --github-app
 ```
 
-`trace login` shows a GitHub verification code and stores the resulting token in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains only the endpoint, repository, and mode. The OAuth token is never written to Trace's database. The OAuth app requests `read:user` and `repo` scopes so the server can check repository access.
+`trace login` shows a GitHub verification code and stores the resulting access and refresh credentials in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains the endpoint, repository, mode, public client ID, and GitHub App mode. Tokens are never written to Trace's database. GitHub App mode requests `offline_access` and renews expiring user tokens before sync and recovery. For an existing OAuth App, omit `--github-app`; that mode still requests `read:user` and `repo` scopes.
 
 ## Encryption modes
 
@@ -39,7 +39,7 @@ For Pro, set `TRACE_SYNC_PASSPHRASE` to the original passphrase before pulling. 
 
 ## Server protocol
 
-The client sends `Authorization: Bearer <GitHub OAuth token>` to the configured HTTPS endpoint. The server must validate that token and repository access. All requests and responses use JSON and HTTP 200 for success.
+The client sends `Authorization: Bearer <GitHub user access token>` to the configured HTTPS endpoint. The server must validate that token and repository access. All requests and responses use JSON and HTTP 200 for success.
 
 - `POST /v1/sync/blobs/have`: `{"repo":"owner/repo","mode":"pro|team","hashes":["sha256",...]}`. Up to 500 hashes; response `{"need":["sha256",...]}`. The response may only name hashes from the request.
 - `POST /v1/sync/blobs`: `{"repo":"owner/repo","mode":"pro|team","hash":"sha256","payload":"base64","salt":"base64"}`. For Pro, payload is a random 24-byte nonce followed by XChaCha20-Poly1305 ciphertext, with `blob:<hash>` as associated data. Salt is present only for Pro. For Team, payload is base64 plaintext. The server should make this operation idempotent by hash.
@@ -50,4 +50,4 @@ The client sends `Authorization: Bearer <GitHub OAuth token>` to the configured 
 
 Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client keeps row requests below 7 MiB, within the Worker's 8 MiB request limit, and records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only. Recovery downloads rows and blobs into a fresh Trace history.
 
-No public sync endpoint or OAuth app registration is configured yet. Live sync requires deploying the companion app and registering a GitHub OAuth app with device flow enabled.
+No public sync endpoint or GitHub App registration is configured yet. Live sync requires deploying the companion app and registering a GitHub App with device flow enabled.
