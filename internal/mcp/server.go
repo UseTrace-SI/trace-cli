@@ -12,6 +12,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 	"github.com/UseTrace-SI/trace-cli/internal/why"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -104,7 +105,7 @@ func New(e *engine.Engine) *mcp.Server {
 				return nil, out, err
 			}
 			if len(r.Prompt) > 120 {
-				r.Prompt = r.Prompt[:120]
+				r.Prompt = textutil.Truncate(r.Prompt, 120)
 			}
 			out.Steps = append(out.Steps, r)
 			out.Cursor = r.Step
@@ -134,7 +135,7 @@ func New(e *engine.Engine) *mcp.Server {
 		}
 		out.Files = restore.Plan(previous, current)
 		if len(out.Reasoning) > 4000 {
-			out.Reasoning = out.Reasoning[:4000]
+			out.Reasoning = textutil.Truncate(out.Reasoning, 4000)
 		}
 		return nil, out, nil
 	})
@@ -236,7 +237,7 @@ func New(e *engine.Engine) *mcp.Server {
 				return nil, out, err
 			}
 			if len(r.Prompt) > 120 {
-				r.Prompt = r.Prompt[:120]
+				r.Prompt = textutil.Truncate(r.Prompt, 120)
 			}
 			out.Steps = append(out.Steps, r)
 			out.Cursor = r.Step

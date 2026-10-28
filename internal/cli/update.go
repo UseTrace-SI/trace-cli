@@ -34,7 +34,7 @@ func updateCommand(repoPath *string, jsonOutput *bool, current string) *cobra.Co
 		if time.Since(time.UnixMilli(state.CheckedAt)) >= 24*time.Hour || state.Latest == "" {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/usetrace/trace/releases/latest", nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/UseTrace-SI/trace-cli/releases/latest", nil)
 			if err != nil {
 				return err
 			}

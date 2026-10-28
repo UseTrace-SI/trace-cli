@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 )
 
 type payload struct {
@@ -55,7 +56,7 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 		ev.Kind = event.TurnContext
 		ev.Text = p.Text
 		if len(ev.Text) > 64<<10 {
-			ev.Text = ev.Text[:64<<10]
+			ev.Text = textutil.TruncateBytes(ev.Text, 64<<10)
 		}
 		if name == "afterAgentThought" {
 			ev.ContextType = "thinking"

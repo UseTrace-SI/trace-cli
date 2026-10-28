@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/spf13/cobra"
 )
 
 func resumeCommand(repoPath *string, jsonOutput *bool) *cobra.Command {

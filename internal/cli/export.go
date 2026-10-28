@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	traceexport "github.com/UseTrace-SI/trace-cli/internal/export"
+	"github.com/spf13/cobra"
 )
 
 func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {

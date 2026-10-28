@@ -8,6 +8,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 )
 
 func (e *Engine) Context(step int64) (string, error) {
@@ -44,7 +45,7 @@ func (e *Engine) Context(step int64) (string, error) {
 		if t.reasoning != "" {
 			excerpt := t.reasoning
 			if len(excerpt) > 400 {
-				excerpt = excerpt[:400]
+				excerpt = textutil.Truncate(excerpt, 400)
 			}
 			fmt.Fprintf(&s, "Reasoning: %s\n", excerpt)
 		}

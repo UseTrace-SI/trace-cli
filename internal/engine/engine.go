@@ -686,6 +686,20 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 	if _, err := e.recordManifest(target); err != nil {
 		return safetySeq, changed, err
 	}
+	// Make the restored tree the latest keyframe so later turns, commits, and
+	// history lookups describe what is actually on disk.
+	restoredHash, err := target.Save(e.Blobs)
+	if err != nil {
+		return safetySeq, changed, err
+	}
+	restoredID, err := id.New()
+	if err != nil {
+		return safetySeq, changed, err
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,git_head,tag,created_at) VALUES(?,?,?,?,?,?)",
+		restoredID, safetySeq+1, restoredHash, e.head(), "rewind", time.Now().UnixMilli()); err != nil {
+		return safetySeq, changed, fmt.Errorf("saving rewind keyframe: %w", err)
+	}
 	opID, err := id.New()
 	if err != nil {
 		return safetySeq, changed, err

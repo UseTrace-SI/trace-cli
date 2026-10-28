@@ -112,6 +112,22 @@ func TestTurnsAndUndoableRewind(t *testing.T) {
 	if string(b) != "three\n" {
 		t.Fatalf("undo: %q", b)
 	}
+	// The newest keyframe must describe the restored tree, even after undo.
+	var latestSeq int64
+	var latestTag string
+	if err := e.DB.QueryRow("SELECT seq,COALESCE(tag,'') FROM keyframes ORDER BY seq DESC LIMIT 1").Scan(&latestSeq, &latestTag); err != nil {
+		t.Fatal(err)
+	}
+	if latestTag != "rewind" {
+		t.Fatalf("latest tag = %q", latestTag)
+	}
+	latest, err := e.ManifestAt(latestSeq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(latest["file.txt"].Hash) != string(before["file.txt"].Hash) {
+		t.Fatalf("undo keyframe does not match the restored tree")
+	}
 }
 
 func TestGCProtectsBaselineAndCurrentTree(t *testing.T) {

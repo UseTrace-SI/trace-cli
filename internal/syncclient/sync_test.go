@@ -93,6 +93,42 @@ func TestCipherRoundTripAndAuthentication(t *testing.T) {
 	}
 }
 
+func TestInsertDownloadedIsIdempotent(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	session := Row{Table: "sessions", ID: "SESSION1"}
+	sessionData := []byte(`{"id":"SESSION1","agent":"codex","worktree":"repo","started_at":1}`)
+	for i := 0; i < 2; i++ {
+		if err := insertDownloaded(db.DB, session, sessionData); err != nil {
+			t.Fatalf("insert session pass %d: %v", i, err)
+		}
+	}
+	update := Row{Table: "sync_updates", ID: "UPDATE1"}
+	updateData := []byte(`{"id":"UPDATE1","table_name":"sessions","row_id":"SESSION1","data":{"id":"SESSION1","ended_at":5}}`)
+	for i := 0; i < 2; i++ {
+		if err := insertDownloaded(db.DB, update, updateData); err != nil {
+			t.Fatalf("apply update pass %d: %v", i, err)
+		}
+	}
+	var sessions, updates int
+	if err := db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&sessions); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM sync_updates").Scan(&updates); err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 1 || updates != 1 {
+		t.Fatalf("sessions=%d updates=%d", sessions, updates)
+	}
+	var ended int64
+	if err := db.QueryRow("SELECT ended_at FROM sessions WHERE id='SESSION1'").Scan(&ended); err != nil || ended != 5 {
+		t.Fatalf("ended_at=%d err=%v", ended, err)
+	}
+}
+
 func TestPullRemapsSharedStepsAndRedactsText(t *testing.T) {
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "trace.db"))

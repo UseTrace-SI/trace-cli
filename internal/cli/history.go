@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 	"github.com/spf13/cobra"
 )
 
@@ -57,9 +59,7 @@ func logCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err := rows.Scan(&r.Step, &r.Time, &r.Agent, &r.Prompt, &r.Tag, &r.FilesChanged); err != nil {
 				return fmt.Errorf("reading history: %w", err)
 			}
-			if len(r.Prompt) > 60 {
-				r.Prompt = r.Prompt[:60]
-			}
+			r.Prompt = textutil.Truncate(r.Prompt, 60)
 			out = append(out, r)
 		}
 		if err := rows.Err(); err != nil {
@@ -80,20 +80,27 @@ func logCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	}}
 }
 
-func blobText(bs *blob.Store, h blob.Hash) (string, error) {
+const maxBlobTextBytes = 1 << 20
+
+// blobTextLimited returns at most maxBlobTextBytes of a blob and reports
+// whether content was omitted.
+func blobTextLimited(bs *blob.Store, h blob.Hash) (string, bool, error) {
 	if h == "" {
-		return "", nil
+		return "", false, nil
 	}
 	r, err := bs.Get(h)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer r.Close()
-	b, err := io.ReadAll(io.LimitReader(r, (1<<20)+1))
+	b, err := io.ReadAll(io.LimitReader(r, maxBlobTextBytes+1))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	return string(b), nil
+	if len(b) > maxBlobTextBytes {
+		return textutil.TruncateBytes(string(b), maxBlobTextBytes), true, nil
+	}
+	return string(b), false, nil
 }
 
 func unifiedDiff(path, before, after string) string {
@@ -209,19 +216,24 @@ func showCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		files := restore.Plan(previous, current)
 		var diff strings.Builder
+		truncated := false
 		for _, p := range files {
-			oldText, err := blobText(e.Blobs, previous[p].Hash)
+			oldText, oldTruncated, err := blobTextLimited(e.Blobs, previous[p].Hash)
 			if err != nil {
 				return err
 			}
-			newText, err := blobText(e.Blobs, current[p].Hash)
+			newText, newTruncated, err := blobTextLimited(e.Blobs, current[p].Hash)
 			if err != nil {
 				return err
 			}
+			truncated = truncated || oldTruncated || newTruncated
 			diff.WriteString(unifiedDiff(p, oldText, newText))
 		}
 		diffText := (redact.Redactor{}).Text(diff.String())
-		result := map[string]any{"step": seq, "tag": tag, "agent": agent, "prompt": prompt, "reasoning": reasoning, "tool_calls": tools, "files": files, "symbols": symbols, "diff": diffText}
+		if truncated {
+			diffText += "\n... file content truncated at 1 MiB; the diff may be incomplete\n"
+		}
+		result := map[string]any{"step": seq, "tag": tag, "agent": agent, "prompt": prompt, "reasoning": reasoning, "tool_calls": tools, "files": files, "symbols": symbols, "diff": diffText, "truncated": truncated}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
@@ -321,11 +333,42 @@ func statusCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		result := map[string]any{"daemon_up": up, "active_sessions": active, "latest_step": latest, "size_bytes": size}
+		pending := spoolPending(dir)
+		result := map[string]any{"daemon_up": up, "active_sessions": active, "latest_step": latest, "size_bytes": size, "pending_events": pending}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
-		_, err = fmt.Fprintf(c.OutOrStdout(), "Daemon: %t\nActive sessions: %d\nLatest step: %d\nTrace size: %d bytes\n", up, active, latest, size)
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Daemon: %t\nActive sessions: %d\nLatest step: %d\nPending events: %d\nTrace size: %d bytes\n", up, active, latest, pending, size)
 		return err
 	}}
+}
+
+// spoolPending counts complete and partial event lines waiting in the spool.
+// A non-zero value while the daemon is up points at a backlog.
+func spoolPending(dir string) int64 {
+	f, err := os.Open(filepath.Join(dir, "spool.jsonl"))
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	buf := make([]byte, 256<<10)
+	var count int64
+	var last byte
+	for {
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			count += int64(bytes.Count(buf[:n], []byte{'\n'}))
+			last = buf[n-1]
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return count
+		}
+	}
+	if last != 0 && last != '\n' {
+		count++
+	}
+	return count
 }

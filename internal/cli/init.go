@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/cursor"
@@ -17,6 +16,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
+	"github.com/spf13/cobra"
 )
 
 func addExclude(root string) error {

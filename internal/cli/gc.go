@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/spf13/cobra"
 )
 
 func gcCommand(repoPath *string, jsonOutput *bool) *cobra.Command {

@@ -82,6 +82,12 @@ func runHook(repoPath, agent, hookEvent string) {
 	if err != nil {
 		return
 	}
+	// Hooks are the only long-lived Trace entry point, so recover an exited or
+	// crashed daemon here. StartAsync returns immediately and never blocks the
+	// agent; the event falls back to the spool until the daemon is ready.
+	if strings.EqualFold(hookEvent, "SessionStart") {
+		daemon.StartAsync(root)
+	}
 	b, err := io.ReadAll(io.LimitReader(os.Stdin, 4<<20))
 	if err != nil {
 		return

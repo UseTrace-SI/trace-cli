@@ -51,45 +51,39 @@ func gitIgnored(root string, paths []string) (map[string]bool, error) {
 	return out, nil
 }
 
-func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
-	var paths []string
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == "." {
-			return nil
-		}
-		if excluded(rel) || (ig != nil && ig.Ignored(rel, d.IsDir())) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Type().IsRegular() {
-			paths = append(paths, rel)
-		}
-		return nil
-	})
+// listRepoFiles asks Git for tracked and untracked-but-not-ignored files. This
+// avoids walking large ignored trees (node_modules, build output) during a full
+// scan, and keeps .gitignore handling consistent with Update.
+func listRepoFiles(root string) ([]string, error) {
+	out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
 	if err != nil {
-		return nil, fmt.Errorf("walking repository: %w", err)
+		return nil, fmt.Errorf("listing repository files: %w", err)
 	}
-	ignored, err := gitIgnored(root, paths)
+	var files []string
+	for _, raw := range bytes.Split(out, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		files = append(files, filepath.ToSlash(string(raw)))
+	}
+	return files, nil
+}
+
+func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
+	paths, err := listRepoFiles(root)
 	if err != nil {
 		return nil, err
 	}
 	m := Manifest{}
 	for _, rel := range paths {
-		if ignored[rel] {
+		if excluded(rel) || (ig != nil && ig.Ignored(rel, false)) {
 			continue
 		}
 		p := filepath.Join(root, filepath.FromSlash(rel))
 		info, err := os.Lstat(p)
+		if os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("statting %s: %w", rel, err)
 		}

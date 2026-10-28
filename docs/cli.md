@@ -22,6 +22,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL` | Authorize optional sync with GitHub device flow |
 | `trace sync [--watch]` | Upload local history to the configured sync server |
 | `trace sync pull --into PATH` | Recover synced history into a fresh Git checkout |
+| `trace daemon start` | Start the local daemon if it is not running |
 | `trace daemon stop` | Stop the local daemon |
 | `trace mcp` | Serve read-only MCP tools over stdio |
 

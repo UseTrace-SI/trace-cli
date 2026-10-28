@@ -6,14 +6,17 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/cursor"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/gemini"
+	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
+	"github.com/spf13/cobra"
 )
 
 func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
@@ -44,9 +47,21 @@ func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		_ = os.Remove(filepath.Join(root, ".trace", "codex.enabled"))
 		pidBytes, err := os.ReadFile(filepath.Join(root, ".trace", "daemon.pid"))
 		if err == nil {
-			if pid, err := strconv.Atoi(string(pidBytes)); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil && daemon.ProcessIsTraceDaemon(pid, root) {
 				if p, err := os.FindProcess(pid); err == nil {
 					_ = p.Signal(syscall.SIGTERM)
+					// Wait for the daemon to release the SQLite database and
+					// remove its PID file before deleting .trace.
+					deadline := time.Now().Add(5 * time.Second)
+					for daemon.ProcessRunning(pid) && time.Now().Before(deadline) {
+						time.Sleep(25 * time.Millisecond)
+					}
+					if daemon.ProcessRunning(pid) {
+						_ = p.Signal(syscall.SIGKILL)
+						for i := 0; i < 100 && daemon.ProcessRunning(pid); i++ {
+							time.Sleep(10 * time.Millisecond)
+						}
+					}
 				}
 			}
 		}

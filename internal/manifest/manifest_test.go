@@ -24,8 +24,12 @@ func TestScanUpdateSave(t *testing.T) {
 	write("a.txt", "one")
 	write("b.txt", "two")
 	write(".env", "secret")
-	write(".gitignore", "ignored.txt\n")
+	write(".gitignore", "ignored.txt\nbuild/\n")
 	write("ignored.txt", "ignore")
+	if err := os.MkdirAll(filepath.Join(root, "build"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	write("build/output.bin", "generated")
 	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
 	if err != nil {
 		t.Fatal(err)

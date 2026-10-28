@@ -60,7 +60,7 @@ python3 -c 'import json,sys; rows=[json.loads(line) for line in open(sys.argv[1]
 "$binary" --repo "$work" rewind 2 >/dev/null
 [ "$(cat "$work/file.txt")" = 2 ] || { echo 'rewind did not restore step 2' >&2; exit 1; }
 [ "$(cat "$work/added.txt")" = created ] || { echo 'rewind did not restore created file' >&2; exit 1; }
-safety=$("$binary" --repo "$work" --json log | python3 -c 'import json,sys; print(json.load(sys.stdin)[-1]["step"])')
+safety=$("$binary" --repo "$work" --json log | python3 -c 'import json,sys; print([row["step"] for row in json.load(sys.stdin) if row["tag"]=="pre-rewind"][-1])')
 "$binary" --repo "$work" rewind "$safety" >/dev/null
 [ "$(cat "$work/file.txt")" = 5 ] || { echo 'safety rewind did not restore step 5' >&2; exit 1; }
 [ ! -e "$work/added.txt" ] || { echo 'safety rewind did not restore deletion' >&2; exit 1; }
@@ -75,7 +75,7 @@ fi
 git -C "$work_agy" init -q
 printf 'before\n' > "$work_agy/main.go"
 "$binary" --repo "$work_agy" init --agent agy >/dev/null
-grep -F 'trace hook agy Stop' "$work_agy/.agents/hooks.json" >/dev/null
+grep -F ' hook agy Stop' "$work_agy/.agents/hooks.json" >/dev/null
 transcript="$work_agy/.trace/agy-transcript.jsonl"
 printf '{"step_index":0,"type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>Update main.go</USER_REQUEST>"}\n' > "$transcript"
 printf '{"conversationId":"agy-e2e","transcriptPath":"%s","workspacePaths":["%s"]}\n' "$transcript" "$work_agy" | "$binary" --repo "$work_agy" hook agy SessionStart >/dev/null
@@ -94,7 +94,7 @@ done
 git -C "$work_cursor" init -q
 printf 'before\n' > "$work_cursor/main.go"
 "$binary" --repo "$work_cursor" init --agent cursor >/dev/null
-grep -F 'trace hook cursor afterAgentResponse' "$work_cursor/.cursor/hooks.json" >/dev/null
+grep -F ' hook cursor afterAgentResponse' "$work_cursor/.cursor/hooks.json" >/dev/null
 printf '{"conversation_id":"cursor-e2e","hook_event_name":"sessionStart"}\n' | "$binary" --repo "$work_cursor" hook cursor sessionStart >/dev/null
 prompt_output=$(printf '{"conversation_id":"cursor-e2e","hook_event_name":"beforeSubmitPrompt","prompt":"Fix Cursor file"}\n' | "$binary" --repo "$work_cursor" hook cursor beforeSubmitPrompt)
 [ "$prompt_output" = '{"continue":true}' ] || { echo 'Cursor prompt hook output changed agent behavior' >&2; exit 1; }

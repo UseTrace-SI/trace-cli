@@ -1,20 +1,81 @@
 package watch
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
+	"github.com/fsnotify/fsnotify"
 )
 
+// addDirs watches every directory Git considers relevant. Asking git for the
+// tracked and untracked-but-not-ignored files avoids descending into large
+// ignored trees such as node_modules or build output.
 func addDirs(w *fsnotify.Watcher, root string) error {
-	return filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
+	dirs, err := dirsToWatch(root)
+	if err != nil {
+		return err
+	}
+	for _, dir := range dirs {
+		if err := w.Add(dir); err != nil {
+			return fmt.Errorf("watching %s: %w", dir, err)
+		}
+	}
+	return nil
+}
+
+func dirsToWatch(root string) ([]string, error) {
+	dirs := map[string]bool{root: true}
+	out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
+	if err != nil {
+		return walkDirs(root)
+	}
+	for _, raw := range bytes.Split(out, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		rel := filepath.ToSlash(string(raw))
+		if manifest.Excluded(rel) {
+			continue
+		}
+		dir := filepath.Join(root, filepath.Dir(filepath.FromSlash(rel)))
+		if !insideRoot(root, dir) {
+			continue
+		}
+		dirs[dir] = true
+	}
+	// Pre-existing empty directories are intentionally not discovered with a
+	// full walk: walking ignored trees is exactly what this avoids. Directories
+	// created while the daemon runs are added on their fsnotify create event.
+	outDirs := make([]string, 0, len(dirs))
+	for dir := range dirs {
+		outDirs = append(outDirs, dir)
+	}
+	sort.Strings(outDirs)
+	return outDirs, nil
+}
+
+func ignoredDir(root, rel string) bool {
+	cmd := exec.Command("git", "-C", root, "check-ignore", "-q", "--", rel)
+	return cmd.Run() == nil
+}
+
+func insideRoot(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
+func walkDirs(root string) ([]string, error) {
+	var dirs []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -28,11 +89,13 @@ func addDirs(w *fsnotify.Watcher, root string) error {
 		if rel != "." && manifest.Excluded(filepath.ToSlash(rel)) {
 			return filepath.SkipDir
 		}
-		if err := w.Add(p); err != nil {
-			return fmt.Errorf("watching %s: %w", p, err)
-		}
+		dirs = append(dirs, p)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return dirs, nil
 }
 
 func Run(ctx context.Context, root string, onDirty func([]string)) error {
@@ -77,7 +140,7 @@ func Run(ctx context.Context, root string, onDirty func([]string)) error {
 				continue
 			}
 			if ev.Op&fsnotify.Create != 0 {
-				if info, err := os.Lstat(ev.Name); err == nil && info.IsDir() {
+				if info, err := os.Lstat(ev.Name); err == nil && info.IsDir() && !ignoredDir(root, rel) {
 					_ = addDirs(w, ev.Name)
 				}
 			}

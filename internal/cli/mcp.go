@@ -3,10 +3,10 @@ package cli
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	mcpserver "github.com/UseTrace-SI/trace-cli/internal/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/spf13/cobra"
 )
 
 func mcpCommand(repoPath *string) *cobra.Command {

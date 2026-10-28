@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
+	"github.com/spf13/cobra"
 )
 
 var safeName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)

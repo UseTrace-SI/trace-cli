@@ -88,7 +88,7 @@ func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
 	if err != nil {
 		return fmt.Errorf("encoding downloaded update: %w", err)
 	}
-	if _, err := db.Exec("INSERT INTO sync_updates(id,table_name,row_id,data) VALUES(?,?,?,?)", update.ID, update.TableName, update.RowID, string(sanitized)); err != nil {
+	if _, err := db.Exec("INSERT OR IGNORE INTO sync_updates(id,table_name,row_id,data) VALUES(?,?,?,?)", update.ID, update.TableName, update.RowID, string(sanitized)); err != nil {
 		return fmt.Errorf("storing downloaded update: %w", err)
 	}
 	return nil
@@ -164,6 +164,15 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 	}
 	if data[key] != row.ID {
 		return errors.New("download row ID mismatch")
+	}
+	// Pull is retried after partial failures; re-applying an already stored row
+	// must be a no-op instead of a primary-key error.
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM "+row.Table+" WHERE "+key+"=?", row.ID).Scan(&exists); err != nil {
+		return fmt.Errorf("checking downloaded row: %w", err)
+	}
+	if exists > 0 {
+		return nil
 	}
 	if row.Table == "turns" || row.Table == "keyframes" {
 		seq, ok := data["seq"].(float64)

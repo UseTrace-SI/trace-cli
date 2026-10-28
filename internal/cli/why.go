@@ -13,6 +13,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 	"github.com/UseTrace-SI/trace-cli/internal/why"
 	"github.com/spf13/cobra"
 )
@@ -87,17 +88,22 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		var results []whyResult
 		uncertain := false
-		textCache := map[string]string{"": ""}
-		loadText := func(hash string) (string, error) {
+		type cachedText struct {
+			text      string
+			truncated bool
+		}
+		textCache := map[string]cachedText{"": {}}
+		loadText := func(hash string) (cachedText, error) {
 			if value, ok := textCache[hash]; ok {
 				return value, nil
 			}
-			value, err := blobText(e.Blobs, blob.Hash(hash))
+			text, truncated, err := blobTextLimited(e.Blobs, blob.Hash(hash))
 			if err != nil {
-				return "", err
+				return cachedText{}, err
 			}
+			value := cachedText{text: text, truncated: truncated}
 			if len(textCache) >= 64 {
-				textCache = map[string]string{"": ""}
+				textCache = map[string]cachedText{"": {}}
 			}
 			textCache[hash] = value
 			return value, nil
@@ -129,11 +135,11 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(oldText) > 1<<20 || len(newText) > 1<<20 {
+			if oldText.truncated || newText.truncated {
 				uncertain = true
 				break
 			}
-			oldLine, touched := why.MapLine(oldText, newText, line)
+			oldLine, touched := why.MapLine(oldText.text, newText.text, line)
 			if oldLine < 0 {
 				uncertain = true
 				break
@@ -160,7 +166,7 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 						return err
 					}
 					if len(r.Reasoning) > 400 {
-						r.Reasoning = r.Reasoning[:400]
+						r.Reasoning = textutil.Truncate(r.Reasoning, 400)
 					}
 				}
 				results = append(results, r)
