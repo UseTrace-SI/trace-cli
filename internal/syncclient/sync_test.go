@@ -25,6 +25,50 @@ func response(body string) *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
 }
 
+func TestReadCommitPages(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, commit := range []struct {
+		sha string
+		at  int64
+	}{{"c", 101}, {"b", 100}, {"e", 103}, {"a", 100}, {"d", 102}} {
+		if _, err := db.Exec("INSERT INTO commits(sha, at) VALUES(?, ?)", commit.sha, commit.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var index string
+	if err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name='commits_at_sha'").Scan(&index); err != nil {
+		t.Fatalf("commit cursor index: %v", err)
+	}
+	var got []string
+	after := ""
+	for {
+		rows, cursors, err := readRows(db.DB, "commits", after, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != len(cursors) || len(rows) > 2 {
+			t.Fatalf("invalid page: %d rows, %d cursors", len(rows), len(cursors))
+		}
+		for i, row := range rows {
+			got = append(got, row.ID)
+			after = cursors[i]
+		}
+		if len(rows) < 2 {
+			break
+		}
+	}
+	if want := []string{"a", "b", "c", "d", "e"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("commit pages = %v, want %v", got, want)
+	}
+	if _, _, err := readRows(db.DB, "commits", "bad-cursor", 2); err == nil {
+		t.Fatal("invalid commit cursor accepted")
+	}
+}
+
 func TestCipherRoundTripAndAuthentication(t *testing.T) {
 	c, err := Derive("a sufficiently long passphrase", bytes.Repeat([]byte{3}, 32))
 	if err != nil {

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS ops (id TEXT PRIMARY KEY, turn_id TEXT REFERENCES tur
 CREATE INDEX IF NOT EXISTS ops_path ON ops(path, at);
 CREATE TABLE IF NOT EXISTS commits (sha TEXT PRIMARY KEY, keyframe_id TEXT REFERENCES keyframes(id),
   at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS commits_at_sha ON commits(at, sha);
 `
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("migrating database: %w", err)

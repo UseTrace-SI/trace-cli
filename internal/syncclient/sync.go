@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -291,8 +292,20 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 	query := "SELECT * FROM " + table + " WHERE id > ? ORDER BY id LIMIT ?"
 	args := []any{after, limit}
 	if table == "commits" {
-		query = "SELECT * FROM commits ORDER BY at, sha"
-		args = nil
+		query = "SELECT * FROM commits ORDER BY at, sha LIMIT ?"
+		args = []any{limit}
+		if after != "" {
+			at, sha, ok := strings.Cut(after, ":")
+			if !ok || len(at) != 20 || sha == "" {
+				return nil, nil, errors.New("invalid commit sync cursor")
+			}
+			millis, err := strconv.ParseInt(at, 10, 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid commit sync cursor: %w", err)
+			}
+			query = "SELECT * FROM commits WHERE (at, sha) > (?, ?) ORDER BY at, sha LIMIT ?"
+			args = []any{millis, sha, limit}
+		}
 	}
 	result, err := db.Query(query, args...)
 	if err != nil {
@@ -327,9 +340,6 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 		if table == "commits" {
 			id, _ = data["sha"].(string)
 			cursor = fmt.Sprintf("%020d:%s", data["at"], id)
-			if cursor <= after {
-				continue
-			}
 		}
 		b, err := json.Marshal(data)
 		if err != nil {
