@@ -31,7 +31,8 @@ check_benchmark Rewind1000Files 1200000000
 check_benchmark Log5000Steps 120000000
 check_benchmark Why5000UnrelatedChanges 120000000
 
-go build -o bin/trace ./cmd/trace
+# Match the stripped binaries shipped by GoReleaser.
+go build -ldflags='-s -w' -o bin/trace ./cmd/trace
 perf_repo=$(mktemp -d)
 cleanup() {
   if [[ -f "$perf_repo/.trace/daemon.pid" ]]; then
@@ -79,6 +80,7 @@ for _ in range(3):
         durations.append((time.perf_counter() - start) * 1000)
     samples.append(sorted(durations)[189])
 p95 = sorted(samples)[1]
+print(f"full hook process p95 samples: {', '.join(f'{sample:.2f}' for sample in samples)} ms")
 print(f"full hook process p95 (median of 3 runs): {p95:.2f} ms")
 if p95 >= 20:
     raise SystemExit("full hook process exceeded 20 ms p95")
