@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ func TestUnifiedDiffKeepsUnchangedLines(t *testing.T) {
 }
 
 func BenchmarkLog5000Steps(b *testing.B) {
-	root := b.TempDir()
+	root := benchmarkRepo(b)
 	dir := filepath.Join(root, ".trace")
 	db, err := store.Open(filepath.Join(dir, "trace.db"))
 	if err != nil {
@@ -67,7 +68,7 @@ func BenchmarkLog5000Steps(b *testing.B) {
 }
 
 func BenchmarkWhy5000UnrelatedChanges(b *testing.B) {
-	root := b.TempDir()
+	root := benchmarkRepo(b)
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("keep\nA\n"), 0600); err != nil {
 		b.Fatal(err)
 	}
@@ -117,4 +118,13 @@ func BenchmarkWhy5000UnrelatedChanges(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func benchmarkRepo(b *testing.B) string {
+	b.Helper()
+	root := b.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		b.Fatalf("init benchmark repository: %v: %s", err, out)
+	}
+	return root
 }

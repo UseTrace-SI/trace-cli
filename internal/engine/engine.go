@@ -234,17 +234,11 @@ func (e *Engine) toolEdit(ev event.Event) error {
 	var firstPath string
 	for _, p := range paths {
 		if p != "" {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(e.Root, p)
-			}
-			rel, err := filepath.Rel(e.Root, p)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			rel, err := repo.RelativePath(e.Root, p)
+			if err != nil || manifest.Excluded(rel) {
 				continue
 			}
-			p = filepath.ToSlash(rel)
-			if manifest.SecretPath(p) {
-				continue
-			}
+			p = rel
 			if firstPath == "" {
 				firstPath = p
 			}
@@ -326,14 +320,11 @@ func (e *Engine) fileRead(ev event.Event) error {
 		seen[path] = true
 	}
 	for _, path := range ev.Paths {
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(e.Root, path)
-		}
-		rel, err := filepath.Rel(e.Root, path)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || manifest.SecretPath(rel) {
+		rel, err := repo.RelativePath(e.Root, path)
+		if err != nil || manifest.Excluded(rel) {
 			continue
 		}
-		seen[filepath.ToSlash(rel)] = true
+		seen[rel] = true
 	}
 	files = files[:0]
 	for path := range seen {

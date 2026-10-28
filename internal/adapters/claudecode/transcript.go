@@ -12,6 +12,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
+	"github.com/UseTrace-SI/trace-cli/internal/repo"
 )
 
 // TranscriptContext is the context Claude has written since a turn began.
@@ -103,9 +104,9 @@ func ReadTranscript(path string, offset int64, root string) (TranscriptContext, 
 				}
 				call := transcriptToolCall{Name: r.Text(block.Name)}
 				if pathInput.FilePath != "" {
-					rel, err := filepath.Rel(root, pathInput.FilePath)
-					if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-						call.Path = filepath.ToSlash(rel)
+					rel, err := repo.RelativePath(root, pathInput.FilePath)
+					if err == nil && !manifest.Excluded(rel) {
+						call.Path = rel
 					}
 				}
 				calls = append(calls, call)

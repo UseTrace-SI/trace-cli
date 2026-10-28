@@ -40,3 +40,40 @@ func TestFindRoot(t *testing.T) {
 		t.Fatal("wrong trace directory")
 	}
 }
+
+func TestRelativePathResolvesAliasesAndMissingFiles(t *testing.T) {
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	escape := filepath.Join(root, "escape")
+	if err := os.Symlink(t.TempDir(), escape); err != nil {
+		t.Fatal(err)
+	}
+	dangling := filepath.Join(root, "dangling")
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, path, want string
+		wantError        bool
+	}{
+		{name: "existing alias", path: filepath.Join(alias, "file.txt"), want: "file.txt"},
+		{name: "deleted alias", path: filepath.Join(alias, "deleted.txt"), want: "deleted.txt"},
+		{name: "relative path", path: "file.txt", want: "file.txt"},
+		{name: "outside path", path: filepath.Join(t.TempDir(), "file.txt"), wantError: true},
+		{name: "symlink escape", path: filepath.Join(escape, "file.txt"), wantError: true},
+		{name: "dangling symlink", path: filepath.Join(dangling, "file.txt"), wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RelativePath(root, tc.path)
+			if (err != nil) != tc.wantError || (!tc.wantError && got != tc.want) {
+				t.Fatalf("RelativePath(%q) = %q, %v; want %q, error %t", tc.path, got, err, tc.want, tc.wantError)
+			}
+		})
+	}
+}

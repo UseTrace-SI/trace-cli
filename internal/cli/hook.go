@@ -78,7 +78,7 @@ func runHook(repoPath, agent, hookEvent string) {
 			}
 		}()
 	}
-	root, err := rootFromFlag(repoPath)
+	root, err := hookRootFromFlag(repoPath)
 	if err != nil {
 		return
 	}

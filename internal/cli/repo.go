@@ -10,13 +10,22 @@ import (
 
 func rootFromFlag(flag string) (string, error) {
 	if flag != "" {
-		return flag, nil
+		return repo.FindRoot(flag)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 	return repo.FindRoot(cwd)
+}
+
+// Hooks receive the absolute repository root from their installed command.
+// Avoid a git subprocess on every agent event.
+func hookRootFromFlag(flag string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	return rootFromFlag("")
 }
 
 func initializedRoot(flag string) (string, error) {

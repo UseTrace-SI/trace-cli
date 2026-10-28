@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
+	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/UseTrace-SI/trace-cli/internal/why"
+	"github.com/spf13/cobra"
 )
 
 type whyResult struct {
@@ -42,15 +43,8 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		file := args[0][:pos]
-		if filepath.IsAbs(file) {
-			file, err = filepath.Rel(root, file)
-			if err != nil {
-				return err
-			}
-		}
-		file = filepath.ToSlash(filepath.Clean(file))
-		if file == ".." || strings.HasPrefix(file, "../") || manifest.Excluded(file) {
+		file, err := repo.RelativePath(root, args[0][:pos])
+		if err != nil || manifest.Excluded(file) {
 			return fmt.Errorf("unsafe file path")
 		}
 		current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
