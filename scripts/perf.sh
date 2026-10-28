@@ -60,6 +60,7 @@ else
 fi
 
 python3 - "$perf_repo" <<'PY'
+import os
 import subprocess
 import sys
 import time
@@ -80,8 +81,9 @@ for _ in range(3):
         durations.append((time.perf_counter() - start) * 1000)
     samples.append(sorted(durations)[189])
 p95 = sorted(samples)[1]
+limit = float(os.environ.get("TRACE_PERF_HOOK_LIMIT_MS", "20"))
 print(f"full hook process p95 samples: {', '.join(f'{sample:.2f}' for sample in samples)} ms")
-print(f"full hook process p95 (median of 3 runs): {p95:.2f} ms")
-if p95 >= 20:
-    raise SystemExit("full hook process exceeded 20 ms p95")
+print(f"full hook process p95 (median of 3 runs): {p95:.2f} ms (limit {limit:g} ms)")
+if p95 >= limit:
+    raise SystemExit(f"full hook process exceeded {limit:g} ms p95")
 PY
