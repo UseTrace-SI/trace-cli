@@ -56,20 +56,29 @@ func SaveCredentials(remote string, credentials Credentials) error {
 	if remote == "" || err != nil {
 		return errors.New("missing sync credentials")
 	}
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("security", "add-generic-password", "-U", "-a", remote, "-s", service, "-w", value)
-	case "linux":
-		cmd = exec.Command("secret-tool", "store", "--label=Trace sync", service, remote)
-		cmd.Stdin = strings.NewReader(value)
-	default:
-		return errors.New("OS credential store is not supported")
+	cmd, err := credentialSaveCommand(runtime.GOOS, remote, value)
+	if err != nil {
+		return err
 	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("saving token in OS credential store: %w", err)
 	}
 	return nil
+}
+
+func credentialSaveCommand(goos, remote, value string) (*exec.Cmd, error) {
+	var cmd *exec.Cmd
+	switch goos {
+	case "darwin":
+		cmd = exec.Command("security", "add-generic-password", "-U", "-a", remote, "-s", service, "-w")
+		cmd.Stdin = strings.NewReader(value + "\n" + value + "\n")
+	case "linux":
+		cmd = exec.Command("secret-tool", "store", "--label=Trace sync", service, remote)
+		cmd.Stdin = strings.NewReader(value)
+	default:
+		return nil, errors.New("OS credential store is not supported")
+	}
+	return cmd, nil
 }
 
 func LoadToken(remote string) (string, error) {
