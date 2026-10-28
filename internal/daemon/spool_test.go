@@ -194,7 +194,7 @@ func TestSocketDaemonIngestsFallbackSpool(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	ctx, cancel := context.WithCancel(context.Background())
-	seen := make(chan event.Event, 1)
+	seen := make(chan event.Event, 2)
 	done := make(chan error, 1)
 	go func() { done <- Serve(ctx, dir, func(ev event.Event) { seen <- ev }) }()
 	t.Cleanup(func() {
@@ -223,13 +223,35 @@ func TestSocketDaemonIngestsFallbackSpool(t *testing.T) {
 	if err := appendSpool(dir, event.Event{Kind: event.TurnStart, Agent: "test", At: 42}); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case ev := <-seen:
-		if ev.At != 42 {
-			t.Fatalf("unexpected fallback event: %+v", ev)
+	if err := Send(dir, event.Event{Kind: event.TurnEnd, Agent: "test", At: 43}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []int64{42, 43} {
+		select {
+		case ev := <-seen:
+			if ev.At != want {
+				t.Fatalf("delivery order: got %d, want %d", ev.At, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("socket daemon did not ingest the fallback and socket events")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("socket daemon did not ingest the fallback spool")
+	}
+}
+
+func TestSocketDeliveryDrainsFallbackFirst(t *testing.T) {
+	dir := t.TempDir()
+	if err := appendSpool(dir, event.Event{Kind: event.TurnStart, Agent: "test", At: 1}); err != nil {
+		t.Fatal(err)
+	}
+	queue := make(chan event.Event, 2)
+	delivery := orderedDelivery{dir: dir, queue: queue}
+	if err := delivery.socket(event.Event{Kind: event.TurnEnd, Agent: "test", At: 2}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []int64{1, 2} {
+		if got := (<-queue).At; got != want {
+			t.Fatalf("delivery order: got %d, want %d", got, want)
+		}
 	}
 }
 

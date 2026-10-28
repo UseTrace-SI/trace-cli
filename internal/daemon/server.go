@@ -49,7 +49,8 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 			consume(ev)
 		}
 	}()
-	if err := ingestSpool(dir, func(ev event.Event) { queue <- ev }); err != nil {
+	delivery := orderedDelivery{dir: dir, queue: queue}
+	if err := delivery.drain(); err != nil {
 		close(queue)
 		workers.Wait()
 		return err
@@ -57,7 +58,7 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 	pollCtx, stopPoll := context.WithCancel(ctx)
 	pollDone := make(chan error, 1)
 	go func() {
-		err := pollSpool(pollCtx, dir, func(ev event.Event) { queue <- ev })
+		err := pollSpool(pollCtx, delivery.drain)
 		if err != nil {
 			_ = ln.Close()
 		}
@@ -79,10 +80,16 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 		for s.Scan() {
 			var ev event.Event
 			if json.Unmarshal(s.Bytes(), &ev) == nil {
-				queue <- ev.Sanitized()
+				if err := delivery.socket(ev); err != nil {
+					acceptErr = fmt.Errorf("delivering socket event: %w", err)
+					break
+				}
 			}
 		}
 		conn.Close()
+		if acceptErr != nil {
+			break
+		}
 	}
 	stopPoll()
 	pollErr := <-pollDone
@@ -92,6 +99,29 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 		return fmt.Errorf("ingesting spooled events: %w", pollErr)
 	}
 	return acceptErr
+}
+
+// orderedDelivery keeps a completed fallback write ahead of later socket events.
+type orderedDelivery struct {
+	mu    sync.Mutex
+	dir   string
+	queue chan<- event.Event
+}
+
+func (d *orderedDelivery) drain() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return ingestSpool(d.dir, func(ev event.Event) { d.queue <- ev })
+}
+
+func (d *orderedDelivery) socket(ev event.Event) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err := ingestSpool(d.dir, func(spooled event.Event) { d.queue <- spooled }); err != nil {
+		return err
+	}
+	d.queue <- ev.Sanitized()
+	return nil
 }
 
 // serveSpool keeps local capture usable where Unix socket binding is denied.
@@ -105,10 +135,10 @@ func serveSpool(ctx context.Context, dir string, consume func(event.Event)) erro
 	if err := ingestSpool(dir, consume); err != nil {
 		return err
 	}
-	return pollSpool(ctx, dir, consume)
+	return pollSpool(ctx, func() error { return ingestSpool(dir, consume) })
 }
 
-func pollSpool(ctx context.Context, dir string, consume func(event.Event)) error {
+func pollSpool(ctx context.Context, drain func() error) error {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -116,7 +146,7 @@ func pollSpool(ctx context.Context, dir string, consume func(event.Event)) error
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := ingestSpool(dir, consume); err != nil {
+			if err := drain(); err != nil {
 				return err
 			}
 		}
