@@ -52,14 +52,29 @@ func Apply(target manifest.Manifest, root string, ig manifest.Ignorer, bs *blob.
 
 // ApplyPlanned restores a plan computed from a saved manifest. Reusing the
 // manifest avoids scanning and storing the working tree a second time.
-func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *blob.Store) ([]string, error) {
+func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *blob.Store) (applied []string, retErr error) {
 	for _, rel := range changed {
 		if _, err := safePath(root, rel); err != nil {
 			return nil, err
 		}
 	}
+	created, err := loadCreatedDirs(root)
+	if err != nil {
+		return nil, err
+	}
+	dirtyDirs := false
+	defer func() {
+		if dirtyDirs {
+			if err := saveCreatedDirs(root, created); err != nil && retErr == nil {
+				retErr = err
+			}
+		}
+	}()
 	for _, rel := range changed {
-		p, _ := safePath(root, rel)
+		p, err := safePath(root, rel)
+		if err != nil {
+			return nil, err
+		}
 		entry, exists := target[rel]
 		if !exists {
 			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
@@ -67,8 +82,18 @@ func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *b
 			}
 			continue
 		}
+		missing, err := missingParentDirs(root, rel)
+		if err != nil {
+			return nil, err
+		}
 		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 			return nil, fmt.Errorf("creating directory for %s: %w", rel, err)
+		}
+		for _, dir := range missing {
+			if !created[dir] {
+				created[dir] = true
+				dirtyDirs = true
+			}
 		}
 		r, err := bs.Get(entry.Hash)
 		if err != nil {
@@ -99,6 +124,11 @@ func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *b
 			os.Remove(tmp.Name())
 			return nil, fmt.Errorf("replacing %s: %w", rel, err)
 		}
+	}
+	pruned, err := pruneCreatedDirs(root, created)
+	dirtyDirs = dirtyDirs || pruned
+	if err != nil {
+		return nil, err
 	}
 	return changed, nil
 }

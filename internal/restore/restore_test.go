@@ -22,6 +22,23 @@ func TestSafePathRejectsUnsafeTargets(t *testing.T) {
 	}
 }
 
+func TestLoadCreatedDirsRejectsSymlink(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".trace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), ".env.local")
+	if err := os.WriteFile(secret, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, createdDirsPath(root)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadCreatedDirs(root); err == nil {
+		t.Fatal("created directories record followed a symlink")
+	}
+}
+
 func TestApplyRestoresBytesAndMode(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
@@ -63,5 +80,41 @@ func TestApplyRestoresBytesAndMode(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0755 {
 		t.Fatalf("mode: %o", info.Mode().Perm())
+	}
+}
+
+func TestApplyRemovesOnlyEmptyDirectoriesCreatedByTrace(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	userDir := filepath.Join(root, "user-empty")
+	if err := os.Mkdir(userDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := bs.PutBytes([]byte("restored"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := manifest.Manifest{"user-empty/nested/deeper/file.txt": {Hash: hash, Mode: 0600}}
+	if _, err := Apply(target, root, nil, bs); err != nil {
+		t.Fatal(err)
+	}
+	marker, err := os.Stat(createdDirsPath(root))
+	if err != nil || marker.Mode().Perm() != 0600 {
+		t.Fatalf("created directories record mode: %v, %v", marker, err)
+	}
+	if _, err := Apply(manifest.Manifest{}, root, nil, bs); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(userDir, "nested")); !os.IsNotExist(err) {
+		t.Fatalf("Trace-created directory remains: %v", err)
+	}
+	if info, err := os.Stat(userDir); err != nil || !info.IsDir() {
+		t.Fatalf("user directory was removed: %v", err)
 	}
 }
