@@ -22,6 +22,7 @@ import (
 )
 
 const batchSize = 500
+const maxRowRequestBytes = 7 << 20
 
 var tables = []string{"sessions", "turns", "keyframes", "ops", "commits"}
 
@@ -201,24 +202,60 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 					rows[i].Data = nil
 				}
 			}
-			request := map[string]any{"repo": c.Config.Remote, "mode": c.Config.Mode, "rows": rows}
+			request := map[string]any{"repo": c.Config.Remote, "mode": c.Config.Mode, "rows": []Row{}}
 			if c.Cipher != nil {
 				request["salt"] = base64.StdEncoding.EncodeToString(c.Cipher.Salt)
 			}
-			if err := c.post(ctx, "/v1/sync/rows", request, nil); err != nil {
-				return blobs, rowCount, err
+			header, err := json.Marshal(request)
+			if err != nil {
+				return blobs, rowCount, fmt.Errorf("encoding sync batch header: %w", err)
 			}
-			state.Cursors[table] = cursors[len(cursors)-1]
-			if err := saveState(statePath, state); err != nil {
-				return blobs, rowCount, err
+			for start := 0; start < len(rows); {
+				end, err := rowBatchEnd(rows, start, len(header))
+				if err != nil {
+					return blobs, rowCount, err
+				}
+				request["rows"] = rows[start:end]
+				if err := c.post(ctx, "/v1/sync/rows", request, nil); err != nil {
+					return blobs, rowCount, err
+				}
+				state.Cursors[table] = cursors[end-1]
+				if err := saveState(statePath, state); err != nil {
+					return blobs, rowCount, err
+				}
+				rowCount += end - start
+				start = end
 			}
-			rowCount += len(rows)
 			if len(rows) < batchSize {
 				break
 			}
 		}
 	}
 	return blobs, rowCount, nil
+}
+
+func rowBatchEnd(rows []Row, start, headerBytes int) (int, error) {
+	size := headerBytes
+	end := start
+	for end < len(rows) {
+		encoded, err := json.Marshal(rows[end])
+		if err != nil {
+			return 0, fmt.Errorf("encoding sync row: %w", err)
+		}
+		additional := len(encoded)
+		if end > start {
+			additional++ // comma between rows
+		}
+		if size+additional > maxRowRequestBytes {
+			break
+		}
+		size += additional
+		end++
+	}
+	if end == start {
+		return 0, fmt.Errorf("sync row %s exceeds the request size limit", rows[start].ID)
+	}
+	return end, nil
 }
 
 func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, error) {

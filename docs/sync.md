@@ -42,6 +42,6 @@ The client sends `Authorization: Bearer <GitHub OAuth token>` to the configured 
 - `GET /v1/sync/blobs/list?repo=owner/repo&mode=pro|team&after=HASH`: up to 100 blob hashes and a `next` cursor.
 - `GET /v1/sync/blobs?repo=owner/repo&mode=pro|team&hash=HASH`: base64 blob payload. Team returns decrypted bytes after checking read access; Pro returns client ciphertext and its salt.
 
-Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only. Recovery downloads rows and blobs into a fresh Trace history.
+Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client keeps row requests below 7 MiB, within the Worker's 8 MiB request limit, and records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only. Recovery downloads rows and blobs into a fresh Trace history.
 
 No public sync endpoint or OAuth app registration is configured yet. Live sync requires deploying the companion app and registering a GitHub OAuth app with device flow enabled.

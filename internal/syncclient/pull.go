@@ -47,7 +47,8 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, output 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("sync server rejected download: %s", resp.Status)
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(output); err != nil {
+	// The Worker returns up to 20 rows, each with a payload near 1 MB.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(output); err != nil {
 		return fmt.Errorf("decoding sync download: %w", err)
 	}
 	return nil

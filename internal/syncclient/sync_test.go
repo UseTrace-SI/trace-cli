@@ -89,6 +89,76 @@ func TestPullRemapsSharedStepsAndRedactsText(t *testing.T) {
 	}
 }
 
+func TestDownloadAcceptsFullWorkerPage(t *testing.T) {
+	client := &Client{Config: Config{Endpoint: "https://sync.example", Remote: "owner/repo", Mode: "team"}, Token: "test-token"}
+	want := strings.Repeat("x", 17<<20)
+	client.HTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return response(`{"payload":"` + want + `"}`), nil
+	})}
+	var got struct {
+		Payload string `json:"payload"`
+	}
+	if err := client.get(context.Background(), "/v1/sync/rows", client.downloadValues(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Payload != want {
+		t.Fatal("downloaded page was truncated")
+	}
+}
+
+func TestSyncSplitsLargeRowBatches(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	bs, err := blob.Open(filepath.Join(dir, "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := strings.Repeat("x", 950_000)
+	for i := range 10 {
+		if _, err := db.Exec("INSERT INTO ops(id,path,kind,source,at,detail) VALUES(?,?,?,?,?,?)", fmt.Sprintf("OP%02d", i), "file.go", "edit", "tool", i, detail); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requests := 0
+	accepted := 0
+	failOnce := true
+	client := &Client{Config: Config{Endpoint: "https://sync.example", Remote: "owner/repo", Mode: "team"}, Token: "test-token", TraceDir: dir, DB: db.DB, Blobs: bs}
+	client.HTTP = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(body) > 8<<20 {
+			t.Fatalf("row batch exceeded Worker limit: %d bytes", len(body))
+		}
+		var upload struct {
+			Rows []Row `json:"rows"`
+		}
+		if err := json.Unmarshal(body, &upload); err != nil {
+			t.Fatal(err)
+		}
+		requests++
+		if failOnce && requests == 2 {
+			failOnce = false
+			return &http.Response{StatusCode: http.StatusServiceUnavailable, Status: "503 Service Unavailable", Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}
+		accepted += len(upload.Rows)
+		return response(`{}`), nil
+	})}
+	_, firstRows, err := client.Sync(context.Background())
+	if err == nil || firstRows == 0 || firstRows >= 10 {
+		t.Fatalf("first sync should stop after its first acknowledged batch: rows=%d err=%v", firstRows, err)
+	}
+	_, remainingRows, err := client.Sync(context.Background())
+	if err != nil || firstRows+remainingRows != 10 || accepted != 10 || requests < 3 {
+		t.Fatalf("resumed sync: first=%d remaining=%d accepted=%d requests=%d err=%v", firstRows, remainingRows, accepted, requests, err)
+	}
+}
+
 func TestSyncEncryptedRowsAndBlobs(t *testing.T) {
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "trace.db"))
