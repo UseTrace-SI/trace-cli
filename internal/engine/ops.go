@@ -104,6 +104,10 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 	if err != nil {
 		return nil, err
 	}
+	return e.recordManifest(next)
+}
+
+func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, error) {
 	if e.current == nil {
 		e.current = next
 		return next, nil
@@ -113,8 +117,12 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 	changed = append(changed, added...)
 	changed = append(changed, modified...)
 	changed = append(changed, deleted...)
+	if len(changed) == 0 {
+		e.current = next
+		return next, nil
+	}
 	var turnID, sessionID string
-	err = e.DB.QueryRow(`SELECT t.id,t.session_id FROM turns t JOIN sessions s ON s.id=t.session_id
+	err := e.DB.QueryRow(`SELECT t.id,t.session_id FROM turns t JOIN sessions s ON s.id=t.session_id
 		WHERE s.worktree=? AND t.ended_at IS NULL ORDER BY t.started_at DESC LIMIT 1`, e.Root).Scan(&turnID, &sessionID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("finding active turn: %w", err)
@@ -122,6 +130,11 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 	if err == sql.ErrNoRows {
 		turnID, sessionID = "", ""
 	}
+	tx, err := e.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("starting change record: %w", err)
+	}
+	defer tx.Rollback()
 	for _, p := range changed {
 		oldHash := e.current[p].Hash
 		newHash := next[p].Hash
@@ -141,18 +154,20 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 		}
 		opAt := time.Now().UnixMilli()
 		if turnID != "" {
-			contested, err := e.contested(p, sessionID, opAt)
+			var count int
+			err := tx.QueryRow(`SELECT COUNT(*) FROM ops WHERE path=? AND session_id IS NOT NULL
+				AND session_id<>? AND at>=? AND at<=?`, p, sessionID, opAt-2000, opAt).Scan(&count)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("checking concurrent edits: %w", err)
 			}
-			if contested {
+			if count > 0 {
 				kind = "contested"
 			}
 		}
 		source := "watcher"
 		if turnID != "" {
 			var n int
-			if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND path=? AND source='tool'", turnID, p).Scan(&n); err != nil {
+			if err := tx.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND path=? AND source='tool'", turnID, p).Scan(&n); err != nil {
 				return nil, fmt.Errorf("checking tool edit: %w", err)
 			}
 			if n > 0 {
@@ -169,7 +184,7 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 				tid = turnID
 				sid = sessionID
 			}
-			_, err = e.DB.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, opAt)
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, opAt)
 			if err != nil {
 				return nil, fmt.Errorf("recording file change: %w", err)
 			}
@@ -183,12 +198,15 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 			if turnID != "" {
 				tid, sid = turnID, sessionID
 			}
-			_, err = e.DB.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
 				opID, tid, sid, p, symbol.Kind, symbol.Name, symbol.StartLine, symbol.EndLine, oldHash, newHash, source, time.Now().UnixMilli())
 			if err != nil {
 				return nil, fmt.Errorf("recording structural change: %w", err)
 			}
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing change record: %w", err)
 	}
 	e.current = next
 	return next, nil

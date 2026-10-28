@@ -47,7 +47,12 @@ func Apply(target manifest.Manifest, root string, ig manifest.Ignorer, bs *blob.
 	if err != nil {
 		return nil, err
 	}
-	changed := Plan(current, target)
+	return ApplyPlanned(target, root, Plan(current, target), bs)
+}
+
+// ApplyPlanned restores a plan computed from a saved manifest. Reusing the
+// manifest avoids scanning and storing the working tree a second time.
+func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *blob.Store) ([]string, error) {
 	for _, rel := range changed {
 		if _, err := safePath(root, rel); err != nil {
 			return nil, err

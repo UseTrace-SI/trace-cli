@@ -76,6 +76,21 @@ func TestTurnsAndUndoableRewind(t *testing.T) {
 	if string(b) != "two\n" {
 		t.Fatalf("rewind: %q", b)
 	}
+	before, err := e.ManifestAt(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.ManifestAt(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var beforeHash, afterHash string
+	if err := e.DB.QueryRow("SELECT before_hash, after_hash FROM ops WHERE path='file.txt' ORDER BY rowid DESC LIMIT 1").Scan(&beforeHash, &afterHash); err != nil {
+		t.Fatal(err)
+	}
+	if beforeHash != string(before["file.txt"].Hash) || afterHash != string(after["file.txt"].Hash) {
+		t.Fatalf("rewind operation hashes: %q -> %q", beforeHash, afterHash)
+	}
 	if _, _, err := e.Rewind(safety, "", false); err != nil {
 		t.Fatal(err)
 	}

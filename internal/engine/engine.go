@@ -622,11 +622,11 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,git_head,tag,created_at) VALUES(?,?,?,?,?,?)", keyID, safetySeq, h, e.head(), "pre-rewind", time.Now().UnixMilli()); err != nil {
 		return 0, nil, fmt.Errorf("saving safety keyframe: %w", err)
 	}
-	changed, err = restore.Apply(target, e.Root, nil, e.Blobs)
+	changed, err = restore.ApplyPlanned(target, e.Root, changed, e.Blobs)
 	if err != nil {
 		return safetySeq, nil, err
 	}
-	if _, err := e.recordChanges(nil, true); err != nil {
+	if _, err := e.recordManifest(target); err != nil {
 		return safetySeq, changed, err
 	}
 	opID, err := id.New()
