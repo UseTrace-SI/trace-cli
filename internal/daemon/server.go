@@ -30,7 +30,7 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 	}
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
-		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENAMETOOLONG) {
 			return serveSpool(ctx, dir, consume)
 		}
 		return fmt.Errorf("listening on socket: %w", err)
@@ -54,16 +54,24 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 		workers.Wait()
 		return err
 	}
-	go func() { <-ctx.Done(); ln.Close() }()
+	pollCtx, stopPoll := context.WithCancel(ctx)
+	pollDone := make(chan error, 1)
+	go func() {
+		err := pollSpool(pollCtx, dir, func(ev event.Event) { queue <- ev })
+		if err != nil {
+			_ = ln.Close()
+		}
+		pollDone <- err
+	}()
+	go func() { <-pollCtx.Done(); _ = ln.Close() }()
+	var acceptErr error
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			if ctx.Err() != nil {
-				break
+			if ctx.Err() == nil {
+				acceptErr = fmt.Errorf("accepting event: %w", err)
 			}
-			close(queue)
-			workers.Wait()
-			return fmt.Errorf("accepting event: %w", err)
+			break
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		s := bufio.NewScanner(conn)
@@ -76,9 +84,14 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 		}
 		conn.Close()
 	}
+	stopPoll()
+	pollErr := <-pollDone
 	close(queue)
 	workers.Wait()
-	return nil
+	if pollErr != nil {
+		return fmt.Errorf("ingesting spooled events: %w", pollErr)
+	}
+	return acceptErr
 }
 
 // serveSpool keeps local capture usable where Unix socket binding is denied.
@@ -92,6 +105,10 @@ func serveSpool(ctx context.Context, dir string, consume func(event.Event)) erro
 	if err := ingestSpool(dir, consume); err != nil {
 		return err
 	}
+	return pollSpool(ctx, dir, consume)
+}
+
+func pollSpool(ctx context.Context, dir string, consume func(event.Event)) error {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {

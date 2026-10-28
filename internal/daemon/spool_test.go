@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -183,5 +184,90 @@ func TestHookSocketRoundTripP95(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSocketDaemonIngestsFallbackSpool(t *testing.T) {
+	dir, err := os.MkdirTemp("", "tr-sock-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	ctx, cancel := context.WithCancel(context.Background())
+	seen := make(chan event.Event, 1)
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, dir, func(ev event.Event) { seen <- ev }) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("stopping daemon: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("daemon did not stop")
+		}
+	})
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		if _, err := os.Stat(filepath.Join(dir, "sock")); err == nil {
+			break
+		}
+		if _, err := os.Stat(filepath.Join(dir, "spool.ready")); err == nil {
+			t.Skip("Unix socket binding is unavailable in this sandbox")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sock")); err != nil {
+		t.Fatal("daemon socket did not start")
+	}
+	if err := appendSpool(dir, event.Event{Kind: event.TurnStart, Agent: "test", At: 42}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-seen:
+		if ev.At != 42 {
+			t.Fatalf("unexpected fallback event: %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("socket daemon did not ingest the fallback spool")
+	}
+}
+
+func TestLongSocketPathFallsBackToSpool(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), strings.Repeat("x", 120))
+	ctx, cancel := context.WithCancel(context.Background())
+	seen := make(chan event.Event, 1)
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, dir, func(ev event.Event) { seen <- ev }) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("stopping spool daemon: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("spool daemon did not stop")
+		}
+	})
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		if _, err := os.Stat(filepath.Join(dir, "spool.ready")); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "spool.ready")); err != nil {
+		t.Fatal("long socket path did not switch to spool mode")
+	}
+	if err := Send(dir, event.Event{Kind: event.TurnStart, Agent: "test", At: 73}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-seen:
+		if ev.At != 73 {
+			t.Fatalf("unexpected spooled event: %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("spool daemon did not ingest event from a long socket path")
 	}
 }
