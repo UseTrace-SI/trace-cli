@@ -6,16 +6,32 @@ Trace keeps local keyframes of coding-agent turns so a project can be inspected,
 
 The CLI records Claude Code, Codex, Cursor Agent, and Antigravity CLI (`agy`) turns, stores compressed keyframes, and supports log, show, rewind, status, why, fork, resume, garbage collection, read-only MCP history tools, and Agent Trace export. The daemon stays resident until stopped, recovers automatically from the next agent session, and rotates its log. Rewind handles files changing into directories and back, removes empty directories created by earlier restores, preserves ignored files, and records the restored tree as the latest keyframe. It captures available assistant text, tool names, and read paths from agent hooks or transcripts. Optional Tree-sitter builds classify structural edits. An opt-in [Pro/Team sync client](docs/sync.md) uploads history in Worker-sized batches, appends corrections for completed turns and sessions, and can recover it into a fresh Git checkout through the separate Trace app, which is not yet deployed. `make test-sync` checks the client. See [quickstart](docs/quickstart.md) and [privacy](docs/privacy.md).
 
-## Build and try it
+## Install
 
-Go 1.23 or newer and Git are required. Until the first tagged release, build from source:
+macOS or Linux, with Git installed:
+
+```sh
+brew install UseTrace-SI/tap/trace
+```
+
+Or install the latest release archive with checksum verification:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/UseTrace-SI/trace-cli/main/scripts/install.sh | sh
+```
+
+Both install `trace` and its `trc` alias. The script defaults to `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. To build from source instead, use Go 1.23 or newer:
 
 ```sh
 git clone https://github.com/UseTrace-SI/trace-cli.git
 cd trace-cli
 make build
 export PATH="$PWD/bin:$PATH"
-cd /path/to/your/git/repo
+```
+
+Then, in any Git repository:
+
+```sh
 trace init --agent codex
 ```
 
