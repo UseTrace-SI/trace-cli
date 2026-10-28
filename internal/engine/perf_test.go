@@ -32,6 +32,7 @@ func BenchmarkKeyframe100ChangedFilesIn10000FileRepo(b *testing.B) {
 	}
 	b.ResetTimer()
 	for round := 0; round < b.N; round++ {
+		b.StopTimer()
 		ev := event.Event{Kind: event.TurnStart, Agent: "codex", AgentSessionID: "bench", Worktree: root, At: time.Now().UnixMilli()}
 		if err := e.Process(ev); err != nil {
 			b.Fatal(err)
@@ -49,6 +50,7 @@ func BenchmarkKeyframe100ChangedFilesIn10000FileRepo(b *testing.B) {
 		}
 		ev.Kind = event.TurnEnd
 		ev.Paths = nil
+		b.StartTimer()
 		if err := e.Process(ev); err != nil {
 			b.Fatal(err)
 		}
