@@ -134,6 +134,56 @@ func TestPullRemapsSharedStepsAndRedactsText(t *testing.T) {
 	}
 }
 
+func TestSyncBatchesCorrectionsForWorkerIndexBudget(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("INSERT INTO sessions(id,agent,worktree,started_at) VALUES('SESSION','codex','repo',1)"); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 25 {
+		if err := store.RecordUpdate(tx, "sessions", "SESSION"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	bs, err := blob.Open(filepath.Join(dir, "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updateBatches []int
+	client := &Client{Config: Config{Endpoint: "https://sync.example", Remote: "owner/repo", Mode: "team"},
+		Token: "token", TraceDir: dir, DB: db.DB, Blobs: bs}
+	client.HTTP = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var request struct {
+			Rows []Row `json:"rows"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		if len(request.Rows) > 0 && request.Rows[0].Table == "sync_updates" {
+			updateBatches = append(updateBatches, len(request.Rows))
+		}
+		return response(`{}`), nil
+	})}
+	_, rows, err := client.Sync(context.Background())
+	if err != nil || rows != 26 {
+		t.Fatalf("synced rows=%d, err=%v", rows, err)
+	}
+	if !reflect.DeepEqual(updateBatches, []int{20, 5}) {
+		t.Fatalf("correction batch sizes = %v", updateBatches)
+	}
+}
+
 func TestDownloadAcceptsFullWorkerPage(t *testing.T) {
 	client := &Client{Config: Config{Endpoint: "https://sync.example", Remote: "owner/repo", Mode: "team"}, Token: "test-token"}
 	want := strings.Repeat("x", 17<<20)

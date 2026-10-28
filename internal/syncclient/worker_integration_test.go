@@ -173,6 +173,33 @@ func TestClientUploadsToWorker(t *testing.T) {
 			if err != nil || blobs != 0 || rows != 0 {
 				t.Fatalf("repeat sync: blobs=%d rows=%d err=%v", blobs, rows, err)
 			}
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec("UPDATE sessions SET ended_at=? WHERE id=?", 3, prefix+"SESSION"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec("UPDATE turns SET prompt=?,reasoning=?,ended_at=? WHERE id=?", "final private prompt", "final reasoning", 3, prefix+"TURN"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec("UPDATE ops SET session_id=? WHERE id=?", prefix+"SESSION", prefix+"OP"); err != nil {
+				t.Fatal(err)
+			}
+			for _, update := range []struct{ table, id string }{
+				{"sessions", prefix + "SESSION"}, {"turns", prefix + "TURN"}, {"ops", prefix + "OP"},
+			} {
+				if err := store.RecordUpdate(tx, update.table, update.id); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			blobs, rows, err = client.Sync(context.Background())
+			if err != nil || blobs != 0 || rows != 3 {
+				t.Fatalf("correction sync: blobs=%d rows=%d err=%v", blobs, rows, err)
+			}
 			resp, err := worker.Get("https://sync.example/__inspect")
 			if err != nil {
 				t.Fatal(err)
@@ -190,7 +217,7 @@ func TestClientUploadsToWorker(t *testing.T) {
 			if err := json.Unmarshal(body, &stored); err != nil {
 				t.Fatal(err)
 			}
-			if len(stored.Rows) != 4 || stored.Blobs != 2 || stored.Objects != 2 || bytes.Contains(body, []byte("a private prompt")) {
+			if len(stored.Rows) != 7 || stored.Blobs != 2 || stored.Objects != 2 || bytes.Contains(body, []byte("private prompt")) {
 				t.Fatalf("Worker did not store opaque, idempotent history: %s", body)
 			}
 			recoveredDir := filepath.Join(t.TempDir(), ".trace")
@@ -199,7 +226,7 @@ func TestClientUploadsToWorker(t *testing.T) {
 				passphrase = "a sufficiently long passphrase"
 			}
 			gotBlobs, gotRows, err := client.Pull(context.Background(), recoveredDir, passphrase)
-			if err != nil || gotBlobs != 2 || gotRows != 4 {
+			if err != nil || gotBlobs != 2 || gotRows != 7 {
 				t.Fatalf("pull: blobs=%d rows=%d err=%v", gotBlobs, gotRows, err)
 			}
 			recovered, err := store.Open(filepath.Join(recoveredDir, "trace.db"))
@@ -208,8 +235,16 @@ func TestClientUploadsToWorker(t *testing.T) {
 			}
 			defer recovered.Close()
 			var prompt string
-			if err := recovered.QueryRow("SELECT prompt FROM turns WHERE id=?", prefix+"TURN").Scan(&prompt); err != nil || prompt != "a private prompt" {
+			if err := recovered.QueryRow("SELECT prompt FROM turns WHERE id=?", prefix+"TURN").Scan(&prompt); err != nil || prompt != "final private prompt" {
 				t.Fatalf("recovered prompt=%q err=%v", prompt, err)
+			}
+			var endedAt int64
+			if err := recovered.QueryRow("SELECT ended_at FROM sessions WHERE id=?", prefix+"SESSION").Scan(&endedAt); err != nil || endedAt != 3 {
+				t.Fatalf("recovered session end=%d err=%v", endedAt, err)
+			}
+			var opSession string
+			if err := recovered.QueryRow("SELECT session_id FROM ops WHERE id=?", prefix+"OP").Scan(&opSession); err != nil || opSession != prefix+"SESSION" {
+				t.Fatalf("recovered operation session=%q err=%v", opSession, err)
 			}
 			recoveredBlobs, err := blob.Open(filepath.Join(recoveredDir, "objects"))
 			if err != nil {

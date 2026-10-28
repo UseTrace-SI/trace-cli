@@ -27,7 +27,7 @@ const blobHaveBatchSize = 500
 const targetRowRequestBytes = 128 << 10
 const maxRowRequestBytes = 7 << 20
 
-var tables = []string{"sessions", "turns", "keyframes", "ops", "commits"}
+var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "sync_updates"}
 
 type Config struct {
 	Endpoint  string `json:"endpoint"`
@@ -205,8 +205,13 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 	}
 	rowCount := 0
 	for _, table := range tables {
+		limit := rowBatchSize
+		if table == "sync_updates" {
+			// Each operation correction also updates its Team dashboard index.
+			limit = rowBatchSize / 2
+		}
 		for {
-			rows, cursors, err := readRows(c.DB, table, state.Cursors[table], rowBatchSize)
+			rows, cursors, err := readRows(c.DB, table, state.Cursors[table], limit)
 			if err != nil {
 				return blobs, rowCount, err
 			}
@@ -246,7 +251,7 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 				rowCount += end - start
 				start = end
 			}
-			if len(rows) < rowBatchSize {
+			if len(rows) < limit {
 				break
 			}
 		}
@@ -329,7 +334,22 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 		}
 		data := make(map[string]any, len(columns))
 		for i, col := range columns {
-			if b, ok := values[i].([]byte); ok {
+			if table == "sync_updates" && col == "data" {
+				var raw []byte
+				switch value := values[i].(type) {
+				case []byte:
+					raw = value
+				case string:
+					raw = []byte(value)
+				default:
+					return nil, nil, errors.New("local sync update has invalid data")
+				}
+				var snapshot map[string]any
+				if err := json.Unmarshal(raw, &snapshot); err != nil {
+					return nil, nil, fmt.Errorf("decoding local sync update: %w", err)
+				}
+				data[col] = snapshot
+			} else if b, ok := values[i].([]byte); ok {
 				data[col] = string(b)
 			} else {
 				data[col] = values[i]

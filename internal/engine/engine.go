@@ -118,16 +118,50 @@ func (e *Engine) Process(ev event.Event) error {
 	case event.TurnEnd:
 		return e.turnEnd(ev)
 	case event.SessionEnd:
-		_, err := e.DB.Exec("UPDATE sessions SET ended_at=? WHERE agent=? AND agent_sid=? AND worktree=? AND ended_at IS NULL", ev.At, ev.Agent, ev.AgentSessionID, e.Root)
-		if err != nil {
-			return fmt.Errorf("ending session: %w", err)
-		}
-		return nil
+		return e.endSession(ev)
 	case event.GitCommit:
 		return e.gitCommit(ev)
 	default:
 		return nil
 	}
+}
+
+func (e *Engine) endSession(ev event.Event) error {
+	tx, err := e.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning session end: %w", err)
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query("SELECT id FROM sessions WHERE agent=? AND agent_sid=? AND worktree=? AND ended_at IS NULL", ev.Agent, ev.AgentSessionID, e.Root)
+	if err != nil {
+		return fmt.Errorf("finding open sessions: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("reading open session: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("reading open sessions: %w", err)
+	}
+	rows.Close()
+	for _, id := range ids {
+		if _, err := tx.Exec("UPDATE sessions SET ended_at=? WHERE id=?", ev.At, id); err != nil {
+			return fmt.Errorf("ending session: %w", err)
+		}
+		if err := store.RecordUpdate(tx, "sessions", id); err != nil {
+			return fmt.Errorf("recording session end: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing session end: %w", err)
+	}
+	return nil
 }
 
 func (e *Engine) session(ev event.Event) (string, error) {
@@ -496,10 +530,25 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		return fmt.Errorf("beginning keyframe transaction: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE ops SET turn_id=?,session_id=? WHERE turn_id IS NULL
-		AND source='watcher' AND at>=? AND at<=?`, tid, sessionID, startedAt, ev.At); err != nil {
+	attributed, err := tx.Query(`UPDATE ops SET turn_id=?,session_id=? WHERE turn_id IS NULL
+		AND source='watcher' AND at>=? AND at<=? RETURNING id`, tid, sessionID, startedAt, ev.At)
+	if err != nil {
 		return fmt.Errorf("attributing queued file changes: %w", err)
 	}
+	var attributedIDs []string
+	for attributed.Next() {
+		var opID string
+		if err := attributed.Scan(&opID); err != nil {
+			attributed.Close()
+			return fmt.Errorf("reading attributed file change: %w", err)
+		}
+		attributedIDs = append(attributedIDs, opID)
+	}
+	if err := attributed.Err(); err != nil {
+		attributed.Close()
+		return fmt.Errorf("reading attributed file changes: %w", err)
+	}
+	attributed.Close()
 	if _, err := tx.Exec(`UPDATE turns SET ended_at=?,prompt=CASE WHEN prompt='' THEN ? ELSE prompt END,
 		reasoning=COALESCE(NULLIF(?,''),reasoning),tool_calls=COALESCE(NULLIF(?,''),tool_calls),
 		files_read=COALESCE(NULLIF(?,''),files_read) WHERE id=?`,
@@ -514,6 +563,14 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	}
 	if _, err := tx.Exec("INSERT INTO keyframes(id,turn_id,seq,manifest_hash,git_head,tag,created_at) VALUES(?,?,?,?,?,?,?)", keyID, tid, seq, h, e.head(), "turn", ev.At); err != nil {
 		return fmt.Errorf("saving keyframe: %w", err)
+	}
+	if err := store.RecordUpdate(tx, "turns", tid); err != nil {
+		return fmt.Errorf("recording completed turn: %w", err)
+	}
+	for _, opID := range attributedIDs {
+		if err := store.RecordUpdate(tx, "ops", opID); err != nil {
+			return fmt.Errorf("recording attributed file change: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing keyframe: %w", err)

@@ -62,6 +62,17 @@ func TestTurnsAndUndoableRewind(t *testing.T) {
 			t.Fatalf("turn keyframes: %d", n)
 		}
 	}
+	base.Kind = event.SessionEnd
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	var updates int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM sync_updates WHERE table_name='turns'").Scan(&updates); err != nil || updates != 3 {
+		t.Fatalf("completed turn updates: %d, %v", updates, err)
+	}
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM sync_updates WHERE table_name='sessions'").Scan(&updates); err != nil || updates != 1 {
+		t.Fatalf("session end updates: %d, %v", updates, err)
+	}
 	safety, changed, err := e.Rewind(2, "", false)
 	if err != nil {
 		t.Fatal(err)
@@ -159,6 +170,10 @@ func TestGCProtectsBaselineAndCurrentTree(t *testing.T) {
 	if _, err := e.ManifestAt(2); err != nil {
 		t.Fatalf("safety keyframe missing: %v", err)
 	}
+	var obsolete int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM sync_updates WHERE table_name='turns'").Scan(&obsolete); err != nil || obsolete != 0 {
+		t.Fatalf("obsolete turn update survived garbage collection: %d, %v", obsolete, err)
+	}
 }
 
 func TestTurnEndAttributesWatcherEditQueuedBeforeTurnStart(t *testing.T) {
@@ -201,6 +216,9 @@ func TestTurnEndAttributesWatcherEditQueuedBeforeTurnStart(t *testing.T) {
 	var attributed int
 	if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id IS NOT NULL AND source='watcher'").Scan(&attributed); err != nil || attributed == 0 {
 		t.Fatalf("final attribution: %d, %v", attributed, err)
+	}
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM sync_updates WHERE table_name='ops'").Scan(&attributed); err != nil || attributed == 0 {
+		t.Fatalf("synced watcher attribution: %d, %v", attributed, err)
 	}
 }
 

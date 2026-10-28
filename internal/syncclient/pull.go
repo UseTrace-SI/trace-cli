@@ -25,11 +25,73 @@ var downloadID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var downloadHash = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 var columns = map[string][]string{
-	"sessions":  {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
-	"turns":     {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at"},
-	"keyframes": {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
-	"ops":       {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
-	"commits":   {"sha", "keyframe_id", "at"},
+	"sessions":     {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
+	"turns":        {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at"},
+	"keyframes":    {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
+	"ops":          {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
+	"commits":      {"sha", "keyframe_id", "at"},
+	"sync_updates": {"id", "table_name", "row_id", "data"},
+}
+
+func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
+	var update struct {
+		ID        string          `json:"id"`
+		TableName string          `json:"table_name"`
+		RowID     string          `json:"row_id"`
+		Data      json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(plain, &update); err != nil {
+		return fmt.Errorf("decoding downloaded update: %w", err)
+	}
+	if update.ID != row.ID || !downloadID.MatchString(update.RowID) {
+		return errors.New("downloaded update has an invalid ID")
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal(update.Data, &snapshot); err != nil || snapshot["id"] != update.RowID {
+		return errors.New("downloaded update has invalid row data")
+	}
+	var fields []string
+	switch update.TableName {
+	case "sessions":
+		fields = []string{"ended_at"}
+	case "turns":
+		fields = []string{"prompt", "reasoning", "tool_calls", "files_read", "ended_at"}
+	case "ops":
+		fields = []string{"turn_id", "session_id"}
+	default:
+		return errors.New("downloaded update names an invalid table")
+	}
+	values := make([]any, 0, len(fields)+1)
+	assignments := make([]string, 0, len(fields))
+	for _, field := range fields {
+		value, ok := snapshot[field]
+		if !ok {
+			return fmt.Errorf("downloaded update is missing %s", field)
+		}
+		if text, ok := value.(string); ok && (field == "prompt" || field == "reasoning" || field == "tool_calls" || field == "files_read") {
+			value = (redact.Redactor{}).Text(text)
+			snapshot[field] = value
+		}
+		assignments = append(assignments, field+"=?")
+		values = append(values, value)
+	}
+	values = append(values, update.RowID)
+	result, err := db.Exec("UPDATE "+update.TableName+" SET "+strings.Join(assignments, ",")+" WHERE id=?", values...)
+	if err != nil {
+		return fmt.Errorf("applying downloaded update: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count != 1 {
+		return errors.New("downloaded update references a missing row")
+	}
+	sanitized, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("encoding downloaded update: %w", err)
+	}
+	if _, err := db.Exec("INSERT INTO sync_updates(id,table_name,row_id,data) VALUES(?,?,?,?)", update.ID, update.TableName, update.RowID, string(sanitized)); err != nil {
+		return fmt.Errorf("storing downloaded update: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, output any) error {
@@ -88,6 +150,9 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 	cols, ok := columns[row.Table]
 	if !ok || !downloadID.MatchString(row.ID) {
 		return errors.New("download contains an invalid row")
+	}
+	if row.Table == "sync_updates" {
+		return applyDownloadedUpdate(db, row, plain)
 	}
 	var data map[string]any
 	if err := json.Unmarshal(plain, &data); err != nil {

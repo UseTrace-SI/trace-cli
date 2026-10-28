@@ -76,5 +76,16 @@ END;`
 	if _, err := db.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(5)"); err != nil {
 		return fmt.Errorf("recording transcript migration: %w", err)
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS sync_updates (
+  id TEXT PRIMARY KEY,
+  table_name TEXT NOT NULL,
+  row_id TEXT NOT NULL,
+  data TEXT NOT NULL
+)`); err != nil {
+		return fmt.Errorf("creating sync updates: %w", err)
+	}
+	if _, err := db.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(6)"); err != nil {
+		return fmt.Errorf("recording sync update migration: %w", err)
+	}
 	return nil
 }

@@ -75,6 +75,12 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 	defer tx.Rollback()
 	for _, v := range victims {
 		if v.turnID != "" {
+			if _, err := tx.Exec("DELETE FROM sync_updates WHERE table_name='ops' AND row_id IN (SELECT id FROM ops WHERE turn_id=?)", v.turnID); err != nil {
+				return result, fmt.Errorf("removing obsolete operation updates: %w", err)
+			}
+			if _, err := tx.Exec("DELETE FROM sync_updates WHERE table_name='turns' AND row_id=?", v.turnID); err != nil {
+				return result, fmt.Errorf("removing obsolete turn update: %w", err)
+			}
 			if _, err := tx.Exec("DELETE FROM ops WHERE turn_id=?", v.turnID); err != nil {
 				return result, err
 			}
