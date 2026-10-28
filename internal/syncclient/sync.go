@@ -21,7 +21,9 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
-const batchSize = 500
+const rowBatchSize = 40
+const blobHaveBatchSize = 500
+const targetRowRequestBytes = 128 << 10
 const maxRowRequestBytes = 7 << 20
 
 var tables = []string{"sessions", "turns", "keyframes", "ops", "commits"}
@@ -203,7 +205,7 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 	rowCount := 0
 	for _, table := range tables {
 		for {
-			rows, cursors, err := readRows(c.DB, table, state.Cursors[table], batchSize)
+			rows, cursors, err := readRows(c.DB, table, state.Cursors[table], rowBatchSize)
 			if err != nil {
 				return blobs, rowCount, err
 			}
@@ -243,7 +245,7 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 				rowCount += end - start
 				start = end
 			}
-			if len(rows) < batchSize {
+			if len(rows) < rowBatchSize {
 				break
 			}
 		}
@@ -263,7 +265,7 @@ func rowBatchEnd(rows []Row, start, headerBytes int) (int, error) {
 		if end > start {
 			additional++ // comma between rows
 		}
-		if size+additional > maxRowRequestBytes {
+		if size+additional > maxRowRequestBytes || (end > start && size+additional > targetRowRequestBytes) {
 			break
 		}
 		size += additional
@@ -351,8 +353,8 @@ func (c *Client) syncBlobs(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	uploaded := 0
-	for start := 0; start < len(hashes); start += batchSize {
-		end := min(start+batchSize, len(hashes))
+	for start := 0; start < len(hashes); start += blobHaveBatchSize {
+		end := min(start+blobHaveBatchSize, len(hashes))
 		var reply struct {
 			Need []string `json:"need"`
 		}

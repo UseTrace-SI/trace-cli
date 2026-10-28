@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -156,6 +157,43 @@ func TestSyncSplitsLargeRowBatches(t *testing.T) {
 	_, remainingRows, err := client.Sync(context.Background())
 	if err != nil || firstRows+remainingRows != 10 || accepted != 10 || requests < 3 {
 		t.Fatalf("resumed sync: first=%d remaining=%d accepted=%d requests=%d err=%v", firstRows, remainingRows, accepted, requests, err)
+	}
+}
+
+func TestSyncKeepsRowBatchesWithinD1FreeLimit(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	bs, err := blob.Open(filepath.Join(dir, "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 81 {
+		if _, err := db.Exec("INSERT INTO ops(id,path,kind,source,at,detail) VALUES(?,?,?,?,?,?)", fmt.Sprintf("OP%03d", i), "file.go", "edit", "tool", i, "short"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var counts []int
+	client := &Client{Config: Config{Endpoint: "https://sync.example", Remote: "owner/repo", Mode: "team"}, Token: "test-token", TraceDir: dir, DB: db.DB, Blobs: bs}
+	client.HTTP = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var upload struct {
+			Rows []Row `json:"rows"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&upload); err != nil {
+			t.Fatal(err)
+		}
+		counts = append(counts, len(upload.Rows))
+		return response(`{}`), nil
+	})}
+	_, rows, err := client.Sync(context.Background())
+	if err != nil || rows != 81 {
+		t.Fatalf("sync rows=%d err=%v", rows, err)
+	}
+	if !reflect.DeepEqual(counts, []int{40, 40, 1}) {
+		t.Fatalf("row batch sizes: %v", counts)
 	}
 }
 
