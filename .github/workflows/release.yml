@@ -16,14 +16,6 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: sigstore/cosign-installer@v3
-      - name: Check Homebrew tap token
-        env:
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-        run: |
-          if [ -z "$TAP_GITHUB_TOKEN" ]; then
-            echo 'TAP_GITHUB_TOKEN is required to publish the Homebrew formula' >&2
-            exit 1
-          fi
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -38,6 +30,10 @@ jobs:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'Homebrew tap token is not configured; release archives are still available.'
+            exit 0
+          fi
           content=$(base64 < dist/trace.rb | tr -d '\n')
           existing_sha=$(gh api repos/UseTrace-SI/homebrew-tap/contents/Formula/trace.rb --jq .sha 2>/dev/null || true)
           args=(-f "message=Release trace $GITHUB_REF_NAME" -f "content=$content")

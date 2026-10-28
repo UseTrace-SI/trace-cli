@@ -1,6 +1,6 @@
 # Quickstart
 
-Install Trace, enter a Git repository, and run `trace init`. By default, Trace installs Claude Code hooks. Run `trace init --agent codex`, `--agent cursor`, or `--agent agy` for those agents. Multiple adapters can be enabled in the same repository. `agy` is Google Antigravity CLI. Cursor Agent CLI is available as `agent` or `cursor agent` even when the Cursor IDE is absent.
+Build Trace using the [source instructions](../README.md#build-and-try-it), enter a Git repository, and run `trace init`. By default, Trace installs Claude Code hooks. Run `trace init --agent codex`, `--agent cursor`, or `--agent agy` for those agents. Multiple adapters can be enabled in the same repository. `agy` is Google Antigravity CLI. Cursor Agent CLI is available as `agent` or `cursor agent` even when the Cursor IDE is absent.
 
 Trace stores its database, snapshots, logs, and context files under `.trace/`. Initialization adds that directory to Git's local `info/exclude` file.
 
