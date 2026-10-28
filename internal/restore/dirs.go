@@ -148,7 +148,7 @@ func pruneCreatedDirs(root string, dirs map[string]bool) (bool, error) {
 			continue
 		}
 		info, err := os.Lstat(path)
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR) {
 			delete(dirs, rel)
 			dirty = true
 			continue

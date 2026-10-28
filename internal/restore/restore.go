@@ -3,6 +3,7 @@ package restore
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,6 +43,30 @@ func Plan(current, target manifest.Manifest) []string {
 	return paths
 }
 
+// removeDirectoryTree removes only directories. A restore must never remove an
+// ignored or untracked file that happens to live under a replaced path.
+func removeDirectoryTree(root string) error {
+	var dirs []string
+	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			return fmt.Errorf("directory contains an untracked or ignored file: %s", path)
+		}
+		dirs = append(dirs, path)
+		return nil
+	}); err != nil {
+		return err
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if err := os.Remove(dirs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Apply(target manifest.Manifest, root string, ig manifest.Ignorer, bs *blob.Store) ([]string, error) {
 	current, err := manifest.Scan(root, ig, bs)
 	if err != nil {
@@ -70,17 +95,39 @@ func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *b
 			}
 		}
 	}()
+	// Remove obsolete files before writing replacements. A file may become a
+	// directory (or the reverse) between keyframes, regardless of path order.
 	for _, rel := range changed {
+		if _, exists := target[rel]; exists {
+			continue
+		}
 		p, err := safePath(root, rel)
 		if err != nil {
 			return nil, err
 		}
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("removing %s: %w", rel, err)
+		}
+	}
+	for _, rel := range changed {
 		entry, exists := target[rel]
 		if !exists {
-			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-				return nil, fmt.Errorf("removing %s: %w", rel, err)
-			}
 			continue
+		}
+		p, err := safePath(root, rel)
+		if err != nil {
+			return nil, err
+		}
+		if info, err := os.Lstat(p); err == nil && info.IsDir() {
+			if err := removeDirectoryTree(p); err != nil {
+				return nil, fmt.Errorf("removing directory for %s: %w", rel, err)
+			}
+			if created[rel] {
+				delete(created, rel)
+				dirtyDirs = true
+			}
+		} else if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("checking restore target %s: %w", rel, err)
 		}
 		missing, err := missingParentDirs(root, rel)
 		if err != nil {

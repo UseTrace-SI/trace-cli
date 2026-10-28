@@ -118,3 +118,92 @@ func TestApplyRemovesOnlyEmptyDirectoriesCreatedByTrace(t *testing.T) {
 		t.Fatalf("user directory was removed: %v", err)
 	}
 }
+
+func TestApplyReplacesFileAndDirectoryAtSamePath(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		initial string
+		final   string
+	}{
+		{"file to directory", "entry", "entry/child.txt"},
+		{"directory to file", "entry/nested/child.txt", "entry"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+				t.Fatalf("git init: %s: %v", out, err)
+			}
+			bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			initialHash, err := bs.PutBytes([]byte("old"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			finalHash, err := bs.PutBytes([]byte("new"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Apply(manifest.Manifest{tc.initial: {Hash: initialHash, Mode: 0600}}, root, nil, bs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Apply(manifest.Manifest{tc.final: {Hash: finalHash, Mode: 0600}}, root, nil, bs); err != nil {
+				t.Fatal(err)
+			}
+			content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(tc.final)))
+			if err != nil || string(content) != "new" {
+				t.Fatalf("replacement content = %q, err = %v", content, err)
+			}
+			if tc.final == "entry" {
+				if info, err := os.Stat(filepath.Join(root, "entry")); err != nil || !info.Mode().IsRegular() {
+					t.Fatalf("entry was not replaced by a file: %v, %v", info, err)
+				}
+			} else if _, err := os.Stat(filepath.Join(root, "entry", "child.txt")); err != nil {
+				t.Fatalf("entry was not replaced by a directory: %v", err)
+			}
+		})
+	}
+}
+
+func TestApplyKeepsIgnoredFileUnderReplacedDirectory(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	ignore := []byte("entry/local.txt\n")
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), ignore, 0600); err != nil {
+		t.Fatal(err)
+	}
+	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ignoreHash, err := bs.PutBytes(ignore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentHash, err := bs.PutBytes([]byte("tracked"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(manifest.Manifest{
+		".gitignore":             {Hash: ignoreHash, Mode: 0600},
+		"entry/nested/child.txt": {Hash: contentHash, Mode: 0600},
+	}, root, nil, bs); err != nil {
+		t.Fatal(err)
+	}
+	ignored := filepath.Join(root, "entry", "local.txt")
+	if err := os.WriteFile(ignored, []byte("keep me"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(manifest.Manifest{
+		".gitignore": {Hash: ignoreHash, Mode: 0600},
+		"entry":      {Hash: contentHash, Mode: 0600},
+	}, root, nil, bs); err == nil {
+		t.Fatal("restore replaced directory containing an ignored file")
+	}
+	if content, err := os.ReadFile(ignored); err != nil || string(content) != "keep me" {
+		t.Fatalf("ignored file was removed: %q, %v", content, err)
+	}
+}
