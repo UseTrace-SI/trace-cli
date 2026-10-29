@@ -164,7 +164,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace gc [--keep-days N] [--dry-run]` | Remove expired history and unused blobs |
 | `trace update-check` | Check for a release, at most once per day |
 | `trace export --format agent-trace --out FILE` | Export line attribution as Agent Trace JSONL |
-| `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL [--auto-sync]` | Authorize optional sync with GitHub device flow; opt into background upload |
+| `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL [--auto-sync] [--no-browser]` | Sign in with GitHub in a browser; opt into background upload |
 | `trace sync [--watch]` | Upload local history to the configured sync server |
 | `trace sync disable-auto` | Turn off background sync for this repository |
 | `trace sync pull --into PATH` | Recover synced history into a fresh Git checkout |

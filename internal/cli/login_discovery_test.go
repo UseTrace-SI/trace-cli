@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,24 @@ func TestGitHubRemote(t *testing.T) {
 			got, err := githubRemote(tc.input)
 			if got != tc.want || (err != nil) != (tc.want == "") {
 				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestBrowserCommand(t *testing.T) {
+	for _, tc := range []struct {
+		goos string
+		want []string
+	}{
+		{"darwin", []string{"open", "https://github.com/login/device"}},
+		{"linux", []string{"xdg-open", "https://github.com/login/device"}},
+		{"windows", []string{"rundll32", "url.dll,FileProtocolHandler", "https://github.com/login/device"}},
+	} {
+		t.Run(tc.goos, func(t *testing.T) {
+			got := browserCommand(tc.goos, "https://github.com/login/device")
+			if !reflect.DeepEqual(got.Args, tc.want) {
+				t.Fatalf("got %v, want %v", got.Args, tc.want)
 			}
 		})
 	}

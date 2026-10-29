@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -132,6 +133,28 @@ func configuredCipher(traceDir string, cfg syncclient.Config) (*syncclient.Ciphe
 	return syncclient.FromKey(credentials.ProSyncKey, salt)
 }
 
+func browserCommand(goos, target string) *exec.Cmd {
+	switch goos {
+	case "darwin":
+		return exec.Command("open", target)
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
+	default:
+		return exec.Command("xdg-open", target)
+	}
+}
+
+func openLoginBrowser(target string) bool {
+	cmd := browserCommand(runtime.GOOS, target)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Start(); err != nil {
+		return false
+	}
+	go func() { _ = cmd.Wait() }()
+	return true
+}
+
 // autoSyncLoop uploads acknowledged local history without holding up hook delivery.
 func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *slog.Logger, wake <-chan struct{}) {
 	path := loginPath(root)
@@ -225,6 +248,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var remote, mode, endpoint, clientID string
 	var githubApp bool
 	var autoSync bool
+	var noBrowser bool
 	cmd := &cobra.Command{Use: "login", Short: "Connect optional sync with GitHub", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
@@ -267,7 +291,15 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(c.ErrOrStderr(), "Open %s and enter code %s\n", code.VerifyURL, code.UserCode); err != nil {
+		opened := false
+		if !noBrowser {
+			opened = openLoginBrowser(code.VerifyURL)
+		}
+		if opened {
+			if _, err := fmt.Fprintf(c.ErrOrStderr(), "Browser opened for GitHub authorization. If needed, visit %s and enter code %s.\n", code.VerifyURL, code.UserCode); err != nil {
+				return err
+			}
+		} else if _, err := fmt.Fprintf(c.ErrOrStderr(), "Open %s and enter code %s\n", code.VerifyURL, code.UserCode); err != nil {
 			return err
 		}
 		credentials, err := oauth.WaitCredentials(ctx, clientID, code)
@@ -317,6 +349,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().StringVar(&clientID, "client-id", os.Getenv("TRACE_GITHUB_CLIENT_ID"), "GitHub client ID")
 	cmd.Flags().BoolVar(&githubApp, "github-app", false, "use fine-grained GitHub App authorization")
 	cmd.Flags().BoolVar(&autoSync, "auto-sync", false, "opt in to background upload after login")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the GitHub verification URL without opening a browser")
 	return cmd
 }
 
