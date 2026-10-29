@@ -4,9 +4,12 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
 )
 
 func TestGitHubRemote(t *testing.T) {
@@ -42,6 +45,42 @@ func TestBrowserCommand(t *testing.T) {
 				t.Fatalf("got %v, want %v", got.Args, tc.want)
 			}
 		})
+	}
+}
+
+func TestBrowserCallbackVerifiesStateAndReceivesCode(t *testing.T) {
+	flow, err := (syncclient.OAuth{}).BrowserAuthorization("client123", "http://127.0.0.1:43210/oauth/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := make(chan browserCallback, 1)
+	request := httptest.NewRequest(http.MethodGet, "/oauth/callback?code=temporary-code&state="+flow.State, nil)
+	response := httptest.NewRecorder()
+	browserCallbackHandler(flow, callback).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("callback status = %d", response.Code)
+	}
+	got := <-callback
+	if got.err != nil || got.code != "temporary-code" {
+		t.Fatalf("callback = %+v", got)
+	}
+}
+
+func TestBrowserCallbackRejectsStateMismatch(t *testing.T) {
+	flow, err := (syncclient.OAuth{}).BrowserAuthorization("client123", "http://127.0.0.1:43210/oauth/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := make(chan browserCallback, 1)
+	request := httptest.NewRequest(http.MethodGet, "/oauth/callback?code=temporary-code&state=wrong", nil)
+	response := httptest.NewRecorder()
+	browserCallbackHandler(flow, callback).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("callback status = %d, want 400", response.Code)
+	}
+	got := <-callback
+	if got.err == nil || got.code != "" {
+		t.Fatalf("callback accepted mismatched state: %+v", got)
 	}
 }
 

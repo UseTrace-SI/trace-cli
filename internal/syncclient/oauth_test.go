@@ -2,6 +2,8 @@ package syncclient
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/url"
@@ -9,6 +11,28 @@ import (
 	"testing"
 	"time"
 )
+
+func TestBrowserOAuthUsesStateAndPKCE(t *testing.T) {
+	flow, err := (OAuth{}).BrowserAuthorization("client123", "http://127.0.0.1:43210/oauth/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(flow.AuthURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := parsed.Query()
+	if parsed.Host != "github.com" || parsed.Path != "/login/oauth/authorize" || values.Get("client_id") != "client123" || values.Get("state") != flow.State {
+		t.Fatalf("unexpected authorization URL %s", flow.AuthURL)
+	}
+	digest := sha256.Sum256([]byte(flow.Verifier))
+	if values.Get("code_challenge_method") != "S256" || values.Get("code_challenge") != base64.RawURLEncoding.EncodeToString(digest[:]) {
+		t.Fatal("authorization URL does not contain the verifier's S256 challenge")
+	}
+	if values.Get("redirect_uri") != flow.RedirectURI {
+		t.Fatal("authorization URL has a different callback URI")
+	}
+}
 
 func TestSyncRequestsUseCurrentToken(t *testing.T) {
 	requests := 0

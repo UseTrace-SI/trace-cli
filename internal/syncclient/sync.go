@@ -30,12 +30,13 @@ const maxRowRequestBytes = 7 << 20
 var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "sync_updates"}
 
 type Config struct {
-	Endpoint  string `json:"endpoint"`
-	Remote    string `json:"remote"`
-	Mode      string `json:"mode"`
-	ClientID  string `json:"client_id,omitempty"`
-	GitHubApp bool   `json:"github_app,omitempty"`
-	AutoSync  bool   `json:"auto_sync,omitempty"`
+	Endpoint      string `json:"endpoint"`
+	Remote        string `json:"remote"`
+	Mode          string `json:"mode"`
+	ClientID      string `json:"client_id,omitempty"`
+	GitHubApp     bool   `json:"github_app,omitempty"`
+	BrokerRefresh bool   `json:"broker_refresh,omitempty"`
+	AutoSync      bool   `json:"auto_sync,omitempty"`
 }
 
 func (cfg Config) Validate() error {

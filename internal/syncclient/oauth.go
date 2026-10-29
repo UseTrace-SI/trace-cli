@@ -2,9 +2,13 @@ package syncclient
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +21,14 @@ type DeviceCode struct {
 	VerifyURL string `json:"verification_uri"`
 	ExpiresIn int    `json:"expires_in"`
 	Interval  int    `json:"interval"`
+}
+
+type BrowserCode struct {
+	State       string
+	Verifier    string
+	Challenge   string
+	RedirectURI string
+	AuthURL     string
 }
 
 type OAuth struct {
@@ -77,6 +89,80 @@ func (o OAuth) Start(ctx context.Context, clientID string) (DeviceCode, error) {
 		return DeviceCode{}, errors.New("GitHub returned an incomplete device code")
 	}
 	return code, nil
+}
+
+func (OAuth) BrowserAuthorization(clientID, redirectURI string) (BrowserCode, error) {
+	if clientID == "" || redirectURI == "" {
+		return BrowserCode{}, errors.New("GitHub client ID and callback URL are required")
+	}
+	random := func(n int) (string, error) {
+		b := make([]byte, n)
+		if _, err := rand.Read(b); err != nil {
+			return "", err
+		}
+		return base64.RawURLEncoding.EncodeToString(b), nil
+	}
+	state, err := random(32)
+	if err != nil {
+		return BrowserCode{}, fmt.Errorf("creating OAuth state: %w", err)
+	}
+	verifier, err := random(32)
+	if err != nil {
+		return BrowserCode{}, fmt.Errorf("creating PKCE verifier: %w", err)
+	}
+	challengeBytes := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
+	values := url.Values{
+		"client_id": {clientID}, "redirect_uri": {redirectURI}, "state": {state},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"},
+		"scope": {"offline_access"},
+	}
+	return BrowserCode{State: state, Verifier: verifier, Challenge: challenge, RedirectURI: redirectURI,
+		AuthURL: "https://github.com/login/oauth/authorize?" + values.Encode()}, nil
+}
+
+func (o OAuth) ExchangeWithPlatform(ctx context.Context, endpoint string, flow BrowserCode, code string) (Credentials, error) {
+	return o.platformTokenRequest(ctx, strings.TrimRight(endpoint, "/")+"/auth/cli/exchange", map[string]string{
+		"code": code, "redirect_uri": flow.RedirectURI, "code_verifier": flow.Verifier,
+	})
+}
+
+func (o OAuth) RefreshWithPlatform(ctx context.Context, endpoint string, previous Credentials) (Credentials, error) {
+	if previous.RefreshToken == "" || previous.RefreshExpiresAt <= time.Now().UnixMilli() {
+		return Credentials{}, errors.New("GitHub login expired; run trace login again")
+	}
+	return o.platformTokenRequest(ctx, strings.TrimRight(endpoint, "/")+"/auth/cli/refresh", map[string]string{
+		"refresh_token": previous.RefreshToken,
+	})
+}
+
+func (o OAuth) platformTokenRequest(ctx context.Context, target string, input map[string]string) (Credentials, error) {
+	body, err := json.Marshal(input)
+	if err != nil {
+		return Credentials{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, strings.NewReader(string(body)))
+	if err != nil {
+		return Credentials{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := o.client().Do(req)
+	if err != nil {
+		return Credentials{}, fmt.Errorf("contacting Trace authentication service: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return Credentials{}, fmt.Errorf("Trace authentication service returned %s", resp.Status)
+	}
+	var credentials Credentials
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&credentials); err != nil {
+		return Credentials{}, fmt.Errorf("decoding Trace authentication response: %w", err)
+	}
+	if credentials.AccessToken == "" || credentials.RefreshToken == "" || credentials.ExpiresAt <= 0 || credentials.RefreshExpiresAt <= 0 {
+		return Credentials{}, errors.New("Trace authentication service returned incomplete credentials")
+	}
+	return credentials, nil
 }
 
 func (o OAuth) Wait(ctx context.Context, clientID string, code DeviceCode) (string, error) {

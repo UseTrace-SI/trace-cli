@@ -43,6 +43,6 @@ trace resume 2 --agent codex --no-launch
 
 `fork` creates a separate Git worktree at that step. `resume` rewinds the current checkout and writes `.trace/context.md`; omit `--no-launch` to start the selected agent.
 
-To send history to the Trace workspace, run `trace login --auto-sync` and follow the GitHub device flow. Existing and new turns upload in the background; run `trace sync disable-auto` to stop it. See [sync](sync.md) for Pro encryption and recovery details.
+To send history to the Trace workspace, run `trace login --auto-sync` and approve GitHub in your browser. Existing and new turns upload in the background; run `trace sync disable-auto` to stop it. Use `trace login --device-auth --auto-sync` on remote or headless machines. See [sync](sync.md) for Pro encryption and recovery details.
 
 See the [CLI reference](cli.md) for all commands and [privacy](privacy.md) for local storage and upload behavior.

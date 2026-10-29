@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
@@ -105,7 +108,12 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 		if !cfg.GitHubApp {
 			return "", errors.New("GitHub login expired; run trace login again")
 		}
-		updated, err := (syncclient.OAuth{App: true}).Refresh(ctx, cfg.ClientID, credentials)
+		var updated syncclient.Credentials
+		if cfg.BrokerRefresh {
+			updated, err = (syncclient.OAuth{App: true}).RefreshWithPlatform(ctx, cfg.Endpoint, credentials)
+		} else {
+			updated, err = (syncclient.OAuth{App: true}).Refresh(ctx, cfg.ClientID, credentials)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -153,6 +161,61 @@ func openLoginBrowser(target string) bool {
 	}
 	go func() { _ = cmd.Wait() }()
 	return true
+}
+
+type browserCallback struct {
+	code string
+	err  error
+}
+
+func startBrowserCallback(clientID string) (syncclient.BrowserCode, net.Listener, *http.Server, <-chan browserCallback, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return syncclient.BrowserCode{}, nil, nil, nil, fmt.Errorf("starting local GitHub callback: %w", err)
+	}
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/oauth/callback", listener.Addr().(*net.TCPAddr).Port)
+	flow, err := (syncclient.OAuth{}).BrowserAuthorization(clientID, redirectURI)
+	if err != nil {
+		_ = listener.Close()
+		return syncclient.BrowserCode{}, nil, nil, nil, err
+	}
+	result := make(chan browserCallback, 1)
+	server := &http.Server{Handler: browserCallbackHandler(flow, result), ReadHeaderTimeout: 5 * time.Second}
+	return flow, listener, server, result, nil
+}
+
+func browserCallbackHandler(flow syncclient.BrowserCode, result chan<- browserCallback) http.Handler {
+	var once sync.Once
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/oauth/callback" {
+			http.NotFound(w, r)
+			return
+		}
+		state := r.URL.Query().Get("state")
+		code := r.URL.Query().Get("code")
+		var callbackErr error
+		if len(state) != len(flow.State) || subtle.ConstantTimeCompare([]byte(state), []byte(flow.State)) != 1 {
+			callbackErr = errors.New("GitHub authorization state did not match")
+		} else if r.URL.Query().Get("error") != "" {
+			callbackErr = errors.New("GitHub authorization was denied")
+		} else if code == "" || len(code) > 1024 {
+			callbackErr = errors.New("GitHub returned an invalid authorization code")
+		}
+		status, message := http.StatusOK, "Trace sign-in complete. Return to your terminal."
+		if callbackErr != nil {
+			status, message = http.StatusBadRequest, "Trace sign-in did not complete. Return to your terminal and try again."
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, message)
+		if callbackErr != nil {
+			code = ""
+		}
+		once.Do(func() { result <- browserCallback{code: code, err: callbackErr} })
+	})
 }
 
 // autoSyncLoop uploads acknowledged local history without holding up hook delivery.
@@ -248,7 +311,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var remote, mode, endpoint, clientID string
 	var githubApp bool
 	var autoSync bool
-	var noBrowser bool
+	var deviceAuth bool
 	cmd := &cobra.Command{Use: "login", Short: "Connect optional sync with GitHub", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
@@ -287,24 +350,59 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		ctx, stop := signal.NotifyContext(c.Context(), os.Interrupt)
 		defer stop()
 		oauth := syncclient.OAuth{App: githubApp}
-		code, err := oauth.Start(ctx, clientID)
-		if err != nil {
-			return err
-		}
-		opened := false
-		if !noBrowser {
-			opened = openLoginBrowser(code.VerifyURL)
-		}
-		if opened {
-			if _, err := fmt.Fprintf(c.ErrOrStderr(), "Browser opened for GitHub authorization. If needed, visit %s and enter code %s.\n", code.VerifyURL, code.UserCode); err != nil {
+		var credentials syncclient.Credentials
+		if githubApp && !deviceAuth {
+			flow, listener, server, callback, err := startBrowserCallback(clientID)
+			if err != nil {
 				return err
 			}
-		} else if _, err := fmt.Fprintf(c.ErrOrStderr(), "Open %s and enter code %s\n", code.VerifyURL, code.UserCode); err != nil {
-			return err
-		}
-		credentials, err := oauth.WaitCredentials(ctx, clientID, code)
-		if err != nil {
-			return err
+			serveErr := make(chan error, 1)
+			go func() { serveErr <- server.Serve(listener) }()
+			if !openLoginBrowser(flow.AuthURL) {
+				_, _ = fmt.Fprintf(c.ErrOrStderr(), "Open this URL to sign in: %s\n", flow.AuthURL)
+			} else if _, err := fmt.Fprintln(c.ErrOrStderr(), "Opening GitHub sign-in in your browser..."); err != nil {
+				_ = server.Close()
+				return err
+			}
+			timeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			defer cancel()
+			select {
+			case result := <-callback:
+				_ = server.Close()
+				if result.err != nil {
+					return result.err
+				}
+				credentials, err = oauth.ExchangeWithPlatform(timeout, endpoint, flow, result.code)
+				if err != nil {
+					return err
+				}
+				cfg.BrokerRefresh = true
+			case err := <-serveErr:
+				if !errors.Is(err, http.ErrServerClosed) {
+					return fmt.Errorf("GitHub callback server failed: %w", err)
+				}
+				return errors.New("GitHub callback server stopped before sign-in completed")
+			case <-timeout.Done():
+				_ = server.Close()
+				return errors.New("GitHub sign-in timed out; run trace login again")
+			}
+		} else {
+			code, err := oauth.Start(ctx, clientID)
+			if err != nil {
+				return err
+			}
+			opened := openLoginBrowser(code.VerifyURL)
+			if opened {
+				if _, err := fmt.Fprintf(c.ErrOrStderr(), "Opening GitHub device sign-in. If needed, visit %s and enter code %s.\n", code.VerifyURL, code.UserCode); err != nil {
+					return err
+				}
+			} else if _, err := fmt.Fprintf(c.ErrOrStderr(), "Open %s and enter code %s\n", code.VerifyURL, code.UserCode); err != nil {
+				return err
+			}
+			credentials, err = oauth.WaitCredentials(ctx, clientID, code)
+			if err != nil {
+				return err
+			}
 		}
 		cfg.AutoSync = autoSync
 		if autoSync && mode == "pro" {
@@ -349,7 +447,8 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().StringVar(&clientID, "client-id", os.Getenv("TRACE_GITHUB_CLIENT_ID"), "GitHub client ID")
 	cmd.Flags().BoolVar(&githubApp, "github-app", false, "use fine-grained GitHub App authorization")
 	cmd.Flags().BoolVar(&autoSync, "auto-sync", false, "opt in to background upload after login")
-	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the GitHub verification URL without opening a browser")
+	cmd.Flags().BoolVar(&deviceAuth, "device-auth", false, "use device-code sign-in for remote or headless environments")
+	cmd.Flags().BoolVar(&deviceAuth, "no-browser", false, "alias for --device-auth")
 	return cmd
 }
 
