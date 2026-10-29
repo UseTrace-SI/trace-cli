@@ -16,6 +16,7 @@ type Credentials struct {
 	RefreshToken     string `json:"refresh_token,omitempty"`
 	ExpiresAt        int64  `json:"expires_at,omitempty"`
 	RefreshExpiresAt int64  `json:"refresh_expires_at,omitempty"`
+	ProSyncKey       string `json:"pro_sync_key,omitempty"`
 }
 
 func (c Credentials) encode() (string, error) {

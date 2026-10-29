@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS ops (id TEXT PRIMARY KEY, turn_id TEXT REFERENCES tur
   path TEXT NOT NULL, kind TEXT NOT NULL, start_line INTEGER, end_line INTEGER,
   before_hash TEXT, after_hash TEXT, source TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS ops_path ON ops(path, at);
+CREATE INDEX IF NOT EXISTS ops_turn_path ON ops(turn_id, path);
 CREATE TABLE IF NOT EXISTS commits (sha TEXT PRIMARY KEY, keyframe_id TEXT REFERENCES keyframes(id),
   at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS commits_at_sha ON commits(at, sha);
@@ -86,6 +87,64 @@ END;`
 	}
 	if _, err := db.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(6)"); err != nil {
 		return fmt.Errorf("recording sync update migration: %w", err)
+	}
+	var n7 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=7").Scan(&n7); err != nil {
+		return fmt.Errorf("checking actor migration: %w", err)
+	}
+	if n7 == 0 {
+		if _, err := db.Exec("ALTER TABLE ops ADD COLUMN actor TEXT"); err != nil {
+			return fmt.Errorf("adding actor column: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(7)"); err != nil {
+			return fmt.Errorf("recording actor migration: %w", err)
+		}
+	}
+	var n8 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=8").Scan(&n8); err != nil {
+		return fmt.Errorf("checking messages migration: %w", err)
+	}
+	if n8 == 0 {
+		const msgs = `
+CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, session_id TEXT REFERENCES sessions(id),
+  turn_id TEXT REFERENCES turns(id), role TEXT NOT NULL, content TEXT, at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id, at);`
+		if _, err := db.Exec(msgs); err != nil {
+			return fmt.Errorf("creating messages table: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(8)"); err != nil {
+			return fmt.Errorf("recording messages migration: %w", err)
+		}
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS messages_turn ON messages(turn_id, at)"); err != nil {
+		return fmt.Errorf("indexing messages by turn: %w", err)
+	}
+	var n9 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=9").Scan(&n9); err != nil {
+		return fmt.Errorf("checking message search migration: %w", err)
+	}
+	if n9 == 0 {
+		const messageFTS = `
+CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(content, content='messages', content_rowid='rowid');
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+  INSERT INTO message_fts(rowid,content) VALUES(new.rowid,new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+  INSERT INTO message_fts(message_fts,rowid,content) VALUES('delete',old.rowid,old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+  INSERT INTO message_fts(message_fts,rowid,content) VALUES('delete',old.rowid,old.content);
+  INSERT INTO message_fts(rowid,content) VALUES(new.rowid,new.content);
+END;`
+		if _, err := db.Exec(messageFTS); err != nil {
+			return fmt.Errorf("creating message search: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO message_fts(message_fts) VALUES('rebuild')"); err != nil {
+			return fmt.Errorf("indexing messages: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(9)"); err != nil {
+			return fmt.Errorf("recording message search migration: %w", err)
+		}
 	}
 	return nil
 }

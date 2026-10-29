@@ -50,5 +50,22 @@ func IsTraceHook(command, agent string) bool {
 		return false
 	}
 	prefix := trimmed[:idx]
-	return prefix == "trace" || strings.HasPrefix(prefix, "'") || filepath.IsAbs(prefix)
+	if prefix == "trace" {
+		return true
+	}
+	path := prefix
+	if strings.HasPrefix(prefix, "'") && strings.HasSuffix(prefix, "'") {
+		parts := strings.Split(prefix[1:len(prefix)-1], `'\''`)
+		for _, part := range parts {
+			if strings.Contains(part, "'") {
+				return false
+			}
+		}
+		path = strings.Join(parts, "'")
+	}
+	if !filepath.IsAbs(path) || shellPath(path) != prefix {
+		return false
+	}
+	base := filepath.Base(path)
+	return base == "trace" || base == "trace.exe" || path == Path()
 }

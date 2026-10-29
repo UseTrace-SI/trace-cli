@@ -5,11 +5,59 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
+
+func TestLateInitialTurnDoesNotRestartSession(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	base := event.Event{Agent: "cline", AgentSessionID: "s", Worktree: root, At: time.Now().UnixMilli()}
+	base.Kind, base.Prompt = event.TurnStart, "first prompt"
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	base.Kind = event.TurnEnd
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	base.Kind, base.Prompt, base.InitialTurnOnly = event.TurnStart, "late initial", true
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	base.Kind, base.InitialTurnOnly = event.SessionEnd, false
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	base.Kind, base.InitialTurnOnly = event.TurnStart, true
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := e.DB.QueryRow("SELECT count(*) FROM turns").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("late initial turn count = %d, %v", count, err)
+	}
+	base.Prompt, base.InitialTurnOnly = "later prompt", false
+	if err := e.Process(base); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.DB.QueryRow("SELECT count(*) FROM turns").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("later turn count = %d, %v", count, err)
+	}
+}
 
 func TestTurnsAndUndoableRewind(t *testing.T) {
 	root := t.TempDir()
@@ -192,6 +240,54 @@ func TestGCProtectsBaselineAndCurrentTree(t *testing.T) {
 	}
 }
 
+func TestGCKeepsChunksForRetainedKeyframes(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	p := filepath.Join(root, "large.txt")
+	baseline := []byte(strings.Repeat("baseline content\n", 9000))
+	current := []byte(strings.Repeat("current content\n", 9000))
+	if err := os.WriteFile(p, baseline, 0600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, current, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,tag,created_at) SELECT 'old',1,manifest_hash,'turn',1 FROM keyframes WHERE seq=0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.GC(0, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		step int64
+		want []byte
+	}{{0, baseline}, {2, current}} {
+		m, err := e.ManifestAt(tc.step)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := e.Blobs.Get(m["large.txt"].Hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(r)
+		closeErr := r.Close()
+		if err != nil || closeErr != nil || string(got) != string(tc.want) {
+			t.Fatalf("step %d blob damaged: read=%v close=%v", tc.step, err, closeErr)
+		}
+	}
+}
+
 func TestTurnEndAttributesWatcherEditQueuedBeforeTurnStart(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
@@ -238,13 +334,15 @@ func TestTurnEndAttributesWatcherEditQueuedBeforeTurnStart(t *testing.T) {
 	}
 }
 
-func TestBashWritesUseWatcherPathsWithoutFullScan(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("file permissions do not block root from scanning")
-	}
+func TestUnknownEditScansEvenWithWatcherChanges(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %s: %v", out, err)
+	}
+	for _, name := range []string{"modified.txt", "deleted.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("before\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	e, err := Open(root)
 	if err != nil {
@@ -273,13 +371,18 @@ func TestBashWritesUseWatcherPathsWithoutFullScan(t *testing.T) {
 	if err := e.RecordChanges(paths); err != nil {
 		t.Fatal(err)
 	}
-	// A full scan would try to read this unrelated file and fail. The watcher
-	// has already supplied every path written by the Bash command.
-	blocked := filepath.Join(root, "unreadable.txt")
-	if err := os.WriteFile(blocked, []byte("not part of the command\n"), 0000); err != nil {
+	// This change has no watcher event: seeing other paths does not prove the
+	// watcher covered every file touched by the command.
+	missed := filepath.Join(root, "missed.txt")
+	if err := os.WriteFile(missed, []byte("missed watcher event\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(blocked, 0600)
+	if err := os.WriteFile(filepath.Join(root, "modified.txt"), []byte("after\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, "deleted.txt")); err != nil {
+		t.Fatal(err)
+	}
 	ev.Kind, ev.ToolName = event.TurnEnd, ""
 	if err := e.Process(ev); err != nil {
 		t.Fatal(err)
@@ -288,10 +391,22 @@ func TestBashWritesUseWatcherPathsWithoutFullScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"one.txt", "two.txt", "three.txt"} {
+	for _, name := range []string{"one.txt", "two.txt", "three.txt", "missed.txt"} {
 		if _, ok := m[name]; !ok {
 			t.Errorf("watcher path %s missing from keyframe", name)
 		}
+	}
+	if _, ok := m["deleted.txt"]; ok {
+		t.Fatal("missed deletion remains in keyframe")
+	}
+	r, err := e.Blobs.Get(m["modified.txt"].Hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	b, err := io.ReadAll(r)
+	if err != nil || string(b) != "after\n" {
+		t.Fatalf("missed modification = %q, %v", b, err)
 	}
 }
 
@@ -343,5 +458,57 @@ func TestEveryFiftiethKeyframeRescansMissedChanges(t *testing.T) {
 	}
 	if string(b) != "missed watcher\n" {
 		t.Fatalf("periodic scan missed change: %q", b)
+	}
+}
+
+func TestUnknownEditDoesNotFinishIncompleteScan(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block root from scanning")
+	}
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "pi", AgentSessionID: "unreadable", Worktree: root, At: time.Now().UnixMilli(), Kind: event.TurnStart}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind = event.ToolEdit
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "unreadable.txt")
+	if err := os.WriteFile(path, []byte("content\n"), 0000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(path, 0600)
+	ev.Kind = event.TurnEnd
+	if err := e.Process(ev); err == nil {
+		t.Fatal("completed turn after incomplete scan")
+	}
+	var n int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM keyframes WHERE tag='turn'").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("incomplete keyframes = %d, %v", n, err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	m, err := e.ManifestAt(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["unreadable.txt"]; !ok {
+		t.Fatal("file missing after scan retry")
 	}
 }

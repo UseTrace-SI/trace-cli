@@ -15,6 +15,7 @@ type payload struct {
 	HookEventName  string `json:"hook_event_name"`
 	Prompt         string `json:"prompt"`
 	Text           string `json:"text"`
+	Summary        string `json:"summary"`
 	FilePath       string `json:"file_path"`
 	TranscriptPath string `json:"transcript_path"`
 }
@@ -30,6 +31,9 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 	sid := p.ConversationID
 	if sid == "" {
 		sid = p.SessionID
+	}
+	if sid == "" {
+		return nil, nil
 	}
 	ev := event.Event{Agent: "cursor", AgentSessionID: sid, Worktree: root, At: time.Now().UnixMilli(), TranscriptPath: p.TranscriptPath}
 	switch name {
@@ -47,6 +51,17 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 	case "afterShellExecution":
 		ev.Kind = event.ToolEdit
 		ev.ToolName = "Shell"
+	case "subagentStop":
+		// Parallel subagents can operate on another branch or worktree, so
+		// request a full scan at turn end instead of trusting their paths.
+		ev.Kind = event.ToolEdit
+		ev.ToolName = "Subagent"
+		if p.Summary != "" {
+			context := ev
+			context.Kind, context.ContextType, context.ToolName = event.TurnContext, "output", ""
+			context.Text = textutil.TruncateBytes(p.Summary, 64<<10)
+			return []event.Event{ev.Sanitized(), context.Sanitized()}, nil
+		}
 	case "beforeReadFile":
 		ev.Kind = event.FileRead
 		if p.FilePath != "" {
@@ -64,9 +79,17 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 			ev.ContextType = "response"
 		}
 	case "stop":
+		scan := ev
+		scan.Kind = event.ToolEdit
 		ev.Kind = event.TurnEnd
+		return []event.Event{scan.Sanitized(), ev.Sanitized()}, nil
 	case "sessionEnd":
+		scan := ev
+		scan.Kind = event.ToolEdit
+		end := ev
+		end.Kind = event.TurnEnd
 		ev.Kind = event.SessionEnd
+		return []event.Event{scan.Sanitized(), end.Sanitized(), ev.Sanitized()}, nil
 	default:
 		return nil, nil
 	}

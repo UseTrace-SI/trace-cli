@@ -8,9 +8,9 @@ test-structure:
 test-sync:
 	go test -count=1 -race ./internal/syncclient
 test-sync-integration:
-	test -d ../trace-app
+	test -d ../trace-platform
 	go test -count=1 -race -tags syncintegration ./internal/syncclient
-	npm --prefix ../trace-app run check
+	npm --prefix ../trace-platform run check
 lint:
 	go vet ./...
 	staticcheck ./...

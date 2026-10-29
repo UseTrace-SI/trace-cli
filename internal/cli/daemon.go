@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/codex"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
@@ -92,6 +93,18 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("creating trace directory: %w", err)
 		}
+		lock, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			return fmt.Errorf("opening daemon lock: %w", err)
+		}
+		defer lock.Close()
+		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			if err == syscall.EWOULDBLOCK || err == syscall.EAGAIN {
+				return nil
+			}
+			return fmt.Errorf("locking daemon: %w", err)
+		}
+		defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		logfile, err := openDaemonLog(filepath.Join(dir, "daemon.log"))
 		if err != nil {
 			return fmt.Errorf("opening daemon log: %w", err)
@@ -103,6 +116,13 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
+		codexEvents := &codexSources{process: e.Process}
+		// Lazily take a baseline so a daemon started in an un-initialized repo
+		// can still capture turns (hooks must still be installed separately).
+		if err := addExclude(root); err != nil {
+			logger.Error("excluding Trace data from Git", "error", err)
+		}
+		_ = e.Baseline()
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		ctx, cancel := context.WithCancel(ctx)
 		defer stop()
@@ -121,20 +141,41 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				logger.Error("watcher stopped", "error", err)
 			}
 		}()
+		syncWake := make(chan struct{}, 1)
+		go autoSyncLoop(ctx, root, e, logger, syncWake)
 		if _, err := os.Stat(filepath.Join(dir, "codex.enabled")); err == nil {
 			home, err := os.UserHomeDir()
 			if err == nil {
-				go func() {
-					if err := codex.Run(ctx, root, filepath.Join(home, ".codex", "sessions"), e.Process); err != nil {
-						logger.Error("Codex adapter stopped", "error", err)
-					}
-				}()
+				config, err := codex.ConfigHome(home)
+				if err != nil {
+					logger.Error("resolving Codex home", "error", err)
+				} else {
+					go func() {
+						if err := codex.Run(ctx, root, filepath.Join(config, "sessions"), codexEvents.transcript); err != nil {
+							logger.Error("Codex adapter stopped", "error", err)
+						}
+					}()
+				}
 			}
 		}
-		err = daemon.Serve(ctx, dir, func(ev event.Event) {
-			if err := e.Process(ev); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, "opencode.enabled")); err == nil {
+			go func() {
+				if err := opencode.Run(ctx, root, "", e.Process); err != nil {
+					logger.Error("OpenCode adapter stopped", "error", err)
+				}
+			}()
+		}
+		err = daemon.ServeChecked(ctx, dir, func(ev event.Event) error {
+			err := codexEvents.hook(ev)
+			if err != nil {
 				logger.Error("processing event", "kind", ev.Kind, "error", err)
+			} else if ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd {
+				select {
+				case syncWake <- struct{}{}:
+				default:
+				}
 			}
+			return err
 		})
 		if err != nil {
 			logger.Error("daemon stopped", "error", err)

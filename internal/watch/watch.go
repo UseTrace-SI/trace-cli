@@ -26,7 +26,10 @@ func addDirs(w *fsnotify.Watcher, root string) error {
 	}
 	for _, dir := range dirs {
 		if err := w.Add(dir); err != nil {
-			return fmt.Errorf("watching %s: %w", dir, err)
+			// Do not abort the whole watcher when a single directory cannot be
+			// watched (e.g. EMFILE / too many open files). Skip it and keep
+			// capturing changes everywhere else.
+			continue
 		}
 	}
 	return nil

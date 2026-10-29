@@ -17,6 +17,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/UseTrace-SI/trace-cli/internal/id"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
@@ -161,6 +162,16 @@ func (e *Engine) endSession(ev event.Event) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing session end: %w", err)
 	}
+	// Opt-in auto-cleanup of Trace-created worktrees on session end.
+	if os.Getenv("TRACE_AUTO_CLEANUP_WORKTREES") == "1" {
+		if _, err := os.Stat(filepath.Join(repo.TraceDir(e.Root), "forked-from")); err == nil {
+			if gitx.IsClean(e.Root) {
+				if main, err := gitx.MainRepoRoot(e.Root); err == nil && main != e.Root {
+					_ = gitx.WorktreeRemove(main, e.Root, false)
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -188,7 +199,27 @@ func (e *Engine) session(ev event.Event) (string, error) {
 	return sid, nil
 }
 
+func (e *Engine) recordMessage(sessionID, turnID, role, content string, at int64) error {
+	id, err := id.New()
+	if err != nil {
+		return err
+	}
+	_, err = e.DB.Exec("INSERT INTO messages(id,session_id,turn_id,role,content,at) VALUES(?,?,?,?,?,?)",
+		id, sessionID, turnID, role, e.Redactor.Text(content), at)
+	return err
+}
+
 func (e *Engine) turnStart(ev event.Event) error {
+	if ev.InitialTurnOnly {
+		var exists int
+		if err := e.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM turns t JOIN sessions s ON s.id=t.session_id
+			WHERE s.agent=? AND s.agent_sid=? AND s.worktree=?)`, ev.Agent, ev.AgentSessionID, e.Root).Scan(&exists); err != nil {
+			return fmt.Errorf("checking initial turn: %w", err)
+		}
+		if exists != 0 {
+			return nil
+		}
+	}
 	sid, err := e.session(ev)
 	if err != nil {
 		return err
@@ -222,6 +253,11 @@ func (e *Engine) turnStart(ev event.Event) error {
 	_, err = e.DB.Exec("INSERT INTO turns(id,session_id,seq,prompt,started_at) VALUES(?,?,?,?,?)", tid, sid, seq, e.Redactor.Text(prompt), ev.At)
 	if err != nil {
 		return fmt.Errorf("creating turn: %w", err)
+	}
+	if prompt != "" {
+		if err := e.recordMessage(sid, tid, "user", prompt, ev.At); err != nil {
+			return fmt.Errorf("recording user message: %w", err)
+		}
 	}
 	if (ev.Agent == "claude-code" || ev.Agent == "agy") && ev.TranscriptPath != "" {
 		var offset int64
@@ -291,7 +327,11 @@ func (e *Engine) toolEdit(ev event.Event) error {
 				kind = "contested"
 			}
 		}
-		_, err = e.DB.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,source,at) VALUES(?,?,?,?,?,?,?)", opID, tid, sessionID, p, kind, "tool", ev.At)
+		actor := ev.Agent
+		if actor == "" {
+			actor = "agent"
+		}
+		_, err = e.DB.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,source,actor,at) VALUES(?,?,?,?,?,?,?,?)", opID, tid, sessionID, p, kind, "tool", actor, ev.At)
 		if err != nil {
 			return fmt.Errorf("recording tool edit: %w", err)
 		}
@@ -393,6 +433,8 @@ func (e *Engine) turnContext(ev event.Event) error {
 	label := "Assistant response"
 	if ev.ContextType == "thinking" {
 		label = "Thinking"
+	} else if ev.ContextType == "output" {
+		label = "Agent output"
 	}
 	if current != "" {
 		current += "\n\n"
@@ -423,8 +465,8 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		return fmt.Errorf("finding open turn: %w", err)
 	}
 	var startedAt int64
-	var sessionID string
-	if err := e.DB.QueryRow("SELECT started_at,session_id FROM turns WHERE id=?", tid).Scan(&startedAt, &sessionID); err != nil {
+	var sessionID, recordedContext, recordedPrompt string
+	if err := e.DB.QueryRow("SELECT started_at,session_id,COALESCE(reasoning,''),COALESCE(prompt,'') FROM turns WHERE id=?", tid).Scan(&startedAt, &sessionID, &recordedContext, &recordedPrompt); err != nil {
 		return fmt.Errorf("finding turn timestamps: %w", err)
 	}
 	var reasoning, toolCalls, filesRead, transcriptPrompt string
@@ -461,6 +503,7 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		}
 		reasoning += "Assistant response: " + e.Redactor.Text(ev.Text)
 	}
+	reasoning = mergeTurnContext(recordedContext, reasoning)
 	// The transcript is a best-effort source. A missing or unreadable file never
 	// prevents a turn from receiving its keyframe.
 	if ev.Agent == "agy" {
@@ -498,15 +541,8 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	if err != nil {
 		return err
 	}
-	if unknown {
-		// The watcher has already updated the manifest for these paths. Keep
-		// the fallback scan when it has not observed the command's writes.
-		var observed int
-		if err := e.DB.QueryRow(`SELECT COUNT(*) FROM ops WHERE turn_id=? AND source='watcher' AND path<>''`, tid).Scan(&observed); err != nil {
-			return fmt.Errorf("checking watcher changes for command: %w", err)
-		}
-		unknown = observed == 0
-	}
+	// A watcher event proves only that one path was observed. An unknown-path
+	// edit can touch other paths for which no watcher event arrived.
 	forcePath := filepath.Join(repo.TraceDir(e.Root), "force-scan")
 	_, forceErr := os.Stat(forcePath)
 	if forceErr != nil && !os.IsNotExist(forceErr) {
@@ -549,7 +585,7 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		return fmt.Errorf("reading attributed file changes: %w", err)
 	}
 	attributed.Close()
-	if _, err := tx.Exec(`UPDATE turns SET ended_at=?,prompt=CASE WHEN prompt='' THEN ? ELSE prompt END,
+	if _, err := tx.Exec(`UPDATE turns SET ended_at=?,prompt=CASE WHEN COALESCE(prompt,'')='' THEN ? ELSE prompt END,
 		reasoning=COALESCE(NULLIF(?,''),reasoning),tool_calls=COALESCE(NULLIF(?,''),tool_calls),
 		files_read=COALESCE(NULLIF(?,''),files_read) WHERE id=?`,
 		ev.At, e.Redactor.Text(transcriptPrompt), reasoning, toolCalls, filesRead, tid); err != nil {
@@ -563,6 +599,24 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	}
 	if _, err := tx.Exec("INSERT INTO keyframes(id,turn_id,seq,manifest_hash,git_head,tag,created_at) VALUES(?,?,?,?,?,?,?)", keyID, tid, seq, h, e.head(), "turn", ev.At); err != nil {
 		return fmt.Errorf("saving keyframe: %w", err)
+	}
+	if recordedPrompt == "" && transcriptPrompt != "" {
+		messageID, err := id.New()
+		if err != nil {
+			return fmt.Errorf("creating recovered message ID: %w", err)
+		}
+		if _, err := tx.Exec("INSERT INTO messages(id,session_id,turn_id,role,content,at) VALUES(?,?,?,?,?,?)", messageID, sessionID, tid, "user", e.Redactor.Text(transcriptPrompt), startedAt); err != nil {
+			return fmt.Errorf("recording recovered user message: %w", err)
+		}
+	}
+	if reasoning != "" {
+		messageID, err := id.New()
+		if err != nil {
+			return fmt.Errorf("creating assistant message ID: %w", err)
+		}
+		if _, err := tx.Exec("INSERT INTO messages(id,session_id,turn_id,role,content,at) VALUES(?,?,?,?,?,?)", messageID, sessionID, tid, "assistant", e.Redactor.Text(reasoning), ev.At); err != nil {
+			return fmt.Errorf("recording assistant message: %w", err)
+		}
 	}
 	if err := store.RecordUpdate(tx, "turns", tid); err != nil {
 		return fmt.Errorf("recording completed turn: %w", err)
@@ -581,6 +635,16 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		}
 	}
 	return nil
+}
+
+func mergeTurnContext(recorded, transcript string) string {
+	if recorded == "" || strings.Contains(transcript, recorded) {
+		return transcript
+	}
+	if transcript == "" || strings.Contains(recorded, transcript) {
+		return recorded
+	}
+	return recorded + "\n\n" + transcript
 }
 
 func (e *Engine) dirtyForTurn(turnID string) ([]string, bool, error) {

@@ -334,11 +334,11 @@ func statusCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		pending := spoolPending(dir)
-		result := map[string]any{"daemon_up": up, "active_sessions": active, "latest_step": latest, "size_bytes": size, "pending_events": pending}
+		result := map[string]any{"repo": root, "repo_name": filepath.Base(root), "daemon_up": up, "active_sessions": active, "latest_step": latest, "size_bytes": size, "pending_events": pending}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
-		_, err = fmt.Fprintf(c.OutOrStdout(), "Daemon: %t\nActive sessions: %d\nLatest step: %d\nPending events: %d\nTrace size: %d bytes\n", up, active, latest, pending, size)
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Repository: %s\nPath: %s\nDaemon: %t\nActive sessions: %d\nLatest step: %d\nPending events: %d\nTrace size: %d bytes\n", filepath.Base(root), root, up, active, latest, pending, size)
 		return err
 	}}
 }

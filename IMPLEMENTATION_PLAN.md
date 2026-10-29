@@ -2,7 +2,7 @@
 
 Read [AGENTS.md](AGENTS.md) first. This plan records the CLI's original phase scope and
 acceptance criteria. The companion Cloudflare application is maintained in a separate private
-`trace-app` repository. For current user-facing behavior, see the [README](README.md) and
+`trace-platform` repository. For current user-facing behavior, see the [README](README.md) and
 [CLI reference](docs/cli.md).
 
 Implement only a requested phase. Each phase lists its dependencies and ends with a mergeable
@@ -475,7 +475,7 @@ Antigravity CLI replaces the discontinued Gemini CLI integration. Its workspace 
 
 ## Phase 14 — Sync client (Pro / Team)
 
-Phase 14 covers the client. The companion Worker is maintained in the private `trace-app` repository.
+Phase 14 covers the client. The companion Worker is maintained in the private `trace-platform` repository.
 
 - `trace login` (GitHub OAuth device flow), `trace sync [--watch]`, and `trace sync pull --into PATH`.
 - Protocol: append-only. POST rows newer than last-synced ULID; blobs by hash with batched

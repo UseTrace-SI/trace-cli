@@ -2,7 +2,7 @@
 
 Trace is a local CLI and daemon that saves a keyframe at each coding-agent turn. Users can
 inspect history, rewind, fork, resume, and ask why a line exists. This public repository
-contains only the CLI; the companion Cloudflare app lives in a separate private `trace-app`
+contains only the CLI; the companion Cloudflare app lives in a separate private `trace-platform`
 repository. Website: usetrace.si. Module: `github.com/UseTrace-SI/trace-cli`.
 
 Work phase by phase from `IMPLEMENTATION_PLAN.md`. Do only the phase you were asked to do.

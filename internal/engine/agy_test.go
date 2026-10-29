@@ -81,3 +81,43 @@ func TestAgyTranscriptCompletesTurnAndRecoversToolEdit(t *testing.T) {
 		t.Fatal("Agy keyframe missed changed file")
 	}
 }
+
+func TestAgyLateTranscriptPromptIsRecordedAsMessage(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	transcript := filepath.Join(t.TempDir(), "transcript.jsonl")
+	if err := os.WriteFile(transcript, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UnixMilli()
+	ev := event.Event{Kind: event.TurnStart, Agent: "agy", AgentSessionID: "s", Worktree: root, At: at, TranscriptPath: transcript}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	secret := "ghp_abcdefghijklmnopqrstuvwxyz"
+	line := `{"type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>Fix ` + secret + `</USER_REQUEST>"}` + "\n"
+	if err := os.WriteFile(transcript, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind, ev.At = event.TurnEnd, at+1
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	var prompt, message string
+	if err := e.DB.QueryRow(`SELECT t.prompt,m.content FROM turns t JOIN messages m ON m.turn_id=t.id WHERE m.role='user'`).Scan(&prompt, &message); err != nil {
+		t.Fatal(err)
+	}
+	if prompt != message || strings.Contains(message, secret) || !strings.Contains(message, "redacted") {
+		t.Fatalf("prompt=%q message=%q", prompt, message)
+	}
+}

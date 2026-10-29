@@ -2,6 +2,7 @@ package repo
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,70 @@ func FindRoot(cwd string) (string, error) {
 		return "", fmt.Errorf("not inside a git repository: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// FindWorktreeRoot locates a normal Git worktree without launching Git. It is
+// intended for latency-sensitive hooks and deliberately does not infer roots
+// from process-wide GIT_DIR/GIT_WORK_TREE overrides.
+func FindWorktreeRoot(directory string) (string, error) {
+	if !filepath.IsAbs(directory) {
+		return "", fmt.Errorf("worktree path must be absolute")
+	}
+	current, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolving worktree path: %w", err)
+	}
+	info, err := os.Stat(current)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("worktree path is not a directory")
+	}
+	for {
+		marker := filepath.Join(current, ".git")
+		info, err := os.Lstat(marker)
+		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				info, err = os.Stat(marker)
+				if err != nil {
+					return "", fmt.Errorf("checking Git worktree marker: %w", err)
+				}
+			}
+			gitdir := marker
+			if !info.IsDir() {
+				if !info.Mode().IsRegular() {
+					return "", fmt.Errorf("invalid Git worktree marker")
+				}
+				f, err := os.Open(marker)
+				if err != nil {
+					return "", fmt.Errorf("opening Git worktree marker: %w", err)
+				}
+				data, readErr := io.ReadAll(io.LimitReader(f, 4097))
+				_ = f.Close()
+				line := strings.TrimSpace(string(data))
+				if readErr != nil || len(data) > 4096 || !strings.HasPrefix(line, "gitdir: ") {
+					return "", fmt.Errorf("invalid Git worktree marker")
+				}
+				gitdir = strings.TrimSpace(strings.TrimPrefix(line, "gitdir: "))
+				if gitdir == "" {
+					return "", fmt.Errorf("invalid Git worktree marker")
+				}
+				if !filepath.IsAbs(gitdir) {
+					gitdir = filepath.Join(current, gitdir)
+				}
+			}
+			if head, err := os.Stat(filepath.Join(gitdir, "HEAD")); err != nil || !head.Mode().IsRegular() {
+				return "", fmt.Errorf("invalid Git worktree directory")
+			}
+			return current, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("checking Git worktree marker: %w", err)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("not inside a Git worktree")
+		}
+		current = parent
+	}
 }
 
 func TraceDir(root string) string { return filepath.Join(root, ".trace") }

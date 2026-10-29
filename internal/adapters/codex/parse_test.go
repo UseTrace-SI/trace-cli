@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,6 +38,34 @@ func TestFixtureReplay(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("events: %v", got)
+		}
+	}
+}
+
+func TestSessionDirectoryResolvesWorktree(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{filepath.Join(root, ".git"), filepath.Join(root, "nested"), filepath.Join(root, "other", ".git")} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, dir := range []string{filepath.Join(root, ".git"), filepath.Join(root, "other", ".git")} {
+		if err := os.WriteFile(filepath.Join(dir, "HEAD"), []byte("ref: refs/heads/main\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		cwd    string
+		active bool
+	}{{root, true}, {filepath.Join(root, "nested"), true}, {filepath.Join(root, "other"), false}} {
+		p := Parser{Root: root}
+		body, err := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "s", "cwd": tc.cwd}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		events, err := p.Feed(body)
+		if err != nil || p.Active != tc.active || (len(events) == 1) != tc.active {
+			t.Fatalf("cwd %s: active=%t events=%v err=%v", tc.cwd, p.Active, events, err)
 		}
 	}
 }

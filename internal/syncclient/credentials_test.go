@@ -1,11 +1,33 @@
 package syncclient
 
 import (
+	"bytes"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSavedProSyncKeyRestoresCipher(t *testing.T) {
+	salt := bytes.Repeat([]byte{3}, 32)
+	cipher, err := Derive("a sufficiently long passphrase", salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := cipher.KeyForCredentialStore()
+	restored, err := FromKey(encoded, salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := cipher.Seal([]byte("private history"), "turn:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := restored.Open(sealed, "turn:1")
+	if err != nil || string(opened) != "private history" {
+		t.Fatalf("restored key opened %q, err=%v", opened, err)
+	}
+}
 
 func TestCredentialSaveCommandKeepsTokenOutOfArguments(t *testing.T) {
 	const value = `{"access_token":"sample-sensitive-token"}`

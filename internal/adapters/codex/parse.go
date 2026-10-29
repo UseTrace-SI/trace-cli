@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/repo"
 )
 
 type Parser struct {
@@ -53,6 +54,11 @@ func (p *Parser) Feed(line []byte) ([]event.Event, error) {
 			p.SessionID = x.ID
 		}
 		p.Active = filepath.Clean(x.CWD) == filepath.Clean(p.Root)
+		if !p.Active && filepath.IsAbs(x.CWD) {
+			worktree, err := repo.FindWorktreeRoot(x.CWD)
+			root, rootErr := filepath.EvalSymlinks(p.Root)
+			p.Active = err == nil && rootErr == nil && worktree == root
+		}
 		if p.Active {
 			return []event.Event{{Kind: event.SessionStart, Agent: "codex", AgentSessionID: p.SessionID, Worktree: p.Root, At: at}}, nil
 		}

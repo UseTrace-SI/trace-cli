@@ -62,4 +62,69 @@ func TestCursorContextAndReadPathsSurviveTurnEnd(t *testing.T) {
 		!strings.Contains(tools, "Write") || files != `["main.go"]` {
 		t.Fatalf("reasoning=%q tools=%q files=%q", reasoning, tools, files)
 	}
+	var assistant string
+	if err := e.DB.QueryRow("SELECT content FROM messages WHERE role='assistant'").Scan(&assistant); err != nil {
+		t.Fatalf("assistant message missing: %v", err)
+	}
+	if assistant != reasoning {
+		t.Fatalf("assistant message = %q; want %q", assistant, reasoning)
+	}
+}
+
+func TestMergeTurnContext(t *testing.T) {
+	for _, tt := range []struct{ recorded, transcript, want string }{
+		{"", "transcript", "transcript"},
+		{"hook", "", "hook"},
+		{"hook", "hook", "hook"},
+		{"hook", "transcript contains hook", "transcript contains hook"},
+		{"hook context", "transcript context", "hook context\n\ntranscript context"},
+	} {
+		if got := mergeTurnContext(tt.recorded, tt.transcript); got != tt.want {
+			t.Errorf("mergeTurnContext(%q, %q) = %q, want %q", tt.recorded, tt.transcript, got, tt.want)
+		}
+	}
+}
+
+func TestAssistantMessageFailureDoesNotFinishTurn(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "test", AgentSessionID: "s", Worktree: root, At: time.Now().UnixMilli(), Kind: event.TurnStart, Prompt: "hello"}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind, ev.Text, ev.ContextType = event.TurnContext, "answer", "response"
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec(`CREATE TRIGGER reject_assistant BEFORE INSERT ON messages WHEN NEW.role='assistant' BEGIN SELECT RAISE(ABORT, 'test'); END`); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind = event.TurnEnd
+	if err := e.Process(ev); err == nil {
+		t.Fatal("expected assistant message failure")
+	}
+	var ended int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM turns WHERE ended_at IS NOT NULL").Scan(&ended); err != nil || ended != 0 {
+		t.Fatalf("turn ended after failure: %d, %v", ended, err)
+	}
+	if _, err := e.DB.Exec("DROP TRIGGER reject_assistant"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Process(ev); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	var count int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM messages WHERE role='assistant'").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("assistant messages: %d, %v", count, err)
+	}
 }

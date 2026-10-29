@@ -2,26 +2,35 @@
 
 ## Connect a repository
 
-Sync is off by default. The CLI never contacts a sync server until `trace login` has completed and you run `trace sync`. The companion Cloudflare server is maintained in a separate private `trace-app` repository.
+Sync is off by default. `trace login` connects one repository but does not upload history unless you choose automatic sync or run `trace sync`. The companion Cloudflare service is maintained in the separate `trace-platform` repository.
 
-The recommended GitHub App must have device flow enabled and Metadata read permission on repositories where Trace is installed. Set its client ID and a Trace sync HTTPS endpoint, then authenticate for a repository:
+From an initialized repository with a GitHub `origin`, run:
 
 ```sh
-export TRACE_GITHUB_CLIENT_ID=YOUR_PUBLIC_CLIENT_ID
-export TRACE_SYNC_URL=https://sync.example.com
-trace login --remote owner/repo --mode pro --github-app
+trace login
 ```
 
-`trace login` shows a GitHub verification code and stores the resulting access and refresh credentials in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains the endpoint, repository, mode, public client ID, and GitHub App mode. Tokens are never written to Trace's database. GitHub App mode requests `offline_access` and renews expiring user tokens before sync and recovery. For an existing OAuth App, omit `--github-app`; that mode still requests `read:user` and `repo` scopes.
+To opt in to background uploads after sign-in, add `--auto-sync`:
+
+```sh
+trace login --auto-sync
+```
+
+The repository daemon starts after login and uploads existing history as well as new turns in the background. It wakes after completed turns, backs off while idle, and retries network or authorization errors with increasing delays. Hook delivery remains local and does not wait for uploads. Stop future background uploads with `trace sync disable-auto`; one-shot `trace sync` remains available. Automatic sync starts only after the repository is explicitly connected with `--auto-sync`.
+
+Trace discovers the repository and public sign-in settings from `https://usetrace.si`, then displays a GitHub device code. Pro mode is the default and keeps history encrypted on your device. For Team mode, which allows browsing history on the web, run `trace login --mode team` instead. Add `--auto-sync` to either command to upload local history in the background; without it, upload manually with `trace sync`.
+
+For custom setups, `--remote owner/repo`, `--endpoint`, `--client-id`, `--github-app`, and `--auto-sync` are available. `TRACE_SYNC_URL` and `TRACE_GITHUB_CLIENT_ID` can also supply the endpoint and client ID. The server's GitHub App must have device flow enabled and access to the repository.
+
+`trace login` shows a GitHub verification code and stores the resulting access and refresh credentials in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains the endpoint, repository, mode, public client ID, GitHub App mode, and automatic-sync choice. Tokens and the optional Pro encryption key are never written to Trace's database. GitHub App mode requests `offline_access` and renews expiring user tokens before sync and recovery. For an existing OAuth App, omit `--github-app`; that mode still requests `read:user` and `repo` scopes.
 
 ## Encryption modes
 
-For Pro, supply a passphrase of at least 12 characters when syncing:
+For Pro, supply a passphrase of at least 12 characters during login. Trace saves the derived key in the OS credential store for background use; the passphrase itself is not saved:
 
 ```sh
 export TRACE_SYNC_PASSPHRASE='a long passphrase kept outside the repo'
-trace sync
-trace sync --watch
+trace login --auto-sync
 ```
 
 Trace derives a 256-bit key with scrypt using a random 32-byte salt in `.trace/sync-salt`. Rows and blobs are encrypted with XChaCha20-Poly1305 before upload. The key and passphrase are never uploaded. Losing the passphrase prevents Pro recovery. Team mode uses HTTPS and sends plaintext to the server for its server-side encryption and repository access control.
@@ -48,6 +57,6 @@ The client sends `Authorization: Bearer <GitHub user access token>` to the confi
 - `GET /v1/sync/blobs/list?repo=owner/repo&mode=pro|team&after=HASH`: up to 100 blob hashes and a `next` cursor.
 - `GET /v1/sync/blobs?repo=owner/repo&mode=pro|team&hash=HASH`: base64 blob payload. Team returns decrypted bytes after checking read access; Pro returns client ciphertext and its salt.
 
-Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client targets 128 KiB and 40 rows per request to fit the Workers Free CPU and D1 query budgets; a single large row can use up to 7 MiB. It records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only, including corrections made after an early `sync --watch` upload. Recovery applies those corrections after the original rows and blobs are downloaded.
+Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client targets 128 KiB and 40 rows per request to fit Worker CPU and D1 query budgets; a single large row can use up to 7 MiB. It records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only, including corrections made after an early upload. Recovery applies those corrections after the original rows and blobs are downloaded.
 
-No public sync endpoint or GitHub App registration is configured yet. Live sync requires deploying the companion app and registering a GitHub App with device flow enabled.
+Live sync requires the companion app to have GitHub sign-in configured, including a GitHub App with device flow enabled.

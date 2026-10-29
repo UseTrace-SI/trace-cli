@@ -137,9 +137,9 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 		e.current = next
 		return next, nil
 	}
-	var turnID, sessionID string
-	err := e.DB.QueryRow(`SELECT t.id,t.session_id FROM turns t JOIN sessions s ON s.id=t.session_id
-		WHERE s.worktree=? AND t.ended_at IS NULL ORDER BY t.started_at DESC LIMIT 1`, e.Root).Scan(&turnID, &sessionID)
+	var turnID, sessionID, agent string
+	err := e.DB.QueryRow(`SELECT t.id,t.session_id,s.agent FROM turns t JOIN sessions s ON s.id=t.session_id
+		WHERE s.worktree=? AND t.ended_at IS NULL ORDER BY t.started_at DESC LIMIT 1`, e.Root).Scan(&turnID, &sessionID, &agent)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("finding active turn: %w", err)
 	}
@@ -200,7 +200,14 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 				tid = turnID
 				sid = sessionID
 			}
-			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, opAt)
+			actor := agent
+			if actor == "" {
+				actor = "watcher"
+			}
+			if turnID == "" {
+				actor = "human"
+			}
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,actor,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, actor, opAt)
 			if err != nil {
 				return nil, fmt.Errorf("recording file change: %w", err)
 			}
@@ -214,8 +221,15 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 			if turnID != "" {
 				tid, sid = turnID, sessionID
 			}
-			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-				opID, tid, sid, p, symbol.Kind, symbol.Name, symbol.StartLine, symbol.EndLine, oldHash, newHash, source, time.Now().UnixMilli())
+			actor := agent
+			if actor == "" {
+				actor = "watcher"
+			}
+			if turnID == "" {
+				actor = "human"
+			}
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,actor,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+				opID, tid, sid, p, symbol.Kind, symbol.Name, symbol.StartLine, symbol.EndLine, oldHash, newHash, source, actor, time.Now().UnixMilli())
 			if err != nil {
 				return nil, fmt.Errorf("recording structural change: %w", err)
 			}

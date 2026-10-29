@@ -27,7 +27,7 @@ import (
 
 func startWorkerBridge(t *testing.T) *http.Client {
 	t.Helper()
-	script, err := filepath.Abs(filepath.Join("..", "..", "..", "trace-app", "scripts", "sync_bridge.mjs"))
+	script, err := filepath.Abs(filepath.Join("..", "..", "..", "trace-platform", "scripts", "sync_bridge.mjs"))
 	if err != nil {
 		t.Fatal(err)
 	}

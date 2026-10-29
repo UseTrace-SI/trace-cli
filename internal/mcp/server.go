@@ -10,6 +10,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/historysearch"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
 	"github.com/UseTrace-SI/trace-cli/internal/textutil"
@@ -62,13 +63,27 @@ type WhyOutput struct {
 	Message string `json:"message,omitempty"`
 }
 type SearchInput struct {
-	Query  string `json:"query"`
-	Limit  int    `json:"limit,omitempty"`
-	Cursor int64  `json:"cursor,omitempty"`
+	Query      string `json:"query,omitempty"`
+	Scope      string `json:"scope,omitempty"`
+	EditedPath string `json:"edited_path,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+	Cursor     int64  `json:"cursor,omitempty"`
 }
 type SearchOutput struct {
 	Steps  []Step `json:"steps"`
 	Cursor int64  `json:"cursor,omitempty"`
+}
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	At      int64  `json:"at"`
+}
+type MessagesInput struct {
+	Session string `json:"session,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+type MessagesOutput struct {
+	Messages []Message `json:"messages"`
 }
 
 func capLimit(n int) int {
@@ -218,29 +233,38 @@ func New(e *engine.Engine) *mcp.Server {
 		}
 		return nil, WhyOutput{Agent: "baseline", Message: "present at baseline"}, nil
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "search_history", Description: "Search prompts and reasoning"}, func(_ context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
-		cursor := in.Cursor
-		if cursor <= 0 {
-			cursor = math.MaxInt64
-		}
-		rows, err := e.DB.Query(`SELECT k.seq,s.agent,COALESCE(t.prompt,'') FROM turn_fts
-			JOIN turns t ON t.rowid=turn_fts.rowid JOIN keyframes k ON k.turn_id=t.id JOIN sessions s ON s.id=t.session_id
-			WHERE turn_fts MATCH ? AND k.seq<? ORDER BY k.seq DESC LIMIT ?`, in.Query, cursor, capLimit(in.Limit))
+	mcp.AddTool(s, &mcp.Tool{Name: "search_history", Description: "Search turn text, messages, and edited paths"}, func(_ context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
+		hits, err := historysearch.Search(e.DB.DB, historysearch.Options{
+			Query: in.Query, Scope: in.Scope, EditedPath: in.EditedPath, Limit: capLimit(in.Limit), Before: in.Cursor,
+		})
 		if err != nil {
 			return nil, SearchOutput{}, err
 		}
-		defer rows.Close()
 		out := SearchOutput{Steps: []Step{}}
-		for rows.Next() {
-			var r Step
-			if err := rows.Scan(&r.Step, &r.Agent, &r.Prompt); err != nil {
-				return nil, out, err
-			}
+		for _, hit := range hits {
+			r := Step{Step: hit.Step, Agent: hit.Agent, Prompt: hit.Prompt}
 			if len(r.Prompt) > 120 {
 				r.Prompt = textutil.Truncate(r.Prompt, 120)
 			}
 			out.Steps = append(out.Steps, r)
 			out.Cursor = r.Step
+		}
+		return nil, out, nil
+	})
+	mcp.AddTool(s, &mcp.Tool{Name: "get_messages", Description: "Get conversation messages for a session"}, func(_ context.Context, _ *mcp.CallToolRequest, in MessagesInput) (*mcp.CallToolResult, MessagesOutput, error) {
+		limit := capLimit(in.Limit)
+		rows, err := e.DB.Query(`SELECT m.role, COALESCE(m.content,''), m.at FROM messages m WHERE (?='' OR m.session_id=?) ORDER BY m.at LIMIT ?`, in.Session, in.Session, limit)
+		if err != nil {
+			return nil, MessagesOutput{}, err
+		}
+		defer rows.Close()
+		out := MessagesOutput{Messages: []Message{}}
+		for rows.Next() {
+			var m Message
+			if err := rows.Scan(&m.Role, &m.Content, &m.At); err != nil {
+				return nil, out, err
+			}
+			out.Messages = append(out.Messages, m)
 		}
 		return nil, out, rows.Err()
 	})

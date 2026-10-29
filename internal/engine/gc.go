@@ -81,6 +81,9 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 			if _, err := tx.Exec("DELETE FROM sync_updates WHERE table_name='turns' AND row_id=?", v.turnID); err != nil {
 				return result, fmt.Errorf("removing obsolete turn update: %w", err)
 			}
+			if _, err := tx.Exec("DELETE FROM messages WHERE turn_id=?", v.turnID); err != nil {
+				return result, fmt.Errorf("removing obsolete messages: %w", err)
+			}
 			if _, err := tx.Exec("DELETE FROM ops WHERE turn_id=?", v.turnID); err != nil {
 				return result, err
 			}
@@ -148,6 +151,19 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 		return result, err
 	}
 	rows.Close()
+	parents := make([]blob.Hash, 0, len(marked))
+	for hash := range marked {
+		parents = append(parents, hash)
+	}
+	for _, hash := range parents {
+		children, err := e.Blobs.Chunks(hash)
+		if err != nil {
+			return result, fmt.Errorf("marking chunks for %s: %w", hash, err)
+		}
+		for _, child := range children {
+			marked[child] = true
+		}
+	}
 	objects := filepath.Join(e.Root, ".trace", "objects")
 	err = filepath.WalkDir(objects, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {

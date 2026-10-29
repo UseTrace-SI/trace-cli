@@ -32,6 +32,20 @@ func Derive(passphrase string, salt []byte) (*Cipher, error) {
 	return &Cipher{key: key, Salt: append([]byte(nil), salt...)}, nil
 }
 
+// FromKey restores a cipher whose key was saved in the operating system
+// credential store. The salt remains in the repository's .trace directory.
+func FromKey(encoded string, salt []byte) (*Cipher, error) {
+	key, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(key) != chacha20poly1305.KeySize || len(salt) != 32 {
+		return nil, errors.New("invalid saved Pro sync key")
+	}
+	return &Cipher{key: key, Salt: append([]byte(nil), salt...)}, nil
+}
+
+func (c *Cipher) KeyForCredentialStore() string {
+	return base64.StdEncoding.EncodeToString(c.key)
+}
+
 func LoadCipher(traceDir, passphrase string) (*Cipher, error) {
 	path := filepath.Join(traceDir, "sync-salt")
 	salt, err := os.ReadFile(path)

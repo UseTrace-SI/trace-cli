@@ -41,6 +41,49 @@ func TestFindRoot(t *testing.T) {
 	}
 }
 
+func TestFindWorktreeRoot(t *testing.T) {
+	for _, separate := range []bool{false, true} {
+		t.Run(map[bool]string{false: "directory", true: "gitdir file"}[separate], func(t *testing.T) {
+			root := t.TempDir()
+			args := []string{"-C", root, "init", "-q"}
+			if separate {
+				args = append(args, "--separate-git-dir", filepath.Join(t.TempDir(), "gitdir"))
+			}
+			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+				t.Fatalf("git init: %s: %v", out, err)
+			}
+			nested := filepath.Join(root, "src", "nested")
+			if err := os.MkdirAll(nested, 0700); err != nil {
+				t.Fatal(err)
+			}
+			alias := filepath.Join(t.TempDir(), "alias")
+			if err := os.Symlink(root, alias); err != nil {
+				t.Fatal(err)
+			}
+			for _, input := range []string{root, nested, filepath.Join(alias, "src")} {
+				want, err := FindRoot(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, err := FindWorktreeRoot(input); err != nil || got != want {
+					t.Errorf("FindWorktreeRoot(%q) = %q, %v; want %q", input, got, err, want)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(nested, ".git"), []byte("invalid"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := FindWorktreeRoot(nested); err == nil {
+				t.Fatalf("invalid nested marker resolved to %q", got)
+			}
+		})
+	}
+	for _, input := range []string{"relative", t.TempDir(), "/nonexistent/trace-repo"} {
+		if got, err := FindWorktreeRoot(input); err == nil {
+			t.Errorf("unexpected root %q for %q", got, input)
+		}
+	}
+}
+
 func TestRelativePathResolvesAliasesAndMissingFiles(t *testing.T) {
 	root := t.TempDir()
 	alias := filepath.Join(t.TempDir(), "alias")

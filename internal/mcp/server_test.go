@@ -92,6 +92,22 @@ func TestReadOnlyTools(t *testing.T) {
 			}
 		})
 	}
+	if _, err := e.DB.Exec("INSERT INTO messages(id,session_id,turn_id,role,content,at) SELECT 'extra',s.id,t.id,'assistant','unique discovery signal',2 FROM sessions s JOIN turns t ON t.session_id=s.id LIMIT 1"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "search_history", Arguments: map[string]any{
+		"query": "discovery", "scope": "messages", "edited_path": "main.go",
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("message search failed: %v, %v", err, result)
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"step":1`) {
+		t.Fatalf("message search did not find edited turn: %s", b)
+	}
 }
 
 func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {

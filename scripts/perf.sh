@@ -61,6 +61,7 @@ fi
 
 python3 - "$perf_repo" <<'PY'
 import os
+import json
 import subprocess
 import sys
 import time
@@ -88,4 +89,36 @@ if p95 >= 20:
         print("hosted macOS VM hook process timing is advisory", file=sys.stderr)
     else:
         raise SystemExit("full hook process exceeded 20 ms p95")
+
+# Exercise the payload-based global routing and multi-event batch paths too.
+cases = [
+    ("cursor global read", "cursor-global", "beforeReadFile",
+     {"workspace_roots": [root], "conversation_id": "perf-global",
+      "hook_event_name": "beforeReadFile", "file_path": os.path.join(root, "file.txt")},
+     '{"permission":"allow"}'),
+    ("gemini global end", "gemini-global", "AfterAgent",
+     {"cwd": root, "session_id": "perf-global", "hook_event_name": "AfterAgent",
+      "prompt_response": "done"}, '{}'),
+]
+for label, agent, hook_event, body, expected in cases:
+    samples = []
+    for _ in range(3):
+        durations = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = subprocess.run(
+                ["./bin/trace", "hook", agent, hook_event],
+                input=json.dumps(body), text=True, capture_output=True,
+            )
+            if result.returncode != 0 or result.stdout.strip() != expected:
+                raise SystemExit(f"{label} hook failed or changed agent output")
+            durations.append((time.perf_counter() - start) * 1000)
+        samples.append(sorted(durations)[94])
+    p95 = sorted(samples)[1]
+    print(f"{label} hook p95 samples: {', '.join(f'{sample:.2f}' for sample in samples)} ms")
+    if p95 >= 20:
+        if os.environ.get("TRACE_PERF_HOOK_ADVISORY") == "1":
+            print(f"{label} timing is advisory on this host", file=sys.stderr)
+        else:
+            raise SystemExit(f"{label} hook exceeded 20 ms p95")
 PY

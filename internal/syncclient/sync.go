@@ -35,6 +35,7 @@ type Config struct {
 	Mode      string `json:"mode"`
 	ClientID  string `json:"client_id,omitempty"`
 	GitHubApp bool   `json:"github_app,omitempty"`
+	AutoSync  bool   `json:"auto_sync,omitempty"`
 }
 
 func (cfg Config) Validate() error {
