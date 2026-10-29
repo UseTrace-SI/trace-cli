@@ -30,6 +30,7 @@ var columns = map[string][]string{
 	"keyframes":    {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
 	"ops":          {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
 	"commits":      {"sha", "keyframe_id", "at"},
+	"messages":     {"id", "session_id", "turn_id", "role", "content", "at"},
 	"sync_updates": {"id", "table_name", "row_id", "data"},
 }
 
@@ -191,7 +192,7 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 			data["seq"] = next
 		}
 	}
-	for _, field := range []string{"prompt", "reasoning", "tool_calls", "files_read", "detail"} {
+	for _, field := range []string{"prompt", "reasoning", "tool_calls", "files_read", "detail", "content"} {
 		if value, ok := data[field].(string); ok {
 			data[field] = (redact.Redactor{}).Text(value)
 		}

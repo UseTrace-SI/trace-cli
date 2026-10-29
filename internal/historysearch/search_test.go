@@ -14,7 +14,7 @@ func TestTerms(t *testing.T) {
 		{"|", "", true},
 	} {
 		t.Run(tc.query, func(t *testing.T) {
-			got, err := terms(tc.query)
+			got, err := terms(tc.query, false)
 			if (err != nil) != tc.invalid || got != tc.want {
 				t.Fatalf("terms(%q) = %q, %v; want %q, invalid=%t", tc.query, got, err, tc.want, tc.invalid)
 			}

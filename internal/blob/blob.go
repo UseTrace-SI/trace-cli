@@ -17,7 +17,6 @@ import (
 type Hash string
 type Store struct{ dir string }
 
-const chunkSize = 32 * 1024
 const chunkThreshold = 64 * 1024
 const maxMemoryPutBytes = 4 << 20
 

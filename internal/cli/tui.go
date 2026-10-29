@@ -19,7 +19,6 @@ type tuiStep struct {
 	agent  string
 	prompt string
 	tag    string
-	files  int
 }
 
 type tuiModel struct {

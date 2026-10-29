@@ -57,7 +57,7 @@ func rewrite(original string, install bool) (string, error) {
 	if begin >= 0 {
 		finish += len(end)
 		if !managedBlock(original[begin:finish]) {
-			return "", fmt.Errorf("Trace hooks in Kimi config were modified; preserve and merge them manually")
+			return "", fmt.Errorf("trace hooks in Kimi config were modified; preserve and merge them manually")
 		}
 		if finish < len(original) && original[finish] == '\n' {
 			finish++

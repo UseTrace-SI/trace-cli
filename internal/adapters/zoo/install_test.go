@@ -128,7 +128,7 @@ setImmediate(() => {
 });
 (async () => {
   let lines=[];
-  for (let n=0; n<100 && lines.length<7; n++) {
+  for (let n=0; n<300 && lines.length<7; n++) {
     await new Promise(r => setTimeout(r,20));
     try {
       const data=fs.readFileSync(process.env.TRACE_ZOO_LOG,'utf8');

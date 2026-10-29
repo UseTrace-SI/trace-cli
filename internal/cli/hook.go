@@ -582,14 +582,14 @@ func auggieHookRoot(body []byte) (string, error) {
 	var root string
 	for _, project := range projects {
 		if !filepath.IsAbs(project) {
-			return "", fmt.Errorf("Auggie workspace must be absolute")
+			return "", fmt.Errorf("auggie workspace must be absolute")
 		}
 		workspaceRoot, err := repo.FindWorktreeRoot(project)
 		if err != nil {
 			return "", fmt.Errorf("finding Auggie workspace: %w", err)
 		}
 		if root != "" && root != workspaceRoot {
-			return "", fmt.Errorf("Auggie workspaces span multiple worktrees")
+			return "", fmt.Errorf("auggie workspaces span multiple worktrees")
 		}
 		root = workspaceRoot
 	}

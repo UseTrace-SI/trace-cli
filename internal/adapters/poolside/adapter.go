@@ -113,7 +113,7 @@ func Setup(home string, remove bool) error {
 	if start >= 0 {
 		end += len(endMarker)
 		if !isManagedBlock(text[start:end], block.String()) {
-			return fmt.Errorf("Trace hooks in Poolside settings were modified; preserve and merge them manually")
+			return fmt.Errorf("trace hooks in Poolside settings were modified; preserve and merge them manually")
 		}
 		if !remove {
 			if text[start:end] == block.String() {
@@ -144,7 +144,7 @@ func Setup(home string, remove bool) error {
 		return nil
 	}
 	if !canAppendHooks(text) {
-		return fmt.Errorf("Poolside settings at %s contain hooks or unsupported YAML; merge the Trace hooks manually", p)
+		return fmt.Errorf("poolside settings at %s contain hooks or unsupported YAML; merge the Trace hooks manually", p)
 	}
 	if text != "" {
 		text += "\n"

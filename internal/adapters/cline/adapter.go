@@ -29,7 +29,7 @@ func globalDir(home string) (string, error) {
 		dir = filepath.Join(home, ".cline")
 	}
 	if !filepath.IsAbs(dir) {
-		return "", fmt.Errorf("Cline config directory must be absolute")
+		return "", fmt.Errorf("cline config directory must be absolute")
 	}
 	return filepath.Join(dir, "hooks"), nil
 }
@@ -115,7 +115,7 @@ func managedHookRoot(data []byte, name string) (string, bool) {
 	}
 	root := ""
 	if strings.HasPrefix(rest, " --repo ") {
-		root, rest, ok = readQuoted(strings.TrimPrefix(rest, " --repo "))
+		root, _, ok = readQuoted(strings.TrimPrefix(rest, " --repo "))
 		if !ok || !filepath.IsAbs(root) {
 			return "", false
 		}

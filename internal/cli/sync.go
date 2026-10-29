@@ -89,7 +89,7 @@ func discoverLoginConfig(ctx context.Context, endpoint string, client *http.Clie
 		return "", false, errors.New("GitHub sign-in is not configured on this Trace server yet")
 	}
 	if settings.AuthMode != "app" && settings.AuthMode != "oauth" {
-		return "", false, errors.New("Trace server returned an unsupported authentication mode")
+		return "", false, errors.New("trace server returned an unsupported authentication mode")
 	}
 	return settings.ClientID, settings.AuthMode == "app", nil
 }

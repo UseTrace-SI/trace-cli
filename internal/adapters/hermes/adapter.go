@@ -24,7 +24,7 @@ func Setup(home string, remove bool) error {
 		profile = filepath.Join(home, ".hermes")
 	}
 	if !filepath.IsAbs(profile) {
-		return fmt.Errorf("Hermes profile directory must be absolute")
+		return fmt.Errorf("hermes profile directory must be absolute")
 	}
 	dir := filepath.Join(profile, "plugins", "trace-observer")
 	module := filepath.Join(dir, "__init__.py")

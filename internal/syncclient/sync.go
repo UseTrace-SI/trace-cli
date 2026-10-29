@@ -27,7 +27,7 @@ const blobHaveBatchSize = 500
 const targetRowRequestBytes = 128 << 10
 const maxRowRequestBytes = 7 << 20
 
-var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "sync_updates"}
+var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "messages", "sync_updates"}
 
 type Config struct {
 	Endpoint      string `json:"endpoint"`

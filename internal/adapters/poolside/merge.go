@@ -68,7 +68,7 @@ func stripEventBlocks(text string) (string, bool, error) {
 			}
 			finish += start + len(end)
 			if !managedEventBlock(text[start:finish], expected, name) {
-				return "", false, fmt.Errorf("Trace Poolside hook block was modified")
+				return "", false, fmt.Errorf("trace Poolside hook block was modified")
 			}
 			replacement := ""
 			if !existing {
@@ -104,7 +104,7 @@ func mergeExistingHooks(text string, remove bool) (string, bool, error) {
 		return clean, found, nil
 	}
 	if strings.Contains(clean, "\r") || strings.Contains(clean, "\t") {
-		return "", false, fmt.Errorf("Poolside settings need manual YAML merging")
+		return "", false, fmt.Errorf("poolside settings need manual YAML merging")
 	}
 	lines := strings.SplitAfter(clean, "\n")
 	hooksStart, hooksEnd, offset := -1, len(clean), 0
@@ -126,11 +126,11 @@ func mergeExistingHooks(text string, remove bool) (string, bool, error) {
 			}
 			i := strings.IndexByte(body, ':')
 			if i <= 0 || !plainKey.MatchString(body[:i]) {
-				return "", false, fmt.Errorf("Poolside settings need manual YAML merging")
+				return "", false, fmt.Errorf("poolside settings need manual YAML merging")
 			}
 			if body[:i] == "hooks" {
 				if hooksStart >= 0 || (strings.TrimSpace(body[i+1:]) != "" && !strings.HasPrefix(strings.TrimSpace(body[i+1:]), "#")) || !strings.HasSuffix(line, "\n") {
-					return "", false, fmt.Errorf("Poolside hooks need manual YAML merging")
+					return "", false, fmt.Errorf("poolside hooks need manual YAML merging")
 				}
 				hooksStart, inHooks = offset+len(line), true
 			}
@@ -139,7 +139,7 @@ func mergeExistingHooks(text string, remove bool) (string, bool, error) {
 			entry := body[2:]
 			i := strings.IndexByte(entry, ':')
 			if i <= 0 || !plainKey.MatchString(entry[:i]) {
-				return "", false, fmt.Errorf("Poolside hooks need manual YAML merging")
+				return "", false, fmt.Errorf("poolside hooks need manual YAML merging")
 			}
 			name := entry[:i]
 			if _, exists := positions[name]; exists {
@@ -149,18 +149,18 @@ func mergeExistingHooks(text string, remove bool) (string, bool, error) {
 			for _, target := range names {
 				if name == target {
 					if (strings.TrimSpace(entry[i+1:]) != "" && !strings.HasPrefix(strings.TrimSpace(entry[i+1:]), "#")) || !strings.HasSuffix(line, "\n") {
-						return "", false, fmt.Errorf("Poolside hook %s needs manual YAML merging", name)
+						return "", false, fmt.Errorf("poolside hook %s needs manual YAML merging", name)
 					}
 					awaitingList = name
 				}
 			}
 		} else if inHooks {
 			if !strings.HasPrefix(body, "    ") {
-				return "", false, fmt.Errorf("Poolside hooks need manual YAML merging")
+				return "", false, fmt.Errorf("poolside hooks need manual YAML merging")
 			}
 			if awaitingList != "" {
 				if !strings.HasPrefix(body, "    - ") && body != "    -" {
-					return "", false, fmt.Errorf("Poolside hook %s needs manual YAML merging", awaitingList)
+					return "", false, fmt.Errorf("poolside hook %s needs manual YAML merging", awaitingList)
 				}
 				awaitingList = ""
 			}
@@ -171,7 +171,7 @@ func mergeExistingHooks(text string, remove bool) (string, bool, error) {
 		return text, found, nil
 	}
 	if strings.Contains(clean[hooksStart:hooksEnd], "trace-") {
-		return "", false, fmt.Errorf("Poolside hook name conflicts with Trace")
+		return "", false, fmt.Errorf("poolside hook name conflicts with Trace")
 	}
 	insert := map[int]string{}
 	for _, name := range names {

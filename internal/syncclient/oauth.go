@@ -153,14 +153,14 @@ func (o OAuth) platformTokenRequest(ctx context.Context, target string, input ma
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Credentials{}, fmt.Errorf("Trace authentication service returned %s", resp.Status)
+		return Credentials{}, fmt.Errorf("trace authentication service returned %s", resp.Status)
 	}
 	var credentials Credentials
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&credentials); err != nil {
 		return Credentials{}, fmt.Errorf("decoding Trace authentication response: %w", err)
 	}
 	if credentials.AccessToken == "" || credentials.RefreshToken == "" || credentials.ExpiresAt <= 0 || credentials.RefreshExpiresAt <= 0 {
-		return Credentials{}, errors.New("Trace authentication service returned incomplete credentials")
+		return Credentials{}, errors.New("trace authentication service returned incomplete credentials")
 	}
 	return credentials, nil
 }

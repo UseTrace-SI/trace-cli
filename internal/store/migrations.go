@@ -146,5 +146,20 @@ END;`
 			return fmt.Errorf("recording message search migration: %w", err)
 		}
 	}
+	var n10 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=10").Scan(&n10); err != nil {
+		return fmt.Errorf("checking trails migration: %w", err)
+	}
+	if n10 == 0 {
+		const trails = `
+CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL,
+  base_step INTEGER NOT NULL, head_step INTEGER NOT NULL, created_at INTEGER NOT NULL);`
+		if _, err := db.Exec(trails); err != nil {
+			return fmt.Errorf("creating trails table: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(10)"); err != nil {
+			return fmt.Errorf("recording trails migration: %w", err)
+		}
+	}
 	return nil
 }

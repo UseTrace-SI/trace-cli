@@ -170,7 +170,7 @@ printf 'before\n' > "$work_gemini_global/main.txt"
 output=$(cd "$work" && printf '{"cwd":"%s","session_id":"gemini-global","hook_event_name":"BeforeAgent","prompt":"Change main"}' "$work_gemini_global" | "$binary" hook gemini-global BeforeAgent)
 [ "$output" = '{}' ] || { echo 'Gemini hook changed behavior' >&2; exit 1; }
 n=0
-while [ ! -e "$work_gemini_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_gemini_global/.trace/batch.ready" ] && [ ! -e "$work_gemini_global/.trace/spool.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Gemini global daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -210,7 +210,7 @@ git -C "$work_amp_global" init -q
 printf 'before\n' > "$work_amp_global/main.txt"
 (cd "$work" && printf '{"cwd":"%s","session_id":"amp-global","prompt":"Change main"}' "$work_amp_global" | "$binary" hook amp-global turn_start)
 n=0
-while [ ! -e "$work_amp_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_amp_global/.trace/spool.ready" ] && [ ! -e "$work_amp_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Amp global daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -230,7 +230,7 @@ for pair in "pi:$work_pi_global" "omp:$work_omp_global" "kilo:$work_kilo_global"
   printf 'before\n' > "$agent_work/main.txt"
   (cd "$work" && printf '{"cwd":"%s","session_id":"global-session","prompt":"Change main"}' "$agent_work" | "$binary" hook "$agent-global" turn_start)
   n=0
-  while [ ! -e "$agent_work/.trace/spool.ready" ]; do
+  while [ ! -e "$agent_work/.trace/spool.ready" ] && [ ! -e "$agent_work/.trace/batch.ready" ]; do
     n=$((n+1)); [ "$n" -lt 100 ] || { echo "$agent global daemon did not start" >&2; exit 1; }
     sleep 0.05
   done
@@ -287,7 +287,7 @@ printf 'before\n' > "$work_copilot_global/main.txt"
 printf '{"cwd":"%s","sessionId":"copilot-global","prompt":"Change main"}' "$work_copilot_global" | "$binary" hook copilot-global userPromptSubmitted
 printf '{"cwd":"%s","sessionId":"copilot-global","agentId":"child"}' "$work_copilot_global" | "$binary" hook copilot-global agentStop
 n=0
-while [ ! -e "$work_copilot_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_copilot_global/.trace/spool.ready" ] && [ ! -e "$work_copilot_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Copilot daemon not ready' >&2; exit 1; }
   sleep 0.05
 done
@@ -323,7 +323,7 @@ git -C "$work_windsurf_global" init -q
 printf 'before\n' > "$work_windsurf_global/main.txt"
 (cd "$work_windsurf_global" && printf '{"trajectory_id":"windsurf-global","agent_action_name":"pre_user_prompt","tool_info":{"user_prompt":"Change main"}}' | "$binary" hook windsurf-global pre_user_prompt)
 n=0
-while [ ! -e "$work_windsurf_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_windsurf_global/.trace/spool.ready" ] && [ ! -e "$work_windsurf_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Windsurf daemon not ready' >&2; exit 1; }
   sleep 0.05
 done
@@ -360,7 +360,7 @@ printf 'before\n' > "$work_factory_global/main.txt"
 output=$(cd "$work" && printf '{"cwd":"%s","session_id":"factory-global","hook_event_name":"UserPromptSubmit","prompt":"Change main"}' "$work_factory_global" | "$binary" hook factory-global UserPromptSubmit)
 [ -z "$output" ] || { echo 'Factory hook produced output' >&2; exit 1; }
 n=0
-while [ ! -e "$work_factory_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_factory_global/.trace/spool.ready" ] && [ ! -e "$work_factory_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Factory daemon not ready' >&2; exit 1; }
   sleep 0.05
 done
@@ -399,7 +399,7 @@ printf 'before\n' > "$work_qwen_global/main.txt"
 output=$(cd "$work" && printf '{"cwd":"%s","session_id":"qwen-global","hook_event_name":"UserPromptSubmit","prompt":"internal continuation"}' "$work_qwen_global" | "$binary" hook qwen-global UserPromptSubmit)
 [ "$output" = '{}' ] || { echo 'Qwen hook changed behavior' >&2; exit 1; }
 n=0
-while [ ! -e "$work_qwen_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_qwen_global/.trace/spool.ready" ] && [ ! -e "$work_qwen_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Qwen daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -438,7 +438,7 @@ multi_output=$(printf '{"workspace_roots":["%s","%s"],"conversation_id":"multi",
 [ "$multi_output" = '{"continue":true}' ] && [ ! -e "$work_cursor_global/.trace" ] || { echo 'Cursor multiroot was not skipped' >&2; exit 1; }
 (cd "$work" && printf '{"workspace_roots":["%s"],"conversation_id":"cursor-global-e2e","hook_event_name":"sessionStart"}' "$work_cursor_global" | "$binary" hook cursor-global sessionStart >/dev/null)
 n=0
-while [ ! -e "$work_cursor_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_cursor_global/.trace/spool.ready" ] && [ ! -e "$work_cursor_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Cursor global daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -557,7 +557,7 @@ auggie_multi_output=$(cd "$work" && printf '{"cwd":"%s","workspace_roots":["%s",
 [ -z "$auggie_multi_output" ] && [ ! -e "$work_auggie/.trace" ] || { echo 'Auggie multiroot was not skipped' >&2; exit 1; }
 (cd "$work" && printf '{"cwd":"%s","workspace_roots":["%s"],"conversation_id":"auggie-e2e"}' "$work" "$work_auggie" | "$binary" hook auggie SessionStart)
 n=0
-while [ ! -e "$work_auggie/.trace/spool.ready" ]; do
+while [ ! -e "$work_auggie/.trace/spool.ready" ] && [ ! -e "$work_auggie/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Auggie daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -591,7 +591,7 @@ for agent in claude-code kimi codex; do
   printf 'before\n' > "$run_repo/main.txt"
   (cd "$work" && printf '{"cwd":"%s","session_id":"global-e2e","hook_event_name":"SessionStart"}' "$run_repo" | "$binary" hook "$agent" SessionStart)
   n=0
-  while [ ! -e "$run_repo/.trace/spool.ready" ]; do
+  while [ ! -e "$run_repo/.trace/spool.ready" ] && [ ! -e "$run_repo/.trace/batch.ready" ]; do
     n=$((n+1)); [ "$n" -lt 100 ] || { echo "$agent daemon did not start" >&2; exit 1; }
     sleep 0.05
   done
@@ -652,7 +652,7 @@ git -C "$work_zoo" init -q
 printf 'before\n' > "$work_zoo/main.txt"
 (cd "$work" && printf '{"cwd":"%s","session_id":"zoo-e2e","prompt":"Fix main ghp_abcdefghijklmnopqrstuvwxyz"}' "$work_zoo" | "$binary" hook zoo turn_start)
 n=0
-while [ ! -e "$work_zoo/.trace/spool.ready" ]; do
+while [ ! -e "$work_zoo/.trace/spool.ready" ] && [ ! -e "$work_zoo/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Zoo daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -673,7 +673,7 @@ output=$(printf '{"taskId":"multi-cline","workspaceRoots":["%s","%s"]}' "$work_c
 output=$(printf '{"taskId":"global-cline","workspaceRoots":["%s"]}' "$work_cline_global" | "$cline_config/hooks/TaskStart")
 [ "$output" = '{"cancel":false}' ] || { echo 'global Cline hook changed agent behavior' >&2; exit 1; }
 n=0
-while [ ! -e "$work_cline_global/.trace/spool.ready" ]; do
+while [ ! -e "$work_cline_global/.trace/spool.ready" ] && [ ! -e "$work_cline_global/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'global Cline daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -706,7 +706,7 @@ assert 'user-hook' in commands and sum(' hook openhands ' in c for c in commands
 PY
 (cd "$work" && printf '{"session_id":"openhands-e2e","working_dir":"%s"}' "$work_openhands" | "$binary" hook openhands SessionStart)
 n=0
-while [ ! -e "$work_openhands/.trace/spool.ready" ]; do
+while [ ! -e "$work_openhands/.trace/spool.ready" ] && [ ! -e "$work_openhands/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'OpenHands daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -730,7 +730,7 @@ git -C "$work_openclaude" init -q
 printf 'before\n' > "$work_openclaude/main.txt"
 (cd "$work" && printf '{"session_id":"openclaude-e2e","cwd":"%s","hook_event_name":"SessionStart"}' "$work_openclaude" | "$binary" hook openclaude SessionStart)
 n=0
-while [ ! -e "$work_openclaude/.trace/spool.ready" ]; do
+while [ ! -e "$work_openclaude/.trace/spool.ready" ] && [ ! -e "$work_openclaude/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'OpenClaude daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -759,7 +759,7 @@ printf 'before\n' > "$work_poolside/main.txt"
 output=$(printf '{"session_id":"pool-e2e","cwd":"%s"}' "$work_poolside" | "$binary" hook poolside SessionStart)
 [ -z "$output" ] || { echo 'Poolside hook changed agent behavior' >&2; exit 1; }
 n=0
-while [ ! -e "$work_poolside/.trace/spool.ready" ]; do
+while [ ! -e "$work_poolside/.trace/spool.ready" ] && [ ! -e "$work_poolside/.trace/batch.ready" ]; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Poolside daemon did not start' >&2; exit 1; }
   sleep 0.05
 done
@@ -789,8 +789,9 @@ module.register(ctx)
 ctx.hooks['pre_llm_call'](session_id='hermes-e2e', user_message='Change main')
 module._events.join()
 ready = os.path.join(os.environ['TRACE_HERMES_REPO'], '.trace', 'spool.ready')
+batch_ready = os.path.join(os.environ['TRACE_HERMES_REPO'], '.trace', 'batch.ready')
 for _ in range(100):
-    if os.path.exists(ready): break
+    if os.path.exists(ready) or os.path.exists(batch_ready): break
     time.sleep(.05)
 else: raise RuntimeError('Hermes daemon did not start')
 with open(os.path.join(os.environ['TRACE_HERMES_REPO'], 'main.txt'), 'w') as f: f.write('after\n')

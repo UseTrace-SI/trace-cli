@@ -32,6 +32,8 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(messagesCommand(&repoPath, &jsonOutput))
 	root.AddCommand(searchCommand(&repoPath, &jsonOutput))
 	root.AddCommand(activityCommand(&repoPath, &jsonOutput))
+	root.AddCommand(statsCommand(&repoPath, &jsonOutput))
+	root.AddCommand(trailCommand(&repoPath, &jsonOutput))
 	root.AddCommand(worktreeCommand(&repoPath, &jsonOutput))
 	root.AddCommand(forkCommand(&repoPath, &jsonOutput))
 	root.AddCommand(resumeCommand(&repoPath, &jsonOutput))

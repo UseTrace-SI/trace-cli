@@ -117,7 +117,7 @@ Cline CLI project and global hook management preserves user-modified and symlink
 
 OpenHands preview hooks route events using the SDK's working directory and request a scan when a turn or session ends. Live OpenHands capture remains unverified.
 
-Newly completed turns include available hook-supplied assistant context in `trace messages`, including Antigravity prompts recovered at turn end; earlier turns are not backfilled. Sync currently transfers turn summaries rather than message rows.
+Newly completed turns include available hook-supplied assistant context in `trace messages`, including Antigravity prompts recovered at turn end; earlier turns are not backfilled. Sync now transfers message rows as well as turn summaries.
 
 The preview `trace run vibe --prompt ...` launcher records bounded, redacted CLI output when neither output stream is a terminal or other character device. Interactive Vibe capture remains unimplemented.
 

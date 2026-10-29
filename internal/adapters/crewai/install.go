@@ -15,7 +15,6 @@ import (
 var bridge string
 
 const relative = ".trace/integrations/trace_crewai.py"
-const marker = "# Trace CrewAI bridge. Managed by trace agent add/remove.\n"
 
 func Install(root string) error {
 	p := filepath.Join(root, relative)
