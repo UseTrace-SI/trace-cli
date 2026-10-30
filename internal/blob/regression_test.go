@@ -22,7 +22,16 @@ func TestRegressionChunkCloseAndIntegrity(t *testing.T) {
 	defer debug.SetGCPercent(old)
 	count := func() int {
 		t.Helper()
-		entries, err := os.ReadDir("/dev/fd")
+		// Read names without statting entries: /dev/fd can expose transient
+		// descriptors that are already closed by the time ReadDir stats them
+		// on macOS (EBADF). The directory's own descriptor is counted in both
+		// samples and is closed before returning.
+		dir, err := os.Open("/dev/fd")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer dir.Close()
+		entries, err := dir.Readdirnames(-1)
 		if err != nil {
 			t.Fatal(err)
 		}
