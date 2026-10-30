@@ -280,9 +280,10 @@ func (c *Client) pullBlobs(ctx context.Context, bs *blob.Store, passphrase strin
 			query := c.downloadValues()
 			query.Set("hash", hash)
 			var item struct {
-				Hash    string `json:"hash"`
-				Payload string `json:"payload"`
-				Salt    string `json:"salt"`
+				Hash     string `json:"hash"`
+				Payload  string `json:"payload"`
+				Salt     string `json:"salt"`
+				Encoding string `json:"encoding"`
 			}
 			if err := c.get(ctx, "/v1/sync/blobs", query, &item); err != nil {
 				return total, err
@@ -290,9 +291,23 @@ func (c *Client) pullBlobs(ctx context.Context, bs *blob.Store, passphrase strin
 			if item.Hash != hash {
 				return total, errors.New("sync server returned the wrong blob")
 			}
-			plain, err := c.openDownloaded(item.Payload, item.Salt, "blob:"+hash, passphrase, ciphers)
+			aad := "blob:" + hash
+			if item.Encoding == "chunked-v1" {
+				aad = "manifest:" + hash
+			} else if item.Encoding != "" {
+				return total, errors.New("unsupported blob encoding")
+			}
+			plain, err := c.openDownloaded(item.Payload, item.Salt, aad, passphrase, ciphers)
 			if err != nil {
 				return total, fmt.Errorf("decrypting downloaded blob: %w", err)
+			}
+			if item.Encoding == "chunked-v1" {
+				if err := c.pullChunked(ctx, bs, hash, plain, passphrase, ciphers); err != nil {
+					return total, err
+				}
+				after = hash
+				total++
+				continue
 			}
 			stored, err := bs.PutBytes(plain)
 			if err != nil {

@@ -197,7 +197,9 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	target := c.Config.Endpoint + "|" + c.Config.Remote + "|" + c.Config.Mode
+	// Protocol 2 stores history under immutable GitHub repository identities.
+	// Re-upload rows once so an old name-keyed cursor cannot hide them.
+	target := c.Config.Endpoint + "|" + c.Config.Remote + "|" + c.Config.Mode + "|v2"
 	if state.Target != target {
 		state = State{Target: target, Cursors: map[string]string{}}
 	}
@@ -400,6 +402,17 @@ func (c *Client) syncBlobs(ctx context.Context) (int, error) {
 		for _, h := range reply.Need {
 			if !allowed[h] {
 				return uploaded, errors.New("sync server requested an unknown blob")
+			}
+			chunks, err := c.Blobs.Chunks(blob.Hash(h))
+			if err != nil {
+				return uploaded, err
+			}
+			if len(chunks) > 0 {
+				if err := c.uploadChunked(ctx, h, chunks); err != nil {
+					return uploaded, err
+				}
+				uploaded++
+				continue
 			}
 			r, err := c.Blobs.Get(blob.Hash(h))
 			if err != nil {

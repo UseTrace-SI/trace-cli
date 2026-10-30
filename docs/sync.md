@@ -46,13 +46,22 @@ trace --repo /path/to/fresh-checkout log
 
 For Pro, set `TRACE_SYNC_PASSPHRASE` to the original passphrase before pulling. The server returns each row's salt, so a separate salt file transfer is unnecessary. Trace verifies decryption and blob hashes, then publishes the recovered `.trace` history only when the download is complete. It does not change working-tree files; use `trace rewind <step>` in the recovered checkout after inspecting the timeline. Team recovery requires current GitHub read access. Existing `.trace` history is never overwritten.
 
+## Protocol 2 upgrade
+
+Upgrade the CLI and platform together for chunked transfers. The platform advertises protocol 2 in `/api/health`. Requests still use `owner/repo`, but the server resolves GitHub's immutable repository ID and permissions together, then stores history under that ID. Renaming a repository preserves access through its new name; recreating an old name does not grant access to the previous repository's history.
+
+The first sync from this client resets the old upload cursor and re-uploads retained local rows. Legacy hosted history keyed only by a name is quarantined; re-sync from the authoritative local history. Do not bind old hosted data to the name's current owner without independent evidence of its original repository ID. Older clients cannot recover chunked history and must be upgraded first.
+
 ## Server protocol
 
 The client sends `Authorization: Bearer <GitHub user access token>` to the configured HTTPS endpoint. The server must validate that token and repository access. All requests and responses use JSON and HTTP 200 for success.
 
 - `POST /v1/sync/blobs/have`: `{"repo":"owner/repo","mode":"pro|team","hashes":["sha256",...]}`. Up to 500 hashes; response `{"need":["sha256",...]}`. The response may only name hashes from the request.
 - `POST /v1/sync/blobs`: `{"repo":"owner/repo","mode":"pro|team","hash":"sha256","payload":"base64","salt":"base64"}`. For Pro, payload is a random 24-byte nonce followed by XChaCha20-Poly1305 ciphertext, with `blob:<hash>` as associated data. Salt is present only for Pro. For Team, payload is base64 plaintext. The server should make this operation idempotent by hash.
-- `POST /v1/sync/rows`: `{"repo":"owner/repo","mode":"pro|team","rows":[{"table":"sessions|turns|keyframes|ops|commits|sync_updates","id":"...","data":{...}}],"salt":"base64"}`. Up to 40 rows per request. Pro replaces `data` with `ciphertext`, using `<table>:<id>` as associated data. The server should make this operation idempotent by table and ID. A `sync_updates` row carries a completed snapshot of a previously uploaded session, turn, or operation; its own ID is a new ULID and its payload names the original table and row ID.
+- `POST /v1/sync/chunks/have` and `POST /v1/sync/chunks`: same shapes as the corresponding blob endpoints, with chunks bounded to 64 KiB before client encryption. Pro uses `chunk:<hash>` as associated data.
+- Chunked blobs use the regular blob endpoint with `"encoding":"chunked-v1"` and a payload containing `{"chunks":["sha256",...]}`. Pro encrypts that manifest using `manifest:<whole-file-hash>` as associated data. Chunks are uploaded first; blob and chunk namespaces are separate. A manifest may contain up to 100,000 chunks.
+- `GET /v1/sync/chunks?repo=owner/repo&mode=pro|team&hash=HASH`: fetch one bounded chunk. Chunked blob downloads include `encoding`; recovery verifies each chunk and the whole-file hash before publishing the local blob.
+- `POST /v1/sync/rows`: `{"repo":"owner/repo","mode":"pro|team","rows":[{"table":"sessions|turns|keyframes|ops|commits|messages|sync_updates","id":"...","data":{...}}],"salt":"base64"}`. Up to 40 rows per request. Pro replaces `data` with `ciphertext`, using `<table>:<id>` as associated data. The server should make this operation idempotent by table and ID. A `sync_updates` row carries a completed snapshot of a previously uploaded session, turn, or operation; its own ID is a new ULID and its payload names the original table and row ID.
 - `GET /v1/sync/rows?repo=owner/repo&mode=pro|team&table=sessions&after=ID`: up to 20 rows and a `next` cursor. Team returns decrypted row data after checking read access; Pro returns client ciphertext and its salt.
 - `GET /v1/sync/blobs/list?repo=owner/repo&mode=pro|team&after=HASH`: up to 100 blob hashes and a `next` cursor.
 - `GET /v1/sync/blobs?repo=owner/repo&mode=pro|team&hash=HASH`: base64 blob payload. Team returns decrypted bytes after checking read access; Pro returns client ciphertext and its salt.

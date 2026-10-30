@@ -286,68 +286,178 @@ func (s *Store) Get(h Hash) (io.ReadCloser, error) {
 	return &verifyReader{decoder: dec, file: f, expected: string(h), hash: sha256.New()}, nil
 }
 
+// getChunked opens at most one chunk at a time. Closing a partial read releases
+// it synchronously; there is no producer goroutine or GC-dependent cleanup.
 func (s *Store) getChunked(h Hash, m chunkManifest) (io.ReadCloser, error) {
-	// Reassemble chunks into a temp file? Instead stream via io.MultiReader of chunk readers.
-	var readers []io.Reader
 	for _, ch := range m.Chunks {
-		cp, err := s.chunkPath(Hash(ch))
-		if err != nil {
+		if _, err := s.chunkPath(Hash(ch)); err != nil {
 			return nil, err
 		}
-		f, err := os.Open(cp)
-		if err != nil {
-			return nil, fmt.Errorf("reading chunk: %w", err)
-		}
-		dec, err := zstd.NewReader(f)
-		if err != nil {
-			f.Close()
-			return nil, fmt.Errorf("creating chunk decompressor: %w", err)
-		}
-		// wrap to close file when exhausted
-		readers = append(readers, &chunkReader{dec: dec, file: f, hash: sha256.New(), expected: ch})
 	}
-	// Concatenate and verify whole hash.
-	pr, pw := io.Pipe()
-	go func() {
-		wh := sha256.New()
-		for _, r := range readers {
-			if _, err := io.Copy(io.MultiWriter(pw, wh), r); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-		}
-		// close chunk files
-		for _, r := range readers {
-			if cr, ok := r.(*chunkReader); ok {
-				cr.Close()
-			}
-		}
-		if hex.EncodeToString(wh.Sum(nil)) != string(h) {
-			pw.CloseWithError(errors.New("blob hash mismatch"))
-			return
-		}
-		pw.Close()
-	}()
-	return &pipeReadCloser{pr: pr}, nil
+	return &chunkedReader{store: s, chunks: m.Chunks, expected: string(h), hash: sha256.New()}, nil
 }
 
-type chunkReader struct {
-	dec      *zstd.Decoder
-	file     *os.File
-	hash     hash.Hash
+type chunkedReader struct {
+	store    *Store
+	chunks   []string
+	next     int
+	current  io.ReadCloser
 	expected string
+	hash     hash.Hash
+	closed   bool
+	terminal error
 }
 
-func (c *chunkReader) Read(p []byte) (int, error) { return c.dec.Read(p) }
-func (c *chunkReader) Close() error {
-	c.dec.Close()
-	return c.file.Close()
+func (r *chunkedReader) Read(p []byte) (int, error) {
+	if r.closed {
+		return 0, os.ErrClosed
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if r.terminal != nil {
+		return 0, r.terminal
+	}
+	for {
+		if r.current == nil {
+			if r.next == len(r.chunks) {
+				r.terminal = io.EOF
+				if hex.EncodeToString(r.hash.Sum(nil)) != r.expected {
+					r.terminal = errors.New("blob hash mismatch")
+				}
+				return 0, r.terminal
+			}
+			reader, err := r.store.GetChunk(Hash(r.chunks[r.next]))
+			if err != nil {
+				r.terminal = err
+				return 0, err
+			}
+			r.current = reader
+			r.next++
+		}
+		n, err := r.current.Read(p)
+		if n > 0 {
+			_, _ = r.hash.Write(p[:n])
+		}
+		if err != nil {
+			closeErr := r.current.Close()
+			r.current = nil
+			if err != io.EOF {
+				r.terminal = err
+				return n, err
+			}
+			if closeErr != nil {
+				r.terminal = closeErr
+				return n, closeErr
+			}
+		}
+		if n > 0 {
+			return n, nil
+		}
+	}
 }
 
-type pipeReadCloser struct{ pr *io.PipeReader }
+func (r *chunkedReader) Close() error {
+	r.closed = true
+	if r.current != nil {
+		err := r.current.Close()
+		r.current = nil
+		return err
+	}
+	return nil
+}
 
-func (p *pipeReadCloser) Read(b []byte) (int, error) { return p.pr.Read(b) }
-func (p *pipeReadCloser) Close() error               { return p.pr.Close() }
+// GetChunk exposes a verified, bounded chunk for the sync protocol.
+func (s *Store) GetChunk(h Hash) (io.ReadCloser, error) {
+	path, err := s.chunkPath(h)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	decoder, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return &verifyReader{decoder: decoder, file: f, hash: sha256.New(), expected: string(h)}, nil
+}
+
+// PutChunk stores a network chunk only after validating its content hash.
+func (s *Store) PutChunk(h Hash, data []byte) error {
+	if len(data) > 64*1024 {
+		return errors.New("chunk exceeds 64 KiB")
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != string(h) {
+		return errors.New("chunk hash mismatch")
+	}
+	path, err := s.chunkPath(h)
+	if err != nil {
+		return err
+	}
+	enc, err := zstd.NewWriter(nil)
+	if err != nil {
+		return err
+	}
+	compressed := enc.EncodeAll(data, nil)
+	enc.Close()
+	return writeObject(path, compressed)
+}
+
+// PutChunked verifies every referenced chunk and the whole-file hash before
+// making a recovered blob visible. Existing history is never overwritten.
+func (s *Store) PutChunked(h Hash, chunks []Hash) error {
+	if len(chunks) == 0 {
+		return errors.New("empty chunk manifest")
+	}
+	m := chunkManifest{}
+	for _, chunk := range chunks {
+		m.Chunks = append(m.Chunks, string(chunk))
+	}
+	r, err := s.getChunked(h, m)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(io.Discard, r)
+	closeErr := r.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	path, err := s.objectPath(h)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return writeObject(path, data)
+}
+
+func writeObject(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
+}
 
 // verifyReader streams decompressed content and verifies the content hash once
 // the consumer reaches EOF, so large blobs never have to sit in memory twice.
