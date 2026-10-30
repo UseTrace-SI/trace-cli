@@ -2,7 +2,8 @@
 build:
 	CGO_ENABLED=0 go build -o bin/trace ./cmd/trace
 test:
-	go test -race ./...
+	# Avoid other packages' builds/tests competing with the hook latency checks.
+	go test -race -p 1 ./...
 test-structure:
 	CGO_ENABLED=1 go test -race -tags treesitter ./internal/structure ./internal/engine
 test-sync:
