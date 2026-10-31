@@ -115,8 +115,8 @@ func dashboardCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 }
 
 const dashboardHTML = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Trace dashboard</title>
-<style>body{font-family:system-ui,sans-serif;margin:2rem;background:#111;color:#eee} h1{color:#7cf} table{border-collapse:collapse;width:100%} td,th{border:1px solid #333;padding:.5rem;text-align:left} .stat{display:inline-block;margin:1rem;padding:1rem;background:#222;border-radius:.5rem}</style>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trace dashboard</title>
+<style>body{font-family:system-ui,sans-serif;margin:1rem;background:#111;color:#eee} h1{color:#7cf} table{border-collapse:collapse;width:100%} td,th{border:1px solid #333;padding:.5rem;text-align:left} .stat{display:inline-block;margin:.5rem;padding:.75rem;background:#222;border-radius:.5rem} @media(max-width:600px){body{margin:.5rem} table{font-size:.85rem} .stat{display:block;margin:.25rem 0}}</style>
 </head><body>
 <h1>Trace dashboard</h1>
 <div id="stats"></div>
