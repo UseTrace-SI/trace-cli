@@ -58,7 +58,7 @@ func TestCompanionWorkerCoalescesWithoutBlockingCapture(t *testing.T) {
 		case <-release:
 		case <-ctx.Done():
 		}
-	}, 0)
+	}, 0, 0)
 	defer w.Close()
 	select {
 	case <-seen:

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/codex"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
@@ -128,7 +129,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		ctx, cancel := context.WithCancel(ctx)
 		defer stop()
 		defer cancel()
-		companionWorker := companions.Start(ctx, func(ctx context.Context) {
+		companionWorker := companions.StartDelayed(ctx, func(ctx context.Context) {
 			if !companions.AutoEnabled(root) {
 				return
 			}
@@ -139,7 +140,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err := companions.SaveStatus(root, report); err != nil {
 				logger.Error("saving companion refresh status", "error", err)
 			}
-		})
+		}, time.Second)
 		defer companionWorker.Close()
 		process := func(ev event.Event) error {
 			err := e.Process(ev)

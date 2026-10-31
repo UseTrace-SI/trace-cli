@@ -254,14 +254,30 @@ type Worker struct {
 }
 
 func Start(ctx context.Context, refresh func(context.Context)) *Worker {
-	return start(ctx, refresh, 250*time.Millisecond)
+	return start(ctx, refresh, 250*time.Millisecond, 0)
 }
 
-func start(ctx context.Context, refresh func(context.Context), delay time.Duration) *Worker {
+// StartDelayed is like Start but waits initialDelay before the first refresh,
+// letting callers finish setup work without contending on companion databases.
+func StartDelayed(ctx context.Context, refresh func(context.Context), initialDelay time.Duration) *Worker {
+	return start(ctx, refresh, 250*time.Millisecond, initialDelay)
+}
+
+func start(ctx context.Context, refresh func(context.Context), delay time.Duration, initialDelay time.Duration) *Worker {
 	ctx, cancel := context.WithCancel(ctx)
 	w := &Worker{wake: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(w.done)
+		if initialDelay > 0 {
+			timer := time.NewTimer(initialDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+		w.Notify() // Catch up after a daemon restart or an interrupted refresh.
 		for {
 			select {
 			case <-ctx.Done():
@@ -282,7 +298,9 @@ func start(ctx context.Context, refresh func(context.Context), delay time.Durati
 			refresh(ctx)
 		}
 	}()
-	w.Notify() // Catch up after a daemon restart or an interrupted refresh.
+	if initialDelay == 0 {
+		w.Notify()
+	}
 	return w
 }
 

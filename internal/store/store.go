@@ -20,7 +20,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	for _, stmt := range []string{"PRAGMA journal_mode=WAL", "PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000"} {
+	for _, stmt := range []string{"PRAGMA journal_mode=WAL", "PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=30000"} {
 		if _, err := db.Exec(stmt); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("configuring database: %w", err)
