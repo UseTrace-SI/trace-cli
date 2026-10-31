@@ -258,6 +258,59 @@ func New(e *engine.Engine) *mcp.Server {
 		}
 		return nil, out, rows.Err()
 	})
+	mcp.AddTool(s, &mcp.Tool{Name: "get_timeline", Description: "Get fine-grained edit timeline with turn and agent attribution"}, func(_ context.Context, _ *mcp.CallToolRequest, in ListInput) (*mcp.CallToolResult, ListOutput, error) {
+		limit := capLimit(in.Limit)
+		rows, err := e.DB.Query(`SELECT o.at, COALESCE(o.path,''), o.kind, o.source FROM ops o ORDER BY o.at ASC, o.id ASC LIMIT ?`, limit)
+		if err != nil {
+			return nil, ListOutput{}, err
+		}
+		defer rows.Close()
+		out := ListOutput{Steps: []Step{}}
+		for rows.Next() {
+			var at int64
+			var path, kind, source string
+			if err := rows.Scan(&at, &path, &kind, &source); err != nil {
+				return nil, out, err
+			}
+			out.Steps = append(out.Steps, Step{Step: at, Agent: source, Prompt: path + " (" + kind + ")"})
+		}
+		return nil, out, rows.Err()
+	})
+	type Comment struct {
+		ID   string `json:"id"`
+		File string `json:"file"`
+		Line int    `json:"line"`
+		Body string `json:"body"`
+		At   int64  `json:"at"`
+	}
+	type CommentsOutput struct {
+		Comments []Comment `json:"comments"`
+	}
+	mcp.AddTool(s, &mcp.Tool{Name: "list_comments", Description: "List anchored review comments"}, func(_ context.Context, _ *mcp.CallToolRequest, in struct {
+		File string `json:"file,omitempty"`
+	}) (*mcp.CallToolResult, CommentsOutput, error) {
+		q := "SELECT id,file,line,body,at FROM comments"
+		var args []any
+		if in.File != "" {
+			q += " WHERE file=?"
+			args = append(args, in.File)
+		}
+		q += " ORDER BY at DESC LIMIT 100"
+		rows, err := e.DB.Query(q, args...)
+		if err != nil {
+			return nil, CommentsOutput{}, err
+		}
+		defer rows.Close()
+		out := CommentsOutput{Comments: []Comment{}}
+		for rows.Next() {
+			var c Comment
+			if err := rows.Scan(&c.ID, &c.File, &c.Line, &c.Body, &c.At); err != nil {
+				return nil, out, err
+			}
+			out.Comments = append(out.Comments, c)
+		}
+		return nil, out, rows.Err()
+	})
 	return s
 }
 
