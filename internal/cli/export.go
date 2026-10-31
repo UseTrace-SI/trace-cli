@@ -16,6 +16,23 @@ func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var format, out string
 	var publish bool
 	cmd := &cobra.Command{Use: "export", Short: "Export code attribution", RunE: func(c *cobra.Command, _ []string) error {
+		if format == "bundle" {
+			root, err := initializedRoot(*repoPath)
+			if err != nil {
+				return err
+			}
+			if out == "" {
+				return fmt.Errorf("--out is required")
+			}
+			if err := writeBundle(root, out); err != nil {
+				return err
+			}
+			if *jsonOutput {
+				return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"path": out, "format": "bundle"})
+			}
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Exported bundle to %s\n", out)
+			return err
+		}
 		if format != "agent-trace" {
 			return fmt.Errorf("unsupported export format %q", format)
 		}

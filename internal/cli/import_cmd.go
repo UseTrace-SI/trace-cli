@@ -11,11 +11,23 @@ import (
 )
 
 func importCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
-	var source string
+	var source, bundle string
 	cmd := &cobra.Command{Use: "import", Short: "Import history from another Trace database", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
 			return err
+		}
+		if bundle != "" {
+			if err := readBundle(root, bundle); err != nil {
+				return err
+			}
+			report := companions.Refresh(c.Context(), root)
+			_ = companions.SaveStatus(root, report)
+			if *jsonOutput {
+				return nil
+			}
+			fmt.Fprintf(c.OutOrStdout(), "imported bundle %s (brain: %s, graph: %s)\n", bundle, report.Brain.Status, report.Graph.Status)
+			return nil
 		}
 		if source == "" {
 			return fmt.Errorf("--from is required")
@@ -67,5 +79,6 @@ func importCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		return nil
 	}}
 	cmd.Flags().StringVar(&source, "from", "", "source Trace database to import")
+	cmd.Flags().StringVar(&bundle, "bundle", "", "bundle file to import")
 	return cmd
 }
