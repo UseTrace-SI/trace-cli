@@ -16,6 +16,7 @@ import (
 func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var path string
 	var limit int
+	var window int
 	var format string
 	cmd := &cobra.Command{Use: "context [task words]", Short: "Combine history, memory and code context", RunE: func(c *cobra.Command, args []string) error {
 		root, err := initializedRoot(*repoPath)
@@ -27,6 +28,9 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
+		if window > 0 {
+			limit = window
+		}
 		out, err := mcpserver.GetContext(c.Context(), e, mcpserver.ContextInput{Path: path, Query: strings.Join(args, " "), Limit: limit})
 		if err != nil {
 			return err
@@ -67,6 +71,7 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	}}
 	cmd.Flags().StringVar(&path, "path", "", "repository-relative file")
 	cmd.Flags().IntVar(&limit, "limit", 20, "maximum results per component (1-50)")
+	cmd.Flags().IntVar(&window, "window", 0, "sliding context window size (overrides --limit for steps)")
 	cmd.Flags().StringVar(&format, "format", "text", "output format: text, json (use --json), or prompt")
 	return cmd
 }

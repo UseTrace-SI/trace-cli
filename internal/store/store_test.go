@@ -16,7 +16,7 @@ func TestOpenTwice(t *testing.T) {
 		if err := db.QueryRow("SELECT count(*) FROM schema_version").Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if n != 10 {
+		if n != 11 {
 			t.Fatalf("schema versions: %d", n)
 		}
 		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('ops') WHERE name='detail'").Scan(&n); err != nil || n != 1 {

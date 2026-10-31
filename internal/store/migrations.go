@@ -179,5 +179,21 @@ CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, title TEXT NOT NULL, kin
 			return fmt.Errorf("recording usage migration: %w", err)
 		}
 	}
+	var n12 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=12").Scan(&n12); err != nil {
+		return fmt.Errorf("checking comments migration: %w", err)
+	}
+	if n12 == 0 {
+		const comments = `
+CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, file TEXT NOT NULL, line INTEGER NOT NULL,
+  body TEXT NOT NULL, turn_id TEXT REFERENCES turns(id), session_id TEXT, at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
+		if _, err := db.Exec(comments); err != nil {
+			return fmt.Errorf("creating comments table: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(12)"); err != nil {
+			return fmt.Errorf("recording comments migration: %w", err)
+		}
+	}
 	return nil
 }
