@@ -8,13 +8,15 @@ import (
 )
 
 type Options struct {
-	Query      string
-	Scope      string
-	EditedPath string
-	Limit      int
-	Before     int64
-	Fuzzy      bool
-	Rank       string
+	Query        string
+	Scope        string
+	EditedPath   string
+	Limit        int
+	Before       int64
+	Fuzzy        bool
+	Rank         string
+	PromptLimit  int
+	OmitSnippets bool
 }
 
 type Hit struct {
@@ -93,6 +95,9 @@ func Search(db *sql.DB, opt Options) ([]Hit, error) {
 		statement += " ORDER BY k.seq DESC LIMIT ?"
 	}
 	params = append(params, opt.Limit)
+	if opt.PromptLimit > 0 {
+		statement = strings.ReplaceAll(statement, "COALESCE(t.prompt,'')", fmt.Sprintf("substr(COALESCE(t.prompt,''),1,%d)", opt.PromptLimit))
+	}
 	rows, err := db.Query(statement, params...)
 	if err != nil {
 		return nil, fmt.Errorf("searching history: %w", err)
@@ -109,7 +114,7 @@ func Search(db *sql.DB, opt Options) ([]Hit, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("reading search results: %w", err)
 	}
-	if opt.Query != "" {
+	if opt.Query != "" && !opt.OmitSnippets {
 		term := strings.Fields(opt.Query)[0]
 		for i := range hits {
 			text := hits[i].Prompt
@@ -150,7 +155,6 @@ func terms(query string, fuzzy bool) (string, error) {
 	}
 	return strings.Join(result, " AND "), nil
 }
-
 
 func makeSnippet(text, term string) string {
 	lower := strings.ToLower(text)

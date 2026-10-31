@@ -36,6 +36,10 @@ func loadPlugins(root *cobra.Command) {
 				continue
 			}
 			bin := filepath.Join(dir, name)
+			bin, err = filepath.Abs(bin)
+			if err != nil {
+				continue
+			}
 			// ensure executable
 			info, err := e.Info()
 			if err != nil || info.Mode()&0111 == 0 {
@@ -49,7 +53,21 @@ func loadPlugins(root *cobra.Command) {
 				Short:              "plugin: " + pname,
 				DisableFlagParsing: true,
 				RunE: func(c *cobra.Command, args []string) error {
+					target, _ := root.PersistentFlags().GetString("repo")
+					args, target, err := pluginRepoArgs(args, target)
+					if err != nil {
+						return err
+					}
 					cmd := exec.Command(pbin, args...)
+					if target != "" || pname == "brain" || pname == "graph" {
+						dir, err := rootFromFlag(target)
+						if err != nil && target != "" {
+							return err
+						}
+						if err == nil {
+							cmd.Dir = dir
+						}
+					}
 					cmd.Stdin = c.InOrStdin()
 					cmd.Stdout = c.OutOrStdout()
 					cmd.Stderr = c.ErrOrStderr()
@@ -62,4 +80,30 @@ func loadPlugins(root *cobra.Command) {
 			root.AddCommand(cmd)
 		}
 	}
+}
+
+// Cobra leaves inherited flags in the argument list when a plugin disables
+// flag parsing. Consume Trace's repository selector, preserving all plugin
+// arguments and the literal argument boundary.
+func pluginRepoArgs(args []string, target string) ([]string, string, error) {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			out = append(out, args[i:]...)
+			break
+		}
+		if arg == "--repo" {
+			if i+1 == len(args) || strings.HasPrefix(args[i+1], "--") {
+				return nil, "", fmt.Errorf("--repo requires a directory")
+			}
+			i++
+			target = args[i]
+		} else if strings.HasPrefix(arg, "--repo=") {
+			target = strings.TrimPrefix(arg, "--repo=")
+		} else {
+			out = append(out, arg)
+		}
+	}
+	return out, target, nil
 }

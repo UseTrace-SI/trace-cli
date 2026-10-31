@@ -161,5 +161,23 @@ CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, title TEXT NOT NULL, kin
 			return fmt.Errorf("recording trails migration: %w", err)
 		}
 	}
+	var n11 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=11").Scan(&n11); err != nil {
+		return fmt.Errorf("checking usage migration: %w", err)
+	}
+	if n11 == 0 {
+		for _, stmt := range []string{
+			"ALTER TABLE turns ADD COLUMN tokens_in INTEGER",
+			"ALTER TABLE turns ADD COLUMN tokens_out INTEGER",
+			"ALTER TABLE turns ADD COLUMN cost_usd REAL",
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("adding usage columns: %w", err)
+			}
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(11)"); err != nil {
+			return fmt.Errorf("recording usage migration: %w", err)
+		}
+	}
 	return nil
 }

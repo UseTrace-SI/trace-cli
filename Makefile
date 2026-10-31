@@ -1,6 +1,11 @@
-.PHONY: build test lint test-structure test-sync test-sync-integration e2e perf
+.PHONY: build companions test test-companions lint test-structure test-sync test-sync-integration e2e perf
 build:
 	CGO_ENABLED=0 go build -o bin/trace ./cmd/trace
+companions: build
+	CGO_ENABLED=0 go -C ../trace-brain build -o ../trace-cli/bin/trace-brain ./cmd/trace-brain
+	CGO_ENABLED=0 go -C ../trace-graph build -o ../trace-cli/bin/trace-graph ./cmd/trace-graph
+test-companions:
+	python3 scripts/companions_e2e.py
 test:
 	# Avoid other packages' builds/tests competing with the hook latency checks.
 	go test -race -p 1 ./...

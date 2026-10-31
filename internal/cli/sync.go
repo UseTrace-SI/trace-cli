@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
@@ -601,10 +602,19 @@ func pullCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		// Companion state is derived locally, never transferred as raw SQLite
+		// files. A companion failure does not undo successfully recovered history.
+		report := companions.Refresh(ctx, target)
+		if err := companions.SaveStatus(target, report); err != nil {
+			fmt.Fprintln(c.ErrOrStderr(), "History recovered; companion status could not be saved.")
+		}
 		if *jsonOutput {
-			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"blobs": blobs, "rows": rows, "repo": target})
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"blobs": blobs, "rows": rows, "repo": target, "companions": report})
 		}
 		_, err = fmt.Fprintf(c.OutOrStdout(), "Recovered %d blobs and %d rows into %s. Use trace --repo %s log to inspect history.\n", blobs, rows, target, target)
+		if err == nil {
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Derived context: brain %s; graph %s.\n", report.Brain.Status, report.Graph.Status)
+		}
 		return err
 	}}
 	cmd.Flags().StringVar(&into, "into", "", "fresh Git checkout to receive downloaded history")

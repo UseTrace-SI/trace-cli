@@ -8,6 +8,8 @@ type Session struct {
 type Turn struct {
 	ID, SessionID, Prompt, Reasoning, ToolCalls, FilesRead string
 	Seq, StartedAt, EndedAt                                int64
+	TokensIn, TokensOut                                     int64
+	CostUSD                                                float64
 }
 
 type Keyframe struct {

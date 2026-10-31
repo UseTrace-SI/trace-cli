@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/historysearch"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
@@ -46,11 +47,14 @@ type TurnOutput struct {
 	Files     []string `json:"files"`
 }
 type ContextInput struct {
-	Path  string `json:"path"`
+	Path  string `json:"path,omitempty"`
+	Query string `json:"query,omitempty"`
 	Limit int    `json:"limit,omitempty"`
 }
 type ContextOutput struct {
-	Steps []Step `json:"steps"`
+	Steps []Step                   `json:"steps"`
+	Brain companions.MemoryContext `json:"brain"`
+	Graph companions.CodeContext   `json:"graph"`
 }
 type WhyInput struct {
 	Path string `json:"path"`
@@ -154,23 +158,9 @@ func New(e *engine.Engine) *mcp.Server {
 		}
 		return nil, out, nil
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "get_context", Description: "Get recent turns touching a path"}, func(_ context.Context, _ *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, ContextOutput, error) {
-		rows, err := e.DB.Query(`SELECT DISTINCT k.seq,COALESCE(s.agent,''),COALESCE(t.prompt,'')
-			FROM ops o JOIN turns t ON t.id=o.turn_id JOIN keyframes k ON k.turn_id=t.id
-			JOIN sessions s ON s.id=t.session_id WHERE o.path=? ORDER BY k.seq DESC LIMIT ?`, in.Path, capLimit(in.Limit))
-		if err != nil {
-			return nil, ContextOutput{}, err
-		}
-		defer rows.Close()
-		out := ContextOutput{Steps: []Step{}}
-		for rows.Next() {
-			var r Step
-			if err := rows.Scan(&r.Step, &r.Agent, &r.Prompt); err != nil {
-				return nil, out, err
-			}
-			out.Steps = append(out.Steps, r)
-		}
-		return nil, out, rows.Err()
+	mcp.AddTool(s, &mcp.Tool{Name: "get_context", Description: "Get recent history, recalled memories and code relationships for a path or task. Companion status reports missing or stale indexes; this tool is read-only."}, func(ctx context.Context, _ *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, ContextOutput, error) {
+		out, err := GetContext(ctx, e, in)
+		return nil, out, err
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "why_line", Description: "Find the edit responsible for a line"}, func(_ context.Context, _ *mcp.CallToolRequest, in WhyInput) (*mcp.CallToolResult, WhyOutput, error) {
 		if in.Line < 1 {

@@ -23,6 +23,8 @@ type statsReport struct {
 	OldestStep     int64             `json:"oldest_step,omitempty"`
 	NewestStep     int64             `json:"newest_step,omitempty"`
 	StorageBytes   int64             `json:"storage_bytes"`
+	TokensIn       int64             `json:"tokens_in"`
+	TokensOut      int64             `json:"tokens_out"`
 }
 
 func statsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
@@ -74,6 +76,9 @@ func statsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := e.DB.QueryRow("SELECT COALESCE(MIN(seq),0),COALESCE(MAX(seq),0) FROM keyframes").Scan(&report.OldestStep, &report.NewestStep); err != nil {
 			return fmt.Errorf("reading step range: %w", err)
 		}
+		if err := e.DB.QueryRow("SELECT COALESCE(SUM(tokens_in),0),COALESCE(SUM(tokens_out),0) FROM turns").Scan(&report.TokensIn, &report.TokensOut); err != nil {
+			return fmt.Errorf("reading token totals: %w", err)
+		}
 		// storage size
 		traceDir := repo.TraceDir(root)
 		filepath.Walk(traceDir, func(_ string, info os.FileInfo, err error) error {
@@ -88,7 +93,7 @@ func statsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if _, err := fmt.Fprintf(c.OutOrStdout(), "Trace stats for %s\n", root); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(c.OutOrStdout(), "  sessions:   %d\n  turns:      %d\n  keyframes:  %d\n  ops:        %d\n  messages:   %d\n  commits:    %d\n", report.Sessions, report.Turns, report.Keyframes, report.Ops, report.Messages, report.Commits); err != nil {
+		if _, err := fmt.Fprintf(c.OutOrStdout(), "  sessions:   %d\n  turns:      %d\n  keyframes:  %d\n  ops:        %d\n  messages:   %d\n  commits:    %d\n  tokens:     %d in / %d out\n", report.Sessions, report.Turns, report.Keyframes, report.Ops, report.Messages, report.Commits, report.TokensIn, report.TokensOut); err != nil {
 			return err
 		}
 		if len(report.Agents) > 0 {

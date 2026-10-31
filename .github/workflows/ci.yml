@@ -13,6 +13,8 @@ jobs:
           go-version-file: go.mod
       - run: GOTOOLCHAIN=local go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
       - run: make lint test
+      - name: Repeat companion integration regressions 100 times
+        run: go test -race -p 1 -count=100 -run TestCompanion -timeout=15m ./internal/companions ./internal/manifest ./internal/mcp ./internal/cli
       - run: make test-structure
       - run: make test-sync
       - run: make build e2e

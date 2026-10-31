@@ -14,6 +14,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/codex"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
+	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
@@ -116,7 +117,6 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
-		codexEvents := &codexSources{process: e.Process}
 		// Lazily take a baseline so a daemon started in an un-initialized repo
 		// can still capture turns (hooks must still be installed separately).
 		if err := addExclude(root); err != nil {
@@ -127,6 +127,27 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		ctx, cancel := context.WithCancel(ctx)
 		defer stop()
 		defer cancel()
+		companionWorker := companions.Start(ctx, func(ctx context.Context) {
+			if !companions.AutoEnabled(root) {
+				return
+			}
+			if _, err := os.Stat(filepath.Join(dir, "trace.db")); err != nil {
+				return
+			}
+			report := companions.Refresh(ctx, root)
+			if err := companions.SaveStatus(root, report); err != nil {
+				logger.Error("saving companion refresh status", "error", err)
+			}
+		})
+		defer companionWorker.Close()
+		process := func(ev event.Event) error {
+			err := e.Process(ev)
+			if err == nil && (ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd) {
+				companionWorker.Notify()
+			}
+			return err
+		}
+		codexEvents := &codexSources{process: process}
 		pidPath := filepath.Join(dir, "daemon.pid")
 		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 			return fmt.Errorf("writing pid file: %w", err)
@@ -160,7 +181,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		if _, err := os.Stat(filepath.Join(dir, "opencode.enabled")); err == nil {
 			go func() {
-				if err := opencode.Run(ctx, root, "", e.Process); err != nil {
+				if err := opencode.Run(ctx, root, "", process); err != nil {
 					logger.Error("OpenCode adapter stopped", "error", err)
 				}
 			}()

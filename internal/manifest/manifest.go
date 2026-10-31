@@ -25,7 +25,12 @@ type Ignorer interface {
 }
 
 func excluded(rel string) bool {
-	return rel == ".git" || rel == ".trace" || rel == ".mcp.json" || rel == ".claude/settings.local.json" || rel == ".cursor/hooks.json" || rel == ".gemini/settings.json" || rel == ".agents/hooks.json" || strings.HasPrefix(rel, ".git/") || strings.HasPrefix(rel, ".trace/") || SecretPath(rel)
+	for _, dir := range []string{".git", ".trace", ".trace-brain", ".trace-graph"} {
+		if rel == dir || strings.HasPrefix(rel, dir+"/") {
+			return true
+		}
+	}
+	return rel == ".mcp.json" || rel == ".claude/settings.local.json" || rel == ".cursor/hooks.json" || rel == ".gemini/settings.json" || rel == ".agents/hooks.json" || SecretPath(rel)
 }
 
 func Excluded(rel string) bool { return excluded(rel) }
@@ -108,10 +113,17 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 }
 
 func Update(prev Manifest, root string, dirty []string, ig Ignorer, bs *blob.Store) (Manifest, error) {
-	if len(dirty) == 0 {
-		return clone(prev), nil
-	}
 	m := clone(prev)
+	// Old checkpoints may contain state written before an exclusion existed.
+	// Drop it from new snapshots without modifying historical checkpoints.
+	for rel := range m {
+		if excluded(rel) {
+			delete(m, rel)
+		}
+	}
+	if len(dirty) == 0 {
+		return m, nil
+	}
 	var rels []string
 	seen := map[string]bool{}
 	for _, path := range dirty {

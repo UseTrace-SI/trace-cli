@@ -81,3 +81,47 @@ func TestSecretPath(t *testing.T) {
 		}
 	}
 }
+
+func TestCompanionStateExcludedFromAllNewSnapshots(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	paths := []string{".trace-brain/memory.db", ".trace-brain/memory.db-wal", ".trace-graph/graph.db", ".trace-graph/graph.db-shm"}
+	for _, p := range append(paths, "app.go") {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, p), []byte("private state"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Even accidentally tracked databases must be excluded before reading.
+	if out, err := exec.Command("git", "-C", root, "add", "-f", ".").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %s: %v", out, err)
+	}
+	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanned, err := Scan(root, nil, bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scanned) != 1 || scanned["app.go"].Hash == "" {
+		t.Fatalf("generated data in scan: %v", scanned)
+	}
+	old := Manifest{"app.go": scanned["app.go"]}
+	for _, p := range paths {
+		old[p] = scanned["app.go"]
+	}
+	for _, dirty := range [][]string{nil, paths} {
+		updated, err := Update(old, root, dirty, nil, bs)
+		if err != nil || !reflect.DeepEqual(updated, scanned) {
+			t.Fatalf("generated data in incremental snapshot: %v, %v", updated, err)
+		}
+	}
+	if len(old) != 5 {
+		t.Fatal("historical manifest was mutated")
+	}
+}

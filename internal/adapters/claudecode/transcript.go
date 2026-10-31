@@ -21,6 +21,8 @@ type TranscriptContext struct {
 	Reasoning string
 	ToolCalls string
 	FilesRead string
+	TokensIn  int64
+	TokensOut int64
 }
 
 type transcriptRecord struct {
@@ -33,6 +35,10 @@ type transcriptRecord struct {
 			Name     string          `json:"name"`
 			Input    json.RawMessage `json:"input"`
 		} `json:"content"`
+		Usage struct {
+			InputTokens  int64 `json:"input_tokens"`
+			OutputTokens int64 `json:"output_tokens"`
+		} `json:"usage"`
 	} `json:"message"`
 }
 
@@ -70,6 +76,7 @@ func ReadTranscript(path string, offset int64, root string) (TranscriptContext, 
 	var notes []string
 	var calls []transcriptToolCall
 	readFiles := map[string]bool{}
+	var tokensIn, tokensOut int64
 	r := redact.Redactor{}
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -84,6 +91,8 @@ func ReadTranscript(path string, offset int64, root string) (TranscriptContext, 
 		if json.Unmarshal(line, &record) != nil || record.Type != "assistant" {
 			continue
 		}
+		tokensIn += record.Message.Usage.InputTokens
+		tokensOut += record.Message.Usage.OutputTokens
 		for _, block := range record.Message.Content {
 			switch block.Type {
 			case "thinking":
@@ -119,6 +128,8 @@ func ReadTranscript(path string, offset int64, root string) (TranscriptContext, 
 		}
 	}
 	result.Reasoning = strings.Join(notes, "\n\n")
+	result.TokensIn = tokensIn
+	result.TokensOut = tokensOut
 	if len(calls) > 0 {
 		b, err := json.Marshal(calls)
 		if err != nil {

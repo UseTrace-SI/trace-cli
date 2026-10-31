@@ -474,6 +474,7 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	var hasCommand bool
 	var transcriptOffset int64
 	var transcriptPath string
+	var tokensIn, tokensOut int64
 	if (ev.Agent == "claude-code" || ev.Agent == "agy") && ev.TranscriptPath != "" {
 		var savedPath string
 		err := e.DB.QueryRow("SELECT path,offset FROM transcript_offsets WHERE session_id=?", sessionID).Scan(&savedPath, &transcriptOffset)
@@ -488,6 +489,7 @@ func (e *Engine) turnEnd(ev event.Event) error {
 			context, next, readErr := claudecode.ReadTranscript(transcriptPath, transcriptOffset, e.Root)
 			if readErr == nil {
 				reasoning, toolCalls, filesRead, transcriptOffset = context.Reasoning, context.ToolCalls, context.FilesRead, next
+				tokensIn, tokensOut = context.TokensIn, context.TokensOut
 			}
 		} else {
 			context, next, readErr := agy.ReadTranscript(transcriptPath, transcriptOffset, e.Root)
@@ -587,8 +589,10 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	attributed.Close()
 	if _, err := tx.Exec(`UPDATE turns SET ended_at=?,prompt=CASE WHEN COALESCE(prompt,'')='' THEN ? ELSE prompt END,
 		reasoning=COALESCE(NULLIF(?,''),reasoning),tool_calls=COALESCE(NULLIF(?,''),tool_calls),
-		files_read=COALESCE(NULLIF(?,''),files_read) WHERE id=?`,
-		ev.At, e.Redactor.Text(transcriptPrompt), reasoning, toolCalls, filesRead, tid); err != nil {
+		files_read=COALESCE(NULLIF(?,''),files_read),
+		tokens_in=COALESCE(tokens_in,0)+?,
+		tokens_out=COALESCE(tokens_out,0)+? WHERE id=?`,
+		ev.At, e.Redactor.Text(transcriptPrompt), reasoning, toolCalls, filesRead, tokensIn, tokensOut, tid); err != nil {
 		return fmt.Errorf("finishing turn: %w", err)
 	}
 	if transcriptPath != "" {
