@@ -23,6 +23,14 @@ func dashboardCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer e.Close()
 		mux := http.NewServeMux()
+		mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/manifest+json")
+			fmt.Fprint(w, dashboardManifest)
+		})
+		mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, dashboardSW)
+		})
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			fmt.Fprint(w, dashboardHTML)
@@ -115,7 +123,8 @@ func dashboardCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 }
 
 const dashboardHTML = `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trace dashboard</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="manifest" href="/manifest.json"><title>Trace dashboard</title>
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js');</script>
 <style>body{font-family:system-ui,sans-serif;margin:1rem;background:#111;color:#eee} h1{color:#7cf} table{border-collapse:collapse;width:100%} td,th{border:1px solid #333;padding:.5rem;text-align:left} .stat{display:inline-block;margin:.5rem;padding:.75rem;background:#222;border-radius:.5rem} @media(max-width:600px){body{margin:.5rem} table{font-size:.85rem} .stat{display:block;margin:.25rem 0}}</style>
 </head><body>
 <h1>Trace dashboard</h1>
@@ -132,3 +141,7 @@ fetch('/api/log?limit=50').then(r=>r.json()).then(d=>{
   for(const row of d){const tr=document.createElement('tr');tr.innerHTML='<td>'+row.step+'</td><td>'+row.agent+'</td><td>'+ (row.prompt||'').slice(0,80)+'</td>';tb.appendChild(tr);}
 });
 </script></body></html>`
+
+const dashboardManifest = `{"name":"Trace dashboard","short_name":"Trace","start_url":"/","display":"standalone","background_color":"#111","theme_color":"#7cf"}`
+
+const dashboardSW = `self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{});`
