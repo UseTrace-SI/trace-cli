@@ -195,5 +195,20 @@ CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
 			return fmt.Errorf("recording comments migration: %w", err)
 		}
 	}
+	var n13 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=13").Scan(&n13); err != nil {
+		return fmt.Errorf("checking causal migration: %w", err)
+	}
+	if n13 == 0 {
+		if _, err := db.Exec("ALTER TABLE ops ADD COLUMN parent_op_id TEXT REFERENCES ops(id)"); err != nil {
+			return fmt.Errorf("adding parent_op_id: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS ops_parent ON ops(parent_op_id)"); err != nil {
+			return fmt.Errorf("indexing parent ops: %w", err)
+		}
+		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(13)"); err != nil {
+			return fmt.Errorf("recording causal migration: %w", err)
+		}
+	}
 	return nil
 }

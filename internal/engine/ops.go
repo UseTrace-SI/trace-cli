@@ -207,7 +207,12 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 			if turnID == "" {
 				actor = "human"
 			}
-			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,actor,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, actor, opAt)
+			var parent any
+			var pid string
+			if err := tx.QueryRow("SELECT id FROM ops WHERE path=? ORDER BY at DESC, id DESC LIMIT 1", p).Scan(&pid); err == nil {
+				parent = pid
+			}
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,before_hash,after_hash,source,actor,at,parent_op_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", opID, tid, sid, p, kind, h.start, h.end, oldHash, newHash, source, actor, opAt, parent)
 			if err != nil {
 				return nil, fmt.Errorf("recording file change: %w", err)
 			}
@@ -228,8 +233,13 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 			if turnID == "" {
 				actor = "human"
 			}
-			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,actor,at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-				opID, tid, sid, p, symbol.Kind, symbol.Name, symbol.StartLine, symbol.EndLine, oldHash, newHash, source, actor, time.Now().UnixMilli())
+			var parent any
+			var pid string
+			if err := tx.QueryRow("SELECT id FROM ops WHERE path=? ORDER BY at DESC, id DESC LIMIT 1", p).Scan(&pid); err == nil {
+				parent = pid
+			}
+			_, err = tx.Exec("INSERT INTO ops(id,turn_id,session_id,path,kind,detail,start_line,end_line,before_hash,after_hash,source,actor,at,parent_op_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+				opID, tid, sid, p, symbol.Kind, symbol.Name, symbol.StartLine, symbol.EndLine, oldHash, newHash, source, actor, time.Now().UnixMilli(), parent)
 			if err != nil {
 				return nil, fmt.Errorf("recording structural change: %w", err)
 			}

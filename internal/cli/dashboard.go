@@ -36,6 +36,51 @@ func dashboardCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			e.DB.QueryRow("SELECT COUNT(*) FROM ops").Scan(&ops)
 			json.NewEncoder(w).Encode(map[string]any{"sessions": sessions, "turns": turns, "keyframes": keyframes, "ops": ops})
 		})
+		mux.HandleFunc("/api/comments", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			rows, err := e.DB.Query("SELECT id,file,line,body,at FROM comments ORDER BY at DESC LIMIT 100")
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			defer rows.Close()
+			type cmt struct {
+				ID   string `json:"id"`
+				File string `json:"file"`
+				Line int    `json:"line"`
+				Body string `json:"body"`
+				At   int64  `json:"at"`
+			}
+			var out []cmt
+			for rows.Next() {
+				var c cmt
+				rows.Scan(&c.ID, &c.File, &c.Line, &c.Body, &c.At)
+				out = append(out, c)
+			}
+			json.NewEncoder(w).Encode(out)
+		})
+		mux.HandleFunc("/api/timeline", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			rows, err := e.DB.Query("SELECT at,path,kind,source FROM ops ORDER BY at ASC LIMIT 200")
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			defer rows.Close()
+			type ev struct {
+				At     int64  `json:"at"`
+				Path   string `json:"path"`
+				Kind   string `json:"kind"`
+				Source string `json:"source"`
+			}
+			var out []ev
+			for rows.Next() {
+				var e ev
+				rows.Scan(&e.At, &e.Path, &e.Kind, &e.Source)
+				out = append(out, e)
+			}
+			json.NewEncoder(w).Encode(out)
+		})
 		mux.HandleFunc("/api/log", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
