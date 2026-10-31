@@ -50,6 +50,8 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(contextCommand(&repoPath, &jsonOutput))
 	root.AddCommand(companionsCommand(&repoPath, &jsonOutput))
 	root.AddCommand(dashboardCommand(&repoPath, &jsonOutput))
+	root.AddCommand(gitNativeCommand(&repoPath, &jsonOutput))
+	root.AddCommand(shadowCommand(&repoPath, &jsonOutput))
 	root.AddCommand(tokensCommand(&repoPath, &jsonOutput))
 	root.AddCommand(expertsCommand(&repoPath, &jsonOutput))
 	root.AddCommand(importCommand(&repoPath, &jsonOutput))

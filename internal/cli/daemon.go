@@ -16,6 +16,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
 	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
+	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/watch"
@@ -144,6 +145,9 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			err := e.Process(ev)
 			if err == nil && (ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd) {
 				companionWorker.Notify()
+				if gitx.GitNativeEnabled(root) {
+					go func() { _ = gitx.Checkpoint(root) }()
+				}
 			}
 			return err
 		}

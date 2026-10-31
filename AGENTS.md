@@ -34,9 +34,12 @@ Every phase must end with `make lint test` passing.
 1. **Never block the agent.** Hook commands (`trace hook ...`) must finish in < 20 ms p95:
    write one JSON line to the daemon socket (or spool file) and exit 0. A hook must never exit
    non-zero or print to stdout in a way that changes agent behaviour.
-2. **The Trace runtime never modifies git history.** No commits, branches, notes, or trailers.
-   Its only Git writes are installing/chaining a `post-commit` hook and `git worktree add`
-   in `fork`.
+2. **The Trace runtime never modifies git history by default.** No commits, branches, notes,
+   or trailers on the user's branches. Its only Git writes are installing/chaining a
+   `post-commit` hook and `git worktree add` in `fork`. An opt-in git-native mode
+   (`git_native = true` in `.trace/config.toml`) may create and update a dedicated hidden
+   branch `trace/checkpoints/v1` and short-lived `trace/shadow/*` branches for rewind; these
+   never touch the user's working branch or its history.
 3. **Never store secrets.** Text (prompts, reasoning, tool calls) passes through `internal/redact`
    before any DB write. Files matching the secret path excludes are never read or stored.
 4. **Local by default.** The daemon listens only on a Unix socket with mode 0600. Network
