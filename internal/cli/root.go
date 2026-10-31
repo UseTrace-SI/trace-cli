@@ -50,6 +50,10 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(contextCommand(&repoPath, &jsonOutput))
 	root.AddCommand(companionsCommand(&repoPath, &jsonOutput))
 	root.AddCommand(dashboardCommand(&repoPath, &jsonOutput))
+	root.AddCommand(tokensCommand(&repoPath, &jsonOutput))
+	root.AddCommand(expertsCommand(&repoPath, &jsonOutput))
+	root.AddCommand(importCommand(&repoPath, &jsonOutput))
+	root.AddCommand(reviewCommand(&repoPath, &jsonOutput))
 	loadPlugins(root)
 	if err := root.Execute(); err != nil {
 		var agentErr agentExit
