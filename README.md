@@ -2,6 +2,13 @@
 
 Trace keeps local keyframes of coding-agent turns so a project can be inspected, rewound, and forked.
 
+The solo workflow connects your CLI to a private hosted dashboard. Install the
+coordinated Trace bundle, initialize your coding agent, sign in at usetrace.si,
+and run `trace connect`. Approve the device in your browser; recorded history
+and bounded Brain/Graph context then upload in the background. Personal
+connections do not require GitHub repository authorization.
+
+
 Cline CLI has preview hooks: `trace setup --agent cline` enables global hooks, while `trace init --agent cline` or `trace agent add cline` installs project hooks. Existing hook scripts are preserved. Live Cline lifecycle verification remains outstanding.
 
 Cursor has preview user-level hooks: run `trace setup --agent cursor` once to capture single-folder local workspaces without initializing each repository. Multi-root workspaces and cloud agents need separate handling; live verification remains outstanding.
@@ -54,7 +61,7 @@ The hook performance check covers global Cursor read and Gemini completion callb
 
 Hook events redact recognized secrets in text and metadata before spooling; sensitive session identifiers are hashed so events still correlate. Redaction is pattern-based.
 
-Spool frames are retained if event processing fails, so a later daemon restart can retry them. Failed socket events and any remaining batch events are also spooled when possible. Replaying a partially processed spool frame can repeat events; a crash before socket events are processed or spooled can still lose them.
+Spool frames are retained if event processing fails, so a later daemon restart can retry them. Failed socket events and any remaining batch events are also spooled when possible. Replaying a partially processed spool frame can repeat events; legacy resident daemons can still lose socket events on a process crash before processing or spooling; restart after upgrade to enable durable spool delivery.
 
 Factory Droid preview hooks route events using `FACTORY_PROJECT_DIR` when available, capture available subagent text and close open turns at session end. Refresh existing hooks with `trace setup --agent factory` or `trace agent add factory`; live lifecycle delivery remains unverified.
 
@@ -75,6 +82,14 @@ Continue, Mistral Vibe, Crush, and Aider have preview single-prompt capture with
 Run `trace setup` once to install automatic recording hooks for Claude Code and Codex in Git repositories. Their hook events use the reported session directory to select the worktree; Codex interruptions also close the current recorded turn. For other global integrations, choose an agent with `trace setup --agent NAME`; several are previews and may require a restart or other activation. Codex requires reviewing the installed hooks in `/hooks`. Start an agent in a repo and Trace creates its local history automatically. Use `trace status --json` to see the repository name and path. `trace setup --remove` removes the default global hooks. Per-repository setup is also available through `trace init` or `trace agent add`.
 
 ## Status
+
+`trace connect [--remote you/project]` supports one-time browser approval against
+the hosted app. Personal connections are scoped to one project and account,
+expire after 90 days, and can be revoked in the dashboard. Credentials remain in
+the OS credential store. The dashboard displays synced sessions, recorded turn
+context, file activity and derived memory/code snapshots. Manual notes stay local.
+Platform migration 0010 and its server encryption key are required; an older
+deployed app cannot accept this connection.
 
 Optional Brain and Graph companions now refresh in the daemon after completed turns and sessions. `trace context --path main.go "authentication" --json` combines history, recalled memories and code relationships; MCP `get_context` returns the same result. `trace companions status` reports refresh status. Recovery rebuilds derived indexes from recovered history and the current checkout; manual memories remain local. Companion state is excluded from new snapshots. See [companion integration](docs/companions.md) for installation, protocol, controls and consistency limits.
 
@@ -149,3 +164,11 @@ Kiro hooks recognize its native file and shell tools, validate session and event
 The Go module and project Makefile live at the repository root. Run `make lint test` for the CLI and `make test-sync` for its sync client. When the private `trace-platform` repository is checked out beside this one, `make test-sync-integration` exercises both sides of the protocol.
 
 Trace is licensed under [Apache 2.0](LICENSE).
+
+## Production connection health
+
+`trace sync status --json` reports pending rows, last upload attempt/success, the last redacted error, connection expiry and credential-store availability. `trace doctor` flags recorded sync failures. Personal credentials are keyed by connection identity, so two accounts using the same project label cannot replace each other's local credentials. A legacy credential migrates only when its connection identity matches the checkout; otherwise reconnect explicitly.
+
+Current daemons advertise durable spool delivery. Hooks append a redacted frame before returning success, and the daemon ingests it asynchronously; processing failures retain frames for replay. Delivery is at least once, so replay may repeat already processed events. This protects against daemon process crashes, not storage failure or sudden machine power loss. Older resident daemons keep their legacy socket behavior until restarted. On Linux, hosted sync requires `secret-tool`, an unlocked Secret Service and its D-Bus session; local recording remains available without them.
+
+The hosted installer supplies the coordinated CLI/Brain/Graph stack. Homebrew and standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.

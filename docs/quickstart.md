@@ -4,7 +4,7 @@ For automatic recording in new Git repositories, run `trace setup` once for Clau
 
 Factory Droid has preview global setup via `trace setup --agent factory`; remove it with `trace setup --agent factory --remove`. If Droid has a legacy `.factory/hooks/hooks.json`, migrate it using Droid's hooks manager before setup. Live hook delivery has not yet been verified.
 
-Build Trace using the [source instructions](../README.md#build-and-try-it), put the `bin` directory on your `PATH`, and enter the Git repository whose work you want to record.
+Build Trace using the [source instructions](../README.md#install), put the `bin` directory on your `PATH`, and enter the Git repository whose work you want to record.
 
 ## Start recording
 
@@ -43,6 +43,30 @@ trace resume 2 --agent codex --no-launch
 
 `fork` creates a separate Git worktree at that step. `resume` rewinds the current checkout and writes `.trace/context.md`; omit `--no-launch` to start the selected agent.
 
-To send history to the Trace workspace, run `trace login --auto-sync` and approve GitHub in your browser. Existing and new turns upload in the background; run `trace sync disable-auto` to stop it. Use `trace login --device-auth --auto-sync` on remote or headless machines. See [sync](sync.md) for Pro encryption and recovery details.
+## Connect your hosted dashboard
+
+Install the coordinated CLI, Brain and Graph bundle from usetrace.si. Sign in
+to its hosted dashboard, then run this in your initialized repository:
+
+```sh
+trace connect --remote you/project
+```
+
+Approve the device under the account that should own its history. The project
+name can match a GitHub repository or use your own `you/project` label. GitHub
+access is not required. Existing history and future turns upload automatically.
+Refresh the hosted timeline to see new sessions. The project context view shows
+the latest derived memories and code index with capture/index times. Manual notes
+stay on this machine.
+
+For a remote terminal, use `trace connect --no-browser` and open the approval URL
+on your signed-in device. `trace sync` uploads immediately; `trace sync disable-auto`
+stops background uploads. Disconnect a CLI in the dashboard to revoke its access.
+Connections expire after 90 days; reconnect to renew.
+
+Personal history is encrypted by the server so it can be displayed after login.
+Legacy client-encrypted Pro sync remains available with `trace login --mode pro`;
+its payloads remain opaque to the dashboard. See [sync](sync.md) for those modes and recovery.
+
 
 See the [CLI reference](cli.md) for all commands and [privacy](privacy.md) for local storage and upload behavior.

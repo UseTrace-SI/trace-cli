@@ -17,9 +17,9 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
 	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
-	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/UseTrace-SI/trace-cli/internal/watch"
 	"github.com/spf13/cobra"
 )
@@ -137,6 +137,9 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return
 			}
 			report := companions.Refresh(ctx, root)
+			if err := saveCompanionSnapshot(ctx, e); err != nil {
+				logger.Error("saving companion snapshot", "error", err)
+			}
 			if err := companions.SaveStatus(root, report); err != nil {
 				logger.Error("saving companion refresh status", "error", err)
 			}
@@ -158,6 +161,11 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return fmt.Errorf("writing pid file: %w", err)
 		}
 		defer os.Remove(pidPath)
+		personalReady := filepath.Join(dir, "personal-sync.ready")
+		if err := os.WriteFile(personalReady, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+			return fmt.Errorf("marking personal sync support: %w", err)
+		}
+		defer os.Remove(personalReady)
 		go func() {
 			if err := watch.Run(ctx, root, func(paths []string) {
 				if err := e.RecordChanges(paths); err != nil {

@@ -42,6 +42,7 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(updateCommand(&repoPath, &jsonOutput, version))
 	root.AddCommand(exportCommand(&repoPath, &jsonOutput))
 	root.AddCommand(loginCommand(&repoPath, &jsonOutput))
+	root.AddCommand(connectCommand(&repoPath, &jsonOutput))
 	root.AddCommand(syncCommand(&repoPath, &jsonOutput))
 	root.AddCommand(agentCommand(&repoPath, &jsonOutput))
 	root.AddCommand(dispatchCommand(&repoPath, &jsonOutput))

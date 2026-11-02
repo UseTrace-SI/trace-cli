@@ -1,5 +1,12 @@
 # CLI reference
 
+`trace connect [--remote you/project] [--endpoint https://usetrace.si] [--no-browser]`
+approves a private connection to your hosted dashboard and enables background
+upload. Run it from an initialized repository. Sign in and approve the displayed
+device in your browser; an account alone does not authorize a CLI until approval.
+Use the dashboard's Connected CLIs view to revoke it, or reconnect after expiry.
+GitHub repository access is not required for this personal mode.
+
 For Claude Code, `trace setup --agent claude-code` installs user hooks in `~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json` when that absolute directory is set. Use the same profile setting when removing them. Claude Code 2.1.312 ran identical user and project SessionStart commands once in an isolated offline startup test, including with different matching groups; other lifecycle events and versions remain unverified.
 
 For OpenCode, `trace setup --agent opencode` installs preview v1 and v2 observers in `~/.config/opencode/plugins/` (or the corresponding `$XDG_CONFIG_HOME/opencode` or `$OPENCODE_CONFIG_DIR` path). Restart the OpenCode server and confirm the relevant plugin loads; remove both with `trace setup --agent opencode --remove`. The v1 observer records non-synthetic prompt text, supported tools, and session idle; another prompt while the session is active is not recorded separately. It skips repositories with the Trace project database poller enabled. The v2 observer tracks admitted user inputs and starts a turn when OpenCode reports delivery. A later delivered prompt closes the preceding turn, and execution success, failure, or interruption closes an active turn; each close requests an edit scan. Cancelled or synthetic inputs do not start turns. The v2 observer captures completed assistant text and reasoning, successful read paths, and supported edit, write, shell, and patch tool names; raw tool arguments and results are not forwarded. Event delivery and hook forwarding are asynchronous, so snapshots can lag, delivery can be lost, and bounded in-memory tracking may omit inputs when its limits are reached. Remote servers, session moves and live turn capture remain unverified. The separate read-only project database poller may produce duplicate v2 events; remove that project integration with `trace agent remove opencode` before relying on the v2 observer.

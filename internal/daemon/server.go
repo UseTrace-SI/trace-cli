@@ -118,7 +118,9 @@ func markBatchReady(dir string) func() {
 	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		return func() {}
 	}
-	return func() { _ = os.Remove(path) }
+	durable := filepath.Join(dir, "durable.ready")
+	_ = os.WriteFile(durable, []byte(strconv.Itoa(os.Getpid())), 0600)
+	return func() { _ = os.Remove(path); _ = os.Remove(durable) }
 }
 
 // orderedDelivery keeps a completed fallback write ahead of later socket events.

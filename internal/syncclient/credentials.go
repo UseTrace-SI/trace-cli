@@ -11,7 +11,38 @@ import (
 
 const service = "usetrace-sync"
 
+// LoadConfigCredentials migrates only a legacy entry whose identity matches the
+// checkout. Never infer ownership from a project label shared by two accounts.
+func LoadConfigCredentials(cfg Config) (Credentials, error) {
+	return loadConfigCredentials(cfg, LoadCredentials, SaveCredentials)
+}
+
+func loadConfigCredentials(cfg Config, read func(string) (Credentials, error), save func(string, Credentials) error) (Credentials, error) {
+	if cfg.Mode != "personal" {
+		return read(cfg.CredentialKey())
+	}
+	if cfg.ConnectionID == "" {
+		return Credentials{}, errors.New("dashboard connection identity missing; run trace connect again")
+	}
+	credentials, err := read(cfg.CredentialKey())
+	if err == nil {
+		if credentials.ConnectionID != cfg.ConnectionID {
+			return Credentials{}, errors.New("dashboard credential identity mismatch; run trace connect again")
+		}
+		return credentials, nil
+	}
+	credentials, err = read(cfg.legacyCredentialKey())
+	if err != nil || credentials.ConnectionID != cfg.ConnectionID {
+		return Credentials{}, errors.New("dashboard credentials unavailable for this connection; run trace connect again")
+	}
+	if err := save(cfg.CredentialKey(), credentials); err != nil {
+		return Credentials{}, err
+	}
+	return credentials, nil
+}
+
 type Credentials struct {
+	ConnectionID     string `json:"connection_id,omitempty"`
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token,omitempty"`
 	ExpiresAt        int64  `json:"expires_at,omitempty"`

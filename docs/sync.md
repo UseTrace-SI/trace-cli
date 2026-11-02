@@ -1,5 +1,27 @@
 # Optional sync client
 
+## Personal hosted dashboard
+
+Use the coordinated Trace bundle and sign in to the hosted dashboard. From an
+initialized repository, run `trace connect --remote you/project`, then approve
+the device in your browser. `--no-browser` prints an approval URL for a remote
+terminal. Personal connections work with your Trace account without GitHub
+repository authorization. The server encrypts content for authenticated browsing;
+this is separate from opaque Pro client encryption.
+
+Each connection is project-scoped, expires after 90 days, and is revocable from
+the dashboard. Tokens stay in the OS credential store. Existing and new history
+upload automatically after approval; `trace sync disable-auto` stops background
+uploads. A fresh connection identity resets the upload cursor when reconnecting,
+including when switching accounts. Recovery uses the same `trace sync pull` path.
+
+Personal uploads include bounded derived Brain/Graph snapshots. Manual notes and
+raw companion databases remain local. The project view displays the latest
+snapshot with source step and index timestamp. The source checkout still determines
+the code graph; it is not a historical code graph for every turn.
+
+The following sections describe the legacy GitHub-backed Pro/Team modes.
+
 ## Connect a repository
 
 Sync is off by default. `trace login` connects one repository but does not upload history unless you choose automatic sync or run `trace sync`. The companion Cloudflare service is maintained in the separate `trace-platform` repository.
@@ -69,3 +91,9 @@ The client sends `Authorization: Bearer <GitHub user access token>` to the confi
 Only blobs referenced by retained keyframes or operations are offered to the server. Blobs are uploaded before rows. The client targets 128 KiB and 40 rows per request to fit Worker CPU and D1 query budgets; a single large row can use up to 7 MiB. It records a separate cursor for each table only after an acknowledged row batch. Switching endpoint, repository, or mode resets those cursors. Uploads are append-only, including corrections made after an early upload. Recovery applies those corrections after the original rows and blobs are downloaded.
 
 `trace login` uses a browser authorization-code flow with PKCE on local machines. It starts a temporary callback listener on `127.0.0.1`, opens GitHub, verifies the returned state, and saves credentials in the operating system credential store. The Worker exchanges the one-time code so the GitHub client secret never ships with the CLI. Use `--device-auth` for remote/headless machines; that flow needs Device Flow enabled on the Trace GitHub App. Users do not need to create or configure an OAuth application themselves.
+
+## Upload health and hosted removal
+
+Use `trace sync status --json` to inspect local upload attempts, success, backlog, errors and connection expiry without a network request. The background daemon records credential failures as well as upload failures. Run `trace sync` to retry immediately; reconnect when a device is expired or revoked. Linux unattended sync requires an unlocked Secret Service on the daemon's D-Bus session.
+
+Personal credentials are isolated per connection identity. Legacy entries migrate only after their saved identity matches the checkout. Hosted accounts have cumulative storage/record limits and a write-rate budget; quota errors explain how to remove a hosted project. Deleting a synced project in the dashboard disconnects its devices and schedules removal of hosted history and objects. Local history is preserved. Reconnect only after cleanup finishes if you want to upload that project again.

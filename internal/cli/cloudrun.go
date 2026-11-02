@@ -13,7 +13,7 @@ import (
 
 func cloudRunCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var platformURL, prompt string
-	cmd := &cobra.Command{Use: "cloud-run", Short: "Submit a job to the Trace cloud runner (stub)", RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "cloud-run", Hidden: true, Short: "Submit a job to the Trace cloud runner (stub)", RunE: func(c *cobra.Command, _ []string) error {
 		if platformURL == "" {
 			platformURL = os.Getenv("TRACE_PLATFORM_URL")
 			if platformURL == "" {
@@ -26,6 +26,9 @@ func cloudRunCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("cloud execution is unavailable: %s", resp.Status)
+		}
 		var job map[string]any
 		if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
 			return err

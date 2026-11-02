@@ -29,7 +29,7 @@ def main():
         trace = str(binaries / "trace")
         project = temporary / "project"
         recovered = temporary / "recovered"
-        daemon_roots = []
+        daemons = []
 
         def run(root, *args, data=None, json_output=False, cwd=None):
             command = [trace, "--repo", str(root)]
@@ -61,8 +61,16 @@ def main():
 
         try:
             initialize(project, "package p\nfunc Validate() bool {return true}\n")
-            # Register cleanup before any command that could launch a daemon.
-            daemon_roots.append(project)
+            (project / ".trace").mkdir()
+            (project / ".trace/login.json").write_text(json.dumps({
+                "endpoint": "https://trace.example", "remote": "solo/project", "mode": "personal", "auto_sync": False,
+            }))
+            # Own the test process handle so cleanup does not need process-list
+            # permissions or trust a PID that another process could recycle.
+            process = subprocess.Popen([trace, "--repo", str(project), "daemon"], env=environment,
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            daemons.append(process)
+            wait_for(lambda: (project / ".trace/spool.ready").exists() or (project / ".trace/sock").exists(), "daemon readiness")
             run(project, "init")
             run(project, "daemon", "start")
             run(project, "brain", "remember", "authentication manual note ghp_abcdefghijklmnopqrstuvwxyz")
@@ -78,6 +86,21 @@ def main():
                                and any(s["name"] == "Login" for s in out["graph"]["symbols"])) else None
 
             context = wait_for(complete_context, "automatic post-turn import and indexing")
+            # An explicit personal connection publishes bounded derived context,
+            # while manual memories remain private to this machine.
+            def personal_snapshot():
+                with sqlite3.connect(project / ".trace/trace.db") as db:
+                    row = db.execute("SELECT payload FROM context_snapshots ORDER BY id DESC LIMIT 1").fetchone()
+                    if not row:
+                        return None
+                    value = json.loads(row[0])
+                    return value if any(m.get("turn_id") for m in value["brain"]["memories"]) else None
+            snapshot = wait_for(personal_snapshot, "Brain and Graph snapshot for personal dashboard")
+            assert snapshot["brain"]["status"] == snapshot["graph"]["status"] == "ready", snapshot
+            assert snapshot["graph"]["repo"] == "solo/project", snapshot
+            assert snapshot["brain"]["memories"], snapshot
+            assert all(m["source"] not in ("manual", "mcp") for m in snapshot["brain"]["memories"]), snapshot
+            assert str(project) not in json.dumps(snapshot), "snapshot exposed the local repository path"
             assert context["brain"]["status"] == context["graph"]["status"] == "ready", context
             assert any(r["from_symbol"] == "Login" and r["to_symbol"] == "Validate" for r in context["graph"]["relations"]), context
             assert "ghp_abcdefghijklmnopqrstuvwxyz" not in json.dumps(context), "context leaked manual memory token"
@@ -113,9 +136,14 @@ def main():
             assert any(m["source"] == "manual" for m in source_context["brain"]["memories"]), source_context
             print("companions e2e passed: automatic refresh, shared context, redaction, isolated project state and derived recovery")
         finally:
-            for root in daemon_roots:
-                run(root, "daemon", "stop")
-                wait_for(lambda: not (root / ".trace/daemon.pid").exists(), "daemon shutdown")
+            for process in daemons:
+                process.terminate()
+                try:
+                    process.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate(timeout=5)
+                    raise AssertionError("test daemon did not shut down gracefully")
 
 
 if __name__ == "__main__":

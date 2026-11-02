@@ -53,7 +53,11 @@ func SendBatch(dir string, events []event.Event) error {
 }
 
 func batchReady(dir string) bool {
-	marker, err := os.ReadFile(filepath.Join(dir, "batch.ready"))
+	return markerMatches(dir, "batch.ready")
+}
+
+func markerMatches(dir, name string) bool {
+	marker, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil || len(marker) == 0 {
 		return false
 	}
@@ -62,6 +66,12 @@ func batchReady(dir string) bool {
 }
 
 func sendFrame(dir string, b []byte) error {
+	// New daemons poll the spool. Persist before reporting successful delivery,
+	// so a daemon process crash cannot lose an event accepted into a socket.
+	// Legacy daemons retain their socket protocol until they are restarted.
+	if markerMatches(dir, "durable.ready") {
+		return appendSpoolFrame(dir, b)
+	}
 	conn, err := net.DialTimeout("unix", filepath.Join(dir, "sock"), 5*time.Millisecond)
 	if err == nil {
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Millisecond))

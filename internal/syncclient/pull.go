@@ -2,8 +2,10 @@ package syncclient
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,13 +27,14 @@ var downloadID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var downloadHash = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 var columns = map[string][]string{
-	"sessions":     {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
-	"turns":        {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at"},
-	"keyframes":    {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
-	"ops":          {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
-	"commits":      {"sha", "keyframe_id", "at"},
-	"messages":     {"id", "session_id", "turn_id", "role", "content", "at"},
-	"sync_updates": {"id", "table_name", "row_id", "data"},
+	"sessions":          {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
+	"turns":             {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at"},
+	"keyframes":         {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
+	"ops":               {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
+	"commits":           {"sha", "keyframe_id", "at"},
+	"messages":          {"id", "session_id", "turn_id", "role", "content", "at"},
+	"sync_updates":      {"id", "table_name", "row_id", "data"},
+	"context_snapshots": {"id", "source_step", "created_at", "payload", "fingerprint"},
 }
 
 func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
@@ -112,7 +115,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, output 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sync server rejected download: %s", resp.Status)
+		return remoteError(resp)
 	}
 	// The Worker returns up to 20 rows, each with a payload near 1 MB.
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(output); err != nil {
@@ -126,7 +129,7 @@ func (c *Client) downloadValues() url.Values {
 }
 
 func (c *Client) openDownloaded(encoded, salt, aad, passphrase string, ciphers map[string]*Cipher) ([]byte, error) {
-	if c.Config.Mode == "team" {
+	if c.Config.Mode != "pro" {
 		return base64.StdEncoding.DecodeString(encoded)
 	}
 	if salt == "" {
@@ -197,11 +200,27 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 			data[field] = (redact.Redactor{}).Text(value)
 		}
 	}
+	if row.Table == "context_snapshots" {
+		payload, ok := data["payload"].(string)
+		if !ok || len(payload) > 1<<20 || !json.Valid([]byte(payload)) {
+			return errors.New("download contains invalid companion context")
+		}
+		payload = (redact.Redactor{}).Text(payload)
+		if !json.Valid([]byte(payload)) {
+			return errors.New("redacted companion context is invalid")
+		}
+		data["payload"] = payload
+		sum := sha256.Sum256([]byte(payload))
+		data["fingerprint"] = hex.EncodeToString(sum[:])
+	}
 	values := make([]any, len(cols))
 	for i, col := range cols {
 		values[i] = data[col]
 	}
 	query := "INSERT INTO " + row.Table + " (" + strings.Join(cols, ",") + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(cols)), ",") + ")"
+	if row.Table == "context_snapshots" {
+		query += " ON CONFLICT(fingerprint) DO NOTHING"
+	}
 	if _, err := db.Exec(query, values...); err != nil {
 		return fmt.Errorf("inserting downloaded %s row: %w", row.Table, err)
 	}
@@ -210,7 +229,7 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 
 func (c *Client) pullRows(ctx context.Context, db *sql.DB, passphrase string, ciphers map[string]*Cipher) (int, error) {
 	total := 0
-	for _, table := range tables {
+	for _, table := range c.syncTables() {
 		after := ""
 		for {
 			query := c.downloadValues()

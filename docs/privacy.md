@@ -2,7 +2,14 @@
 
 ## Local history and network access
 
-Trace stores data locally in `.trace/` by default. It contacts the sync server only after you run `trace sync` or explicitly opt in with `trace login --auto-sync`. Automatic sync sends existing and new history from the local daemon in the background; stop it with `trace sync disable-auto`. Pro sync encrypts rows and blobs on the client, with its derived key held in the OS credential store for unattended sync. Team sync sends rows and blobs over HTTPS for server-side encryption. See [sync](sync.md) for the protocol and setup.
+Trace stores data locally in `.trace/` by default. It contacts the sync server only after you run `trace sync` or explicitly opt in with `trace login --auto-sync` or approve `trace connect`. Automatic sync sends existing and new history from the local daemon in the background; stop it with `trace sync disable-auto`. Pro sync encrypts rows and blobs on the client, with its derived key held in the OS credential store for unattended sync. Team sync sends rows and blobs over HTTPS for server-side encryption. See [sync](sync.md) for the protocol and setup.
+
+An approved personal connection uploads history and bounded derived Brain/Graph
+snapshots to your hosted account. Payloads are encrypted on the server and readable
+in your signed-in dashboard; this mode is not end-to-end encrypted. Tokens stay
+in the OS credential store, are scoped to one project, expire, and can be revoked.
+Manual memories and raw companion SQLite files are excluded from derived uploads.
+Revoking a device does not delete uploaded history.
 
 ## Text redaction
 

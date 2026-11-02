@@ -29,14 +29,23 @@ const maxRowRequestBytes = 7 << 20
 
 var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "messages", "sync_updates"}
 
+func (c *Client) syncTables() []string {
+	if c.Config.Mode == "personal" {
+		return append(append([]string{}, tables...), "context_snapshots")
+	}
+	return tables
+}
+
 type Config struct {
-	Endpoint      string `json:"endpoint"`
-	Remote        string `json:"remote"`
-	Mode          string `json:"mode"`
-	ClientID      string `json:"client_id,omitempty"`
-	GitHubApp     bool   `json:"github_app,omitempty"`
-	BrokerRefresh bool   `json:"broker_refresh,omitempty"`
-	AutoSync      bool   `json:"auto_sync,omitempty"`
+	ConnectionExpiresAt int64  `json:"connection_expires_at,omitempty"`
+	ConnectionID        string `json:"connection_id,omitempty"`
+	Endpoint            string `json:"endpoint"`
+	Remote              string `json:"remote"`
+	Mode                string `json:"mode"`
+	ClientID            string `json:"client_id,omitempty"`
+	GitHubApp           bool   `json:"github_app,omitempty"`
+	BrokerRefresh       bool   `json:"broker_refresh,omitempty"`
+	AutoSync            bool   `json:"auto_sync,omitempty"`
 }
 
 func (cfg Config) Validate() error {
@@ -44,8 +53,8 @@ func (cfg Config) Validate() error {
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("sync endpoint must be an HTTPS URL without credentials or query")
 	}
-	if cfg.Mode != "pro" && cfg.Mode != "team" {
-		return errors.New("sync mode must be pro or team")
+	if cfg.Mode != "pro" && cfg.Mode != "team" && cfg.Mode != "personal" {
+		return errors.New("sync mode must be personal, pro or team")
 	}
 	if cfg.Remote == "" {
 		return errors.New("sync remote is required")
@@ -54,6 +63,19 @@ func (cfg Config) Validate() error {
 		return errors.New("GitHub App sync requires a client ID")
 	}
 	return nil
+}
+
+// CredentialKey keeps account-scoped connections separate from GitHub login
+// credentials and from connections to another Trace server.
+func (cfg Config) CredentialKey() string {
+	if cfg.Mode == "personal" {
+		return cfg.legacyCredentialKey() + "|" + cfg.ConnectionID
+	}
+	return cfg.Remote
+}
+
+func (cfg Config) legacyCredentialKey() string {
+	return "personal|" + strings.TrimRight(cfg.Endpoint, "/") + "|" + cfg.Remote
 }
 
 type State struct {
@@ -131,7 +153,7 @@ func (c *Client) post(ctx context.Context, path string, input, output any) error
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sync server rejected request: %s", resp.Status)
+		return remoteError(resp)
 	}
 	if output != nil {
 		if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(output); err != nil {
@@ -188,7 +210,8 @@ func saveState(path string, state State) error {
 
 // Sync uploads content-addressed blobs first, then append-only rows. Each row batch
 // advances its local cursor only after the server acknowledges the request.
-func (c *Client) Sync(ctx context.Context) (int, int, error) {
+func (c *Client) Sync(ctx context.Context) (blobTotal int, rowTotal int, resultErr error) {
+	defer func() { _ = RecordAttempt(c.TraceDir, c.Config, resultErr) }()
 	if err := c.validate(); err != nil {
 		return 0, 0, err
 	}
@@ -200,6 +223,9 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 	// Protocol 2 stores history under immutable GitHub repository identities.
 	// Re-upload rows once so an old name-keyed cursor cannot hide them.
 	target := c.Config.Endpoint + "|" + c.Config.Remote + "|" + c.Config.Mode + "|v2"
+	if c.Config.Mode == "personal" {
+		target += "|" + c.Config.ConnectionID
+	}
 	if state.Target != target {
 		state = State{Target: target, Cursors: map[string]string{}}
 	}
@@ -208,7 +234,7 @@ func (c *Client) Sync(ctx context.Context) (int, int, error) {
 		return 0, 0, err
 	}
 	rowCount := 0
-	for _, table := range tables {
+	for _, table := range c.syncTables() {
 		limit := rowBatchSize
 		if table == "sync_updates" {
 			// Each operation correction also updates its Team dashboard index.
@@ -288,7 +314,7 @@ func rowBatchEnd(rows []Row, start, headerBytes int) (int, error) {
 }
 
 func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, error) {
-	valid := false
+	valid := table == "context_snapshots"
 	for _, t := range tables {
 		if table == t {
 			valid = true

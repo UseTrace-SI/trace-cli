@@ -10,6 +10,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
+	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
 	"github.com/spf13/cobra"
 )
 
@@ -139,6 +140,10 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		})
 		add(".trace size", true, fmt.Sprintf("%d bytes", size))
 
+		if _, err := os.Stat(loginPath(root)); err == nil {
+			health, readErr := syncclient.ReadHealth(td)
+			add("sync health", readErr == nil && health.LastError == "", "Inspect progress with: trace sync status")
+		}
 		allOK := true
 		for _, ch := range checks {
 			if !ch.OK {

@@ -98,7 +98,7 @@ func discoverLoginConfig(ctx context.Context, endpoint string, client *http.Clie
 func loginPath(root string) string { return filepath.Join(repo.TraceDir(root), "login.json") }
 
 func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, error), error) {
-	credentials, err := syncclient.LoadCredentials(cfg.Remote)
+	credentials, err := syncclient.LoadConfigCredentials(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +107,9 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 			return credentials.AccessToken, nil
 		}
 		if !cfg.GitHubApp {
+			if cfg.Mode == "personal" {
+				return "", errors.New("dashboard connection expired; run trace connect again")
+			}
 			return "", errors.New("GitHub login expired; run trace login again")
 		}
 		var updated syncclient.Credentials
@@ -119,7 +122,7 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 			return "", err
 		}
 		updated.ProSyncKey = credentials.ProSyncKey
-		if err := syncclient.SaveCredentials(cfg.Remote, updated); err != nil {
+		if err := syncclient.SaveCredentials(cfg.CredentialKey(), updated); err != nil {
 			return "", err
 		}
 		credentials = updated
@@ -268,6 +271,7 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 		}
 		tokenProvider, err := syncTokenProvider(cfg)
 		if err != nil {
+			_ = syncclient.RecordAttempt(repo.TraceDir(root), cfg, err)
 			logger.Warn("automatic sync unavailable", "error", err)
 			reset(retryDelay)
 			retryDelay = min(retryDelay*2, retryMax)
@@ -275,6 +279,7 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 		}
 		token, err := tokenProvider(ctx)
 		if err != nil {
+			_ = syncclient.RecordAttempt(repo.TraceDir(root), cfg, err)
 			logger.Warn("automatic sync login unavailable", "error", err)
 			reset(retryDelay)
 			retryDelay = min(retryDelay*2, retryMax)
@@ -550,6 +555,7 @@ func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		_, err = fmt.Fprintln(c.OutOrStdout(), "Automatic sync disabled. Run trace sync to upload manually.")
 		return err
 	}})
+	cmd.AddCommand(syncStatusCommand(repoPath, jsonOutput))
 	cmd.AddCommand(pullCommand(repoPath, jsonOutput))
 	return cmd
 }

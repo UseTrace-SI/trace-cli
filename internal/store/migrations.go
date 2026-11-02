@@ -210,5 +210,11 @@ CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
 			return fmt.Errorf("recording causal migration: %w", err)
 		}
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS context_snapshots (
+    id TEXT PRIMARY KEY, source_step INTEGER NOT NULL, created_at INTEGER NOT NULL,
+    payload TEXT NOT NULL, fingerprint TEXT NOT NULL UNIQUE);
+    INSERT OR IGNORE INTO schema_version(version) VALUES(14);`); err != nil {
+		return fmt.Errorf("creating companion snapshots: %w", err)
+	}
 	return nil
 }

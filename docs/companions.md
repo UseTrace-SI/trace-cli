@@ -4,6 +4,13 @@ CLI owns captured history. Brain derives searchable memories from sessions and
 turns. Graph indexes the current checkout. Platform synchronizes CLI history
 and blobs; companion databases are rebuilt locally.
 
+An approved personal connection also publishes bounded derived context snapshots
+from history imports and the code index. They include source step and index time,
+exclude manual/MCP-authored notes and raw database files, and are redacted before
+storage. The hosted project view displays the latest snapshot. Graph describes
+the checkout when indexed, rather than historical source for every turn. Legacy
+Pro/Team sync does not transfer these new snapshot rows.
+
 ## Build and use
 
 With the three source repositories next to one another:

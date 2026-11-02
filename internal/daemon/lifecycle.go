@@ -58,6 +58,17 @@ func EnsureRunning(root string) error {
 	return fmt.Errorf("daemon did not start")
 }
 
+// PersonalSyncReady identifies support in the running daemon, rather than
+// assuming a newly installed CLI has replaced an older resident process.
+func PersonalSyncReady(dir string) bool {
+	capability, err := os.ReadFile(filepath.Join(dir, "personal-sync.ready"))
+	if err != nil || len(capability) == 0 {
+		return false
+	}
+	pid, err := os.ReadFile(filepath.Join(dir, "daemon.pid"))
+	return err == nil && string(pid) == string(capability)
+}
+
 // StartAsync launches the daemon without waiting for it to become ready. Hooks
 // use it on SessionStart so an idle-exited or crashed daemon recovers without
 // blocking the agent.

@@ -436,6 +436,26 @@ func TestHookSocketRoundTripP95(t *testing.T) {
 	}
 }
 
+func TestDurableDaemonDeliveryPersistsBeforeReturn(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"daemon.pid", "durable.ready", "batch.ready"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("42"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SendBatch(dir, []event.Event{{Kind: event.TurnStart, At: 1}, {Kind: event.TurnEnd, At: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	// No running daemon is needed: successful delivery is already recoverable.
+	var got []event.Event
+	if err := ingestSpool(dir, func(ev event.Event) { got = append(got, ev) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].At != 1 || got[1].At != 2 {
+		t.Fatalf("lost acknowledged frame: %+v", got)
+	}
+}
+
 func TestSocketDaemonIngestsFallbackSpool(t *testing.T) {
 	dir, err := os.MkdirTemp("", "tr-sock-")
 	if err != nil {

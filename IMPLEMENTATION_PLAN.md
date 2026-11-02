@@ -28,6 +28,29 @@ change, passing `make lint test`, and tests for its acceptance criteria.
 
 ---
 
+## Phase S1 — Connected solo developer release
+
+Trace uses a hosted dashboard. CLI captures history and runs Brain and Graph on
+its developer's machine, then synchronizes approved history and bounded derived
+context into that user's private account. Team sharing and cloud execution are deferred.
+
+Acceptance criteria:
+
+- Browser approval for `trace connect` works without GitHub repository access.
+- Approval is verifier-bound and single-use. Repository-scoped credentials stay in
+  the OS credential store, expire, and are revocable from the dashboard.
+- Accounts remain isolated when project names and entity IDs match.
+- Existing and new history uploads automatically; hosted sessions, recorded turn
+  context, file activity and the latest Brain/Graph snapshot are browsable.
+- Manual memories and raw companion databases remain local. Published context is redacted.
+- Recovery uses the same protocol. A new connection identity resets upload cursors.
+- The four repositories build as one versioned release: CLI, Brain and Graph bundles
+  for macOS/Linux on Intel/ARM, a hosted app, checksums and source revision metadata.
+- Run `make lint test`, real companion integration, personal sync integration,
+  Platform API/runtime/smoke checks and all release builds before deployment.
+
+---
+
 ## Phase 0 — Scaffold
 
 **Goal:** an empty but buildable, tested, linted Go project.
