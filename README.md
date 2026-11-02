@@ -83,6 +83,8 @@ Run `trace setup` once to install automatic recording hooks for Claude Code and 
 
 ## Status
 
+The public installation instructions use the coordinated hosted bundle; legacy standalone installers are retained for release testing.
+
 `trace connect [--remote you/project]` supports one-time browser approval against
 the hosted app. Personal connections are scoped to one project and account,
 expire after 90 days, and can be revoked in the dashboard. Credentials remain in
@@ -99,19 +101,16 @@ The CLI records Claude Code, Codex, Cursor Agent, Antigravity CLI (`agy`), OpenC
 
 ## Install
 
-macOS or Linux, with Git installed:
+macOS or Linux, with Git installed. Install the coordinated CLI, Brain and Graph release:
 
 ```sh
-brew install UseTrace-SI/tap/trace
+curl -fsSL https://usetrace.si/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Or install the latest release archive with checksum verification:
+This installs `trace`, `trace-brain`, `trace-graph` and the `trc` alias together, with checksum verification. The default directory is `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. Homebrew is not currently a supported installation route. Older standalone GitHub releases contain only the CLI.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/UseTrace-SI/trace-cli/main/scripts/install.sh | sh
-```
-
-Both install `trace` and its `trc` alias. The script defaults to `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. To build from source instead, use Go 1.23 or newer:
+To build the CLI from source, use Go 1.26 or newer (the module selects the reviewed Go 1.27.3 compiler):
 
 ```sh
 git clone https://github.com/UseTrace-SI/trace-cli.git
@@ -171,6 +170,6 @@ Trace is licensed under [Apache 2.0](LICENSE).
 
 Current daemons advertise durable spool delivery. Hooks append a redacted frame before returning success, and the daemon ingests it asynchronously; processing failures retain frames for replay. Delivery is at least once, so replay may repeat already processed events. This protects against daemon process crashes, not storage failure or sudden machine power loss. Older resident daemons keep their legacy socket behavior until restarted. On Linux, hosted sync requires `secret-tool`, an unlocked Secret Service and its D-Bus session; local recording remains available without them.
 
-The hosted installer supplies the coordinated CLI/Brain/Graph stack. Homebrew and standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.
+The hosted installer supplies the coordinated CLI/Brain/Graph stack. Older standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.
 
 Production builds select Go 1.27.3 to include the patched certificate verifier. CI pins this compiler and runs Govulncheck. The language version remains Go 1.26; release builds reject a different compiler. Existing runtime dependencies are pinned to their reviewed updates in go.mod/go.sum.

@@ -4,7 +4,7 @@ For automatic recording in new Git repositories, run `trace setup` once for Clau
 
 Factory Droid has preview global setup via `trace setup --agent factory`; remove it with `trace setup --agent factory --remove`. If Droid has a legacy `.factory/hooks/hooks.json`, migrate it using Droid's hooks manager before setup. Live hook delivery has not yet been verified.
 
-Build Trace using the [source instructions](../README.md#install), put the `bin` directory on your `PATH`, and enter the Git repository whose work you want to record.
+Install the coordinated bundle using the [installation instructions](../README.md#install), put its installation directory on your `PATH`, and enter the Git repository whose work you want to record.
 
 ## Start recording
 
