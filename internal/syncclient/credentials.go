@@ -1,6 +1,7 @@
 package syncclient
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -95,6 +96,10 @@ func SaveCredentials(remote string, credentials Credentials) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("saving token in OS credential store: %w", err)
 	}
+	stored, err := LoadCredentials(remote)
+	if err != nil || stored != credentials {
+		return errors.New("OS credential store did not preserve the connection; reconnect after unlocking the credential store")
+	}
 	return nil
 }
 
@@ -102,8 +107,20 @@ func credentialSaveCommand(goos, remote, value string) (*exec.Cmd, error) {
 	var cmd *exec.Cmd
 	switch goos {
 	case "darwin":
-		cmd = exec.Command("security", "add-generic-password", "-U", "-a", remote, "-s", service, "-w")
-		cmd.Stdin = strings.NewReader(value + "\n" + value + "\n")
+		// A trailing -w reads getpass() from the controlling terminal, not
+		// stdin. Use security's command-input mode so credentials never enter
+		// process arguments and no interactive password prompt can replace them.
+		if strings.ContainsAny(remote, "\r\n\x00") {
+			return nil, errors.New("invalid credential account")
+		}
+		account := `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(remote) + `"`
+		input := "add-generic-password -U -a " + account + " -s " + service + " -X " + hex.EncodeToString([]byte(value)) + "\n"
+		// Apple's interactive parser has a fixed 4096-byte line buffer.
+		if len(input) >= 4096 {
+			return nil, errors.New("credentials exceed the macOS credential transport limit")
+		}
+		cmd = exec.Command("security", "-i")
+		cmd.Stdin = strings.NewReader(input)
 	case "linux":
 		cmd = exec.Command("secret-tool", "store", "--label=Trace sync", service, remote)
 		cmd.Stdin = strings.NewReader(value)

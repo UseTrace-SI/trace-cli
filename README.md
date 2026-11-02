@@ -83,7 +83,7 @@ Run `trace setup` once to install automatic recording hooks for Claude Code and 
 
 ## Status
 
-The public installation instructions use the coordinated hosted bundle; legacy standalone installers are retained for release testing.
+The public installation instructions use the coordinated hosted bundle; legacy standalone installers are retained for release testing. macOS credential writes use private command input rather than terminal password prompts, and connections are accepted only after the stored credential is read back unchanged.
 
 `trace connect [--remote you/project]` supports one-time browser approval against
 the hosted app. Personal connections are scoped to one project and account,

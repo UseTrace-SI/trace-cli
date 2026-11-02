@@ -2,6 +2,7 @@ package syncclient
 
 import (
 	"bytes"
+	"encoding/hex"
 	"io"
 	"reflect"
 	"strings"
@@ -36,7 +37,7 @@ func TestCredentialSaveCommandKeepsTokenOutOfArguments(t *testing.T) {
 		wantArgs  []string
 		wantInput string
 	}{
-		{"darwin", []string{"security", "add-generic-password", "-U", "-a", "owner/repo", "-s", service, "-w"}, value + "\n" + value + "\n"},
+		{"darwin", []string{"security", "-i"}, "add-generic-password -U -a \"owner/repo\" -s " + service + " -X " + hex.EncodeToString([]byte(value)) + "\n"},
 		{"linux", []string{"secret-tool", "store", "--label=Trace sync", service, "owner/repo"}, value},
 	} {
 		t.Run(tc.goos, func(t *testing.T) {
@@ -61,5 +62,27 @@ func TestCredentialSaveCommandKeepsTokenOutOfArguments(t *testing.T) {
 	}
 	if _, err := credentialSaveCommand("windows", "owner/repo", value); err == nil {
 		t.Fatal("unsupported credential store accepted")
+	}
+}
+
+func TestMacCredentialTransportRejectsCommandInjectionAndOversize(t *testing.T) {
+	for _, account := range []string{"owner/repo\nhelp", "owner/repo\rhelp", "owner/repo\x00help"} {
+		if _, err := credentialSaveCommand("darwin", account, "value"); err == nil {
+			t.Fatal("accepted a command separator in the account")
+		}
+	}
+	if _, err := credentialSaveCommand("darwin", "owner/repo", strings.Repeat("x", 4096)); err == nil {
+		t.Fatal("accepted a truncated security command")
+	}
+	cmd, err := credentialSaveCommand("darwin", `personal|https://trace.example/a"b\c|owner/repo`, `{"access_token":"test"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := io.ReadAll(cmd.Stdin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(input), `-a "personal|https://trace.example/a\"b\\c|owner/repo"`) {
+		t.Fatal("account quoting does not preserve special characters")
 	}
 }
