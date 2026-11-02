@@ -10,8 +10,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
       - run: GOTOOLCHAIN=local go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - run: govulncheck ./...
       - run: make lint test
       - name: Repeat companion integration regressions 100 times
         run: go test -race -p 1 -count=100 -run TestCompanion -timeout=15m ./internal/companions ./internal/manifest ./internal/mcp ./internal/cli
@@ -29,7 +31,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -58,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
       - run: make perf
         env:
           TRACE_PERF_HOOK_ADVISORY: ${{ matrix.hook_advisory }}

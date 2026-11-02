@@ -777,7 +777,7 @@ git -C "$work_hermes" init -q
 printf 'before\n' > "$work_hermes/main.txt"
 HERMES_HOME="$hermes_profile" "$binary" setup --agent hermes >/dev/null
 TRACE_HERMES_REPO="$work_hermes" PYTHONDONTWRITEBYTECODE=1 python3 - "$hermes_profile/plugins/trace-observer/__init__.py" <<'PY'
-import importlib.util, os, sys, time
+import importlib.util, json, os, subprocess, sys, time
 spec = importlib.util.spec_from_file_location('trace_observer', sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -798,6 +798,15 @@ with open(os.path.join(os.environ['TRACE_HERMES_REPO'], 'main.txt'), 'w') as f: 
 ctx.hooks['post_tool_call'](session_id='hermes-e2e', tool_name='write_file', args={'path':'main.txt'}, status='ok')
 ctx.hooks['post_llm_call'](session_id='hermes-e2e', assistant_response='Done ghp_abcdefghijklmnopqrstuvwxyz')
 module._events.join()
+# Hook delivery is asynchronous. Finish the first snapshot before changing
+# the same file for the next turn, so the fixture represents two real turns.
+for _ in range(100):
+    result = subprocess.run(['trace', '--repo', os.environ['TRACE_HERMES_REPO'], '--json', 'show', '1'], capture_output=True, text=True)
+    if result.returncode == 0:
+        turn = json.loads(result.stdout)
+        if 'main.txt' in turn.get('files', []) and 'Done' in turn.get('reasoning', ''): break
+    time.sleep(.05)
+else: raise RuntimeError('Hermes first turn did not finish before the second edit')
 ctx.hooks['pre_llm_call'](session_id='hermes-e2e', user_message='Failed turn')
 module._events.join()
 with open(os.path.join(os.environ['TRACE_HERMES_REPO'], 'main.txt'), 'w') as f: f.write('failed edit\n')
