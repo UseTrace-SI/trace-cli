@@ -20,11 +20,11 @@ func TestPersonalPairingProofAndOrigin(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatal(err)
 		}
-		if request["repo"] != cfg.Remote || request["device"] != "My laptop" {
+		if request["repo"] != cfg.Remote || request["device"] != "My laptop" || request["verification_path"] != "/connect" {
 			t.Fatalf("invalid pairing: %+v", request)
 		}
 		challenge = request["challenge"]
-		body, _ := json.Marshal(Pairing{ID: strings.Repeat("a", 43), VerificationURI: "https://trace.example/app/connect.html?request=" + strings.Repeat("a", 43), ExpiresAt: time.Now().Add(time.Minute).UnixMilli(), Interval: 1})
+		body, _ := json.Marshal(Pairing{ID: strings.Repeat("a", 43), VerificationURI: "https://trace.example/connect?request=" + strings.Repeat("a", 43), ExpiresAt: time.Now().Add(time.Minute).UnixMilli(), Interval: 1})
 		return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
 	})}
 	flow, err := StartPairing(context.Background(), client, cfg, "My laptop")
@@ -72,5 +72,31 @@ func TestPersonalPairingWaitCancellationAndCredential(t *testing.T) {
 	cancel()
 	if _, err := WaitPairing(ctx, client, "https://trace.example", flow); err == nil {
 		t.Fatal("cancelled connection succeeded")
+	}
+}
+
+func TestPersonalPairingCanonicalAndLegacyPaths(t *testing.T) {
+	cfg := Config{Endpoint: "https://trace.example", Remote: "solo/project", Mode: "personal"}
+	id := strings.Repeat("a", 43)
+	for _, tc := range []struct {
+		path string
+		ok   bool
+	}{
+		{"/connect", true},
+		{"/app/connect.html", true}, // Existing servers remain compatible.
+		{"/workspace", false},
+		{"/connect/other", false},
+		{"/app/other.html", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				data, _ := json.Marshal(Pairing{ID: id, VerificationURI: "https://trace.example" + tc.path + "?request=" + id, ExpiresAt: time.Now().Add(time.Minute).UnixMilli(), Interval: 1})
+				return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(string(data))), Header: make(http.Header)}, nil
+			})}
+			_, err := StartPairing(context.Background(), client, cfg, "My laptop")
+			if (err == nil) != tc.ok {
+				t.Fatalf("pairing URL %s: %v", tc.path, err)
+			}
+		})
 	}
 }

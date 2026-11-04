@@ -98,9 +98,9 @@ func connectCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return fmt.Errorf("connection saved, but the running daemon predates personal sync; run trace daemon stop, trace daemon start, then trace sync")
 		}
 		if *jsonOutput {
-			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"connected": true, "remote": remote, "mode": "personal", "dashboard": strings.TrimRight(endpoint, "/") + "/app/"})
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"connected": true, "remote": remote, "mode": "personal", "dashboard": strings.TrimRight(endpoint, "/") + "/workspace"})
 		}
-		_, err = fmt.Fprintf(c.OutOrStdout(), "Connected %s to %s/app/. Existing history and new turns sync in the background.\n", remote, strings.TrimRight(endpoint, "/"))
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Connected %s to %s/workspace. Existing history and new turns sync in the background.\n", remote, strings.TrimRight(endpoint, "/"))
 		return err
 	}}
 	cmd.Flags().BoolVar(&preview, "preview", false, "inspect upload scope and potential source secrets without connecting")

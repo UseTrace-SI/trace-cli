@@ -186,6 +186,8 @@ Trace is licensed under [Apache 2.0](LICENSE).
 
 ## Production connection health
 
+`trace connect` requests the clean `/connect` approval URL and reports the dashboard at `/workspace`. Older servers remain supported; legacy approval links redirect to the clean page after the hosted upgrade.
+
 `trace sync status --json` reports pending rows, last upload attempt/success, the last redacted error, connection expiry and credential-store availability. `trace doctor` flags recorded sync failures. Personal credentials are keyed by connection identity, so two accounts using the same project label cannot replace each other's local credentials. A legacy credential migrates only when its connection identity matches the checkout; otherwise reconnect explicitly.
 
 Current daemons advertise durable spool delivery. Hooks append a redacted frame before returning success, and the daemon ingests it asynchronously; processing failures retain frames for replay. Delivery is at least once, so replay may repeat already processed events. This protects against daemon process crashes, not storage failure or sudden machine power loss. Older resident daemons keep their legacy socket behavior until restarted. On Linux, hosted sync requires `secret-tool`, an unlocked Secret Service and its D-Bus session; local recording remains available without them.

@@ -63,6 +63,9 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if flow.VerificationURI != cfg.Endpoint+"/connect?request="+flow.ID {
+			t.Fatalf("pairing did not use the clean approval route: %s", flow.VerificationURI)
+		}
 		response, _ := request("POST", "/api/cli/pairings/"+flow.ID, cookie, map[string]any{})
 		if response.StatusCode != 200 {
 			t.Fatalf("approval: %d", response.StatusCode)
