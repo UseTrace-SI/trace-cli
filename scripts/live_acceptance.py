@@ -6,6 +6,7 @@ user-level hooks. Never bypasses hook trust or agent permission checks. The
 receipt records versions and capture assertions, never prompts or responses.
 """
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -20,24 +21,42 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--agent',choices=['claude-code','codex'],required=True)
 parser.add_argument('--trace',required=True)
 parser.add_argument('--receipt',required=True)
+parser.add_argument('--manifest',help='stack.json from the same verified archive as the Trace binary')
 args=parser.parse_args()
 binary=pathlib.Path(args.trace).resolve()
 agent='claude' if args.agent=='claude-code' else 'codex'
 version=subprocess.check_output([agent,'--version'],text=True,stderr=subprocess.DEVNULL).strip()
 started=time.time()
-receipt={'agent':args.agent,'agent_version':version,'status':'unverified','checks':{},'started_at':int(started*1000)}
+receipt={'agent':args.agent,'agent_version':version,'capture_mode':'rollout' if args.agent=='codex' else 'hooks','status':'unverified','checks':{},'started_at':int(started*1000)}
+receipt['trace_binary_sha256']=hashlib.sha256(binary.read_bytes()).hexdigest()
+if args.manifest:
+ manifest=json.loads(pathlib.Path(args.manifest).read_text())
+ receipt['stack_version']=manifest['version']
+ receipt['sources']={name:source['commit'] for name,source in manifest['sources'].items()}
 
 with tempfile.TemporaryDirectory(prefix='trace-live-') as directory:
  root=pathlib.Path(directory)/'repo';root.mkdir()
  tools=pathlib.Path(directory)/'bin';tools.mkdir();shutil.copy2(binary,tools/'trace')
  env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'],TRACE_COMPANIONS='0')
+ # Owner-only Vaultly privileges must never be inherited by an agent run.
+ env.pop('VAULTLY_HUMAN_MODE',None)
  subprocess.run(['git','init','-q',str(root)],check=True)
  (root/'acceptance.txt').write_text('before\n')
  subprocess.run([str(binary),'--repo',str(root),'init','--agent',args.agent],env=env,check=True,stdout=subprocess.DEVNULL)
  prompt='This is an isolated Trace acceptance fixture. Change only acceptance.txt to exactly "trace acceptance passed" followed by a newline. Do not commit, access the network, inspect credentials, or change any other file. Then reply done.'
- command=([agent,'-p','--permission-mode','acceptEdits','--max-budget-usd','1','--settings',str(root/'.claude/settings.local.json'),'--output-format','json',prompt] if args.agent=='claude-code' else [agent,'exec','--json','--ephemeral','--sandbox','workspace-write',prompt])
+ # The default Codex adapter follows the normal on-disk rollout. Ephemeral
+ # sessions deliberately omit that file and cannot verify this capture mode.
+ command=([agent,'-p','--permission-mode','acceptEdits','--max-budget-usd','1','--settings',str(root/'.claude/settings.local.json'),'--output-format','json',prompt] if args.agent=='claude-code' else [agent,'exec','--json','--sandbox','workspace-write',prompt])
  process=None
  try:
+  if args.agent=='codex':
+   # Initial baseline scanning must finish before this fixture creates a new
+   # rollout, otherwise it can be mistaken for pre-existing session history.
+   ready=root/'.trace/codex-offsets.json'
+   startup_deadline=time.monotonic()+30
+   while not ready.is_file() and time.monotonic()<startup_deadline:time.sleep(.1)
+   receipt['checks']['adapter_started']=ready.is_file()
+   if not ready.is_file():raise subprocess.TimeoutExpired('Codex capture adapter startup',30)
   process=subprocess.Popen(command,cwd=root,env=env,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
   process.wait(timeout=90)
   receipt['checks']['agent_exited_successfully']=process.returncode==0
