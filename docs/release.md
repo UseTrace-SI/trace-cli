@@ -33,3 +33,7 @@ staging backup recovery, and delivered alert verification. A source build or a
 failed model turn is not that evidence. See platform `docs/operations.md` for the
 receipt schema and the outstanding operator steps. Release qualification must
 include hook p95, idle daemon RSS, failure/restart cases and macOS/Linux CI.
+
+Local object writes flush file contents before atomic publication. Checkpoint
+creation does not force every parent-directory metadata update to stable storage;
+it does not promise recovery from every sudden power loss. Keep verified backups.

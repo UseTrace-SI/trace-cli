@@ -472,12 +472,7 @@ func writeObject(path string, data []byte) error {
 	if err := os.Rename(f.Name(), path); err != nil {
 		return err
 	}
-	directory, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
+	return nil
 }
 
 // verifyReader streams decompressed content and verifies the content hash once
