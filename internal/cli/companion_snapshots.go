@@ -55,12 +55,32 @@ func saveCompanionSnapshot(ctx context.Context, e *engine.Engine) error {
 	if err != nil {
 		return err
 	}
-	clean := e.Redactor.Text(string(payload))
-	encodedRoot, err := json.Marshal(e.Root)
+	var document any
+	if err := json.Unmarshal(payload, &document); err != nil {
+		return err
+	}
+	var cleanValue func(any) any
+	cleanValue = func(value any) any {
+		switch v := value.(type) {
+		case string:
+			return strings.ReplaceAll(e.Redactor.Text(v), e.Root, "[repository]")
+		case []any:
+			for i := range v {
+				v[i] = cleanValue(v[i])
+			}
+		case map[string]any:
+			for key, item := range v {
+				v[key] = cleanValue(item)
+			}
+		}
+		return value
+	}
+	encoded, err := json.Marshal(cleanValue(document))
 	if err != nil {
 		return err
 	}
-	clean = strings.ReplaceAll(clean, string(encodedRoot[1:len(encodedRoot)-1]), "[repository]")
+	clean := string(encoded)
+
 	sum := sha256.Sum256([]byte(clean))
 	snapshotID, err := id.New()
 	if err != nil {

@@ -16,7 +16,7 @@ func TestRecoveredCompanionContextRedactsBeforeStorage(t *testing.T) {
 	}
 	defer db.Close()
 	secret := "ghp_abcdefghijklmnopqrstuvwxyz"
-	payload := `{"schema":1,"brain":{"memories":[{"content":"token ` + secret + `"}]}}`
+	payload := `{"schema":1,"brain":{"memories":[{"content":"TOKEN=\"` + secret + `\"\nnext line"}]},"nested":{"password":"plain-value"}}`
 	plain, _ := json.Marshal(map[string]any{"id": "snapshot1", "source_step": 1, "created_at": 2, "payload": payload, "fingerprint": "original"})
 	if err := insertDownloaded(db.DB, Row{Table: "context_snapshots", ID: "snapshot1"}, plain); err != nil {
 		t.Fatal(err)
@@ -25,7 +25,7 @@ func TestRecoveredCompanionContextRedactsBeforeStorage(t *testing.T) {
 	if err := db.QueryRow("SELECT payload,fingerprint FROM context_snapshots").Scan(&stored, &fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(stored, secret) || !json.Valid([]byte(stored)) || len(fingerprint) != 64 {
+	if strings.Contains(stored, secret) || strings.Contains(stored, "plain-value") || !json.Valid([]byte(stored)) || len(fingerprint) != 64 {
 		t.Fatalf("unsafe recovered context: %s", stored)
 	}
 	// Redaction can merge two derived cache entries. That must not prevent

@@ -17,3 +17,19 @@ Run `make lint test test-structure test-sync build e2e perf` before release. CI 
 `goreleaser release --snapshot --clean` can validate packaging in a real checkout. It cannot run in a directory without Git history. The Homebrew tap and companion sync Worker are separate repositories.
 
 The connected solo release is built by trace-platform from its pinned stack.lock.json and includes CLI, Brain and Graph. The public installer at https://usetrace.si/install.sh installs that bundle. The Homebrew generator and standalone workflow above are retained for legacy release tooling; do not advertise them as the coordinated release.
+
+## Production acceptance for the coordinated release
+
+The candidate `1.1.0-solo.3` adds import security, complete portable-history field
+coverage, bounded capture and upload previews. The existing user working tree
+may contain unrelated deleted plans or generated output; never discard or commit
+those to make a release clean. Commit only the reviewed change set and build from
+isolated clean checkouts of those commits. Pin companion revisions in the platform
+lock after committing them, and retain the previous coordinated release.
+
+Production deployment also requires current source-matched acceptance evidence:
+security scans, real browser coverage, successful Claude/Codex capture, a complete
+staging backup recovery, and delivered alert verification. A source build or a
+failed model turn is not that evidence. See platform `docs/operations.md` for the
+receipt schema and the outstanding operator steps. Release qualification must
+include hook p95, idle daemon RSS, failure/restart cases and macOS/Linux CI.

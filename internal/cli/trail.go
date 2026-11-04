@@ -41,8 +41,11 @@ func trailCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if count == 0 {
 			return fmt.Errorf("no recorded history to trail")
 		}
+		title = e.Redactor.Text(title)
 		trailID, err := id.New()
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		if _, err := e.DB.Exec("INSERT INTO trails(id,title,kind,base_step,head_step,created_at) VALUES(?,?,?,?,?,?)",
 			trailID, title, kind, base, head, time.Now().UnixMilli()); err != nil {
 			return fmt.Errorf("creating trail: %w", err)

@@ -18,10 +18,16 @@ import (
 
 func connectCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var remote, endpoint, device string
-	var noBrowser bool
+	var noBrowser, preview bool
 	cmd := &cobra.Command{Use: "connect", Short: "Connect this repository to your private hosted dashboard", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
+			return err
+		}
+		if preview {
+			return printUploadPreview(c.Context(), root, c.OutOrStdout(), *jsonOutput)
+		}
+		if _, err := fmt.Fprintln(c.ErrOrStderr(), "Approval uploads existing and future history. Source files stay byte-exact and may contain credentials. Personal sync is server-encrypted. Review with trace connect --preview before approving."); err != nil {
 			return err
 		}
 		if remote == "" {
@@ -97,6 +103,7 @@ func connectCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		_, err = fmt.Fprintf(c.OutOrStdout(), "Connected %s to %s/app/. Existing history and new turns sync in the background.\n", remote, strings.TrimRight(endpoint, "/"))
 		return err
 	}}
+	cmd.Flags().BoolVar(&preview, "preview", false, "inspect upload scope and potential source secrets without connecting")
 	cmd.Flags().StringVar(&remote, "remote", "", "project name, such as owner/repo (defaults to GitHub remote)")
 	cmd.Flags().StringVar(&endpoint, "endpoint", defaultSyncEndpoint, "Trace dashboard HTTPS URL")
 	cmd.Flags().StringVar(&device, "device", "", "device name shown when approving the connection")

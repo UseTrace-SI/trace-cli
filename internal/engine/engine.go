@@ -37,6 +37,11 @@ type Engine struct {
 
 func Open(root string) (*Engine, error) {
 	dir := repo.TraceDir(root)
+	if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+		return nil, fmt.Errorf("trace state path is not a real directory")
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
 	db, err := store.Open(filepath.Join(dir, "trace.db"))
 	if err != nil {
 		return nil, err

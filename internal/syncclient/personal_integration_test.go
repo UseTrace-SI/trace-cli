@@ -107,6 +107,18 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
+	for _, statement := range []string{
+		"UPDATE turns SET tokens_in=42,tokens_out=24,cost_usd=0.25 WHERE id='t1'",
+		"INSERT INTO ops(id,turn_id,session_id,path,kind,source,actor,at) VALUES('o1','t1','s1','main.go','edit','tool','codex',2)",
+		"INSERT INTO ops(id,turn_id,session_id,path,kind,source,actor,parent_op_id,at) VALUES('o2','t1','s1','main.go','edit','tool','human','o1',3)",
+		"INSERT INTO comments(id,file,line,body,turn_id,session_id,at) VALUES('comment1','main.go',1,'reviewed','t1','s1',3)",
+		"INSERT INTO trails(id,title,kind,base_step,head_step,created_at) VALUES('trail1','fix','work',1,1,3)",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
 	payload := `{"schema":1,"brain":{"status":"ready","memories":[]},"graph":{"status":"ready","symbols":[],"relations":[]}}`
 	sum := sha256.Sum256([]byte(payload))
 	if _, err := db.Exec("INSERT INTO context_snapshots(id,source_step,created_at,payload,fingerprint) VALUES('c1',1,3,?,?)", payload, hex.EncodeToString(sum[:])); err != nil {
@@ -114,7 +126,7 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 	}
 	client := &Client{HTTP: worker, Config: cfg, Token: credentials.AccessToken, TraceDir: dir, DB: db.DB, Blobs: bs}
 	_, rows, err := client.Sync(ctx)
-	if err != nil || rows != 4 {
+	if err != nil || rows != 8 {
 		t.Fatalf("personal sync: %d, %v", rows, err)
 	}
 	response, listing := request("GET", "/api/repos?scope=personal", alice, nil)
@@ -130,7 +142,7 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 		t.Fatalf("dashboard detail: %+v", detail)
 	}
 	target := filepath.Join(t.TempDir(), ".trace")
-	if _, n, err := client.Pull(ctx, target, ""); err != nil || n != 4 {
+	if _, n, err := client.Pull(ctx, target, ""); err != nil || n != 8 {
 		t.Fatalf("personal recovery: %d, %v", n, err)
 	}
 	recovered, err := store.Open(filepath.Join(target, "trace.db"))
@@ -159,12 +171,25 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 	if err := recovered.QueryRow("SELECT COUNT(*) FROM context_snapshots").Scan(&n); err != nil || n != 1 {
 		t.Fatalf("recovered context: %d %v", n, err)
 	}
+	var tokens int
+	var actor, parent string
+	if err := recovered.QueryRow("SELECT tokens_in FROM turns WHERE id='t1'").Scan(&tokens); err != nil || tokens != 42 {
+		t.Fatalf("usage recovery: %d %v", tokens, err)
+	}
+	if err := recovered.QueryRow("SELECT actor,parent_op_id FROM ops WHERE id='o2'").Scan(&actor, &parent); err != nil || actor != "human" || parent != "o1" {
+		t.Fatalf("ancestry recovery: %s %s %v", actor, parent, err)
+	}
+	for _, table := range []string{"comments", "trails"} {
+		if err := recovered.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&n); err != nil || n != 1 {
+			t.Fatalf("%s recovery: %d %v", table, n, err)
+		}
+	}
 	// Reconnecting the same checkout to a different account must resend history,
 	// rather than carrying over the first account's upload cursor.
 	credentials = connect(bob)
 	client.Config.ConnectionID = credentials.ConnectionID
 	client.Token = credentials.AccessToken
-	if _, n, err := client.Sync(ctx); err != nil || n != 4 {
+	if _, n, err := client.Sync(ctx); err != nil || n != 8 {
 		t.Fatalf("account switch skipped history: %d %v", n, err)
 	}
 }

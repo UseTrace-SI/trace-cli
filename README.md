@@ -2,6 +2,26 @@
 
 Trace keeps local keyframes of coding-agent turns so a project can be inspected, rewound, and forked.
 
+The next coordinated release candidate is `1.1.0-solo.3`. Imports validate and
+stage portable bundles, merge database rows transactionally, and preserve usage,
+attribution, operation ancestry, comments and trails during cloud recovery.
+Capture streams file chunks, honors `.traceignore`, and checks file, batch and
+free-disk budgets. Run `trace connect --preview` or `trace sync --dry-run` before
+approving uploads. See [privacy](docs/privacy.md) and [release setup](docs/release.md).
+
+| Integration | Release status | Evidence still required |
+| --- | --- | --- |
+| Claude Code | Primary launch candidate | Successful live capture, interruption/resume and concurrent-worktree verification on supported macOS/Linux versions |
+| Codex | Primary launch candidate | Successful live capture with trusted hooks, interruption/resume and concurrent-worktree verification on supported macOS/Linux versions |
+| Other adapters and bridges | Preview | The same live lifecycle and delivery checks before certification |
+
+The isolated acceptance runner is `python3 scripts/live_acceptance.py --agent
+claude-code --trace /absolute/path/to/trace --receipt /private/path/claude.json`
+(or `--agent codex`). It uses existing provider authentication without changing
+global hook configuration or bypassing hook trust. A failed provider turn does
+not certify an integration. Repeat successful, interrupted, resumed and parallel
+worktree sessions on macOS and Linux before changing a status above.
+
 The solo workflow connects your CLI to a private hosted dashboard. Install the
 coordinated Trace bundle, initialize your coding agent, sign in at usetrace.si,
 and run `trace connect`. Approve the device in your browser; recorded history

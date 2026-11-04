@@ -50,11 +50,14 @@ type Symbol struct {
 }
 
 type Relation struct {
-	From string `json:"from_symbol"`
-	To   string `json:"to_symbol"`
-	Kind string `json:"kind"`
-	File string `json:"file"`
-	Line int    `json:"line"`
+	FromID     string `json:"from_symbol_id,omitempty"`
+	ToID       string `json:"to_symbol_id,omitempty"`
+	Resolution string `json:"resolution,omitempty"`
+	From       string `json:"from_symbol"`
+	To         string `json:"to_symbol"`
+	Kind       string `json:"kind"`
+	File       string `json:"file"`
+	Line       int    `json:"line"`
 }
 
 type MemoryContext struct {
@@ -64,6 +67,11 @@ type MemoryContext struct {
 }
 
 type CodeContext struct {
+	Analysis struct {
+		Analyzer      string   `json:"analyzer"`
+		Relationships string   `json:"relationships"`
+		Limitations   []string `json:"limitations"`
+	} `json:"analysis"`
 	Protocol  int        `json:"protocol"`
 	Status    string     `json:"status"`
 	Repo      string     `json:"repo"`
@@ -199,7 +207,7 @@ func Lookup(ctx context.Context, root, path, query string, limit int) (MemoryCon
 	if len(brain.Memories) > limit {
 		brain.Status = "invalid_response"
 	}
-	if len(code.Symbols) > limit || len(code.Relations) > 50 || (code.Status == "ready" && code.Repo != root) {
+	if len(code.Analysis.Limitations) > 8 || len(code.Symbols) > limit || len(code.Relations) > 50 || (code.Status == "ready" && code.Repo != root) {
 		code.Status = "invalid_response"
 	}
 	if brain.Status != "ready" {

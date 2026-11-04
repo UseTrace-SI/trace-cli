@@ -24,3 +24,35 @@ Codex assistant output and reasoning summaries, Cursor Agent CLI response and th
 Trace does not read `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.aws/`, or `.ssh/`. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
+
+## Preview and project exclusions
+
+`trace connect --preview --json` and `trace sync --dry-run --json` run locally,
+without provider login or upload. They report history scope and paths with
+potential credentials; they never print matched credential values. Scanning
+samples up to 1 MiB per file version and 20 MiB overall and reports incomplete
+coverage. Detection is best effort, not a guarantee that source contains no secrets.
+
+A project-root `.traceignore` excludes paths from future CLI snapshots and Graph
+indexes, even when tracked by Git. Use a relative filename, a directory prefix
+ending in `/`, or a single-level glob such as `secrets/*.json` or `*.local`.
+Blank lines and `#` comments are supported. Negation and `**` patterns are rejected.
+Built-in secret exclusions always apply. Existing snapshots and hosted history
+are not erased when this file changes; the preview identifies historical paths
+that are now excluded. Review or delete that history before connecting if needed.
+
+Default capture budgets are 64 MiB per file, 512 MiB per scan/batch, and 64 MiB of
+free disk reserved beyond the source size. Positive byte-count environment
+variables `TRACE_MAX_FILE_BYTES`, `TRACE_MAX_CAPTURE_BYTES` and
+`TRACE_MIN_FREE_BYTES` override them. Propagate these variables to the daemon
+process and restart it after changing them. Limit failures preserve the previous
+keyframe and surface as capture errors; hooks remain nonblocking.
+
+Portable handoff bundles contain a consistent SQLite snapshot and referenced
+objects, with mode 0600. Runtime credentials, logs, hook configuration and manual
+companion databases are excluded. Bundles contain exact source bytes and must
+still be treated as private. Import requires an idle/stopped daemon, rejects
+archive links, path traversal, duplicate entries, excessive expansion and
+truncated compression, and validates object hashes before committing history.
+Database imports reject incompatible schemas and conflicting entity IDs rather
+than silently losing rows. Importing the same unchanged history reports duplicates.
