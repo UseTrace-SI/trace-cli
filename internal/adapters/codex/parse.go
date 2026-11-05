@@ -78,6 +78,9 @@ func (p *Parser) Feed(line []byte) ([]event.Event, error) {
 			}
 		}
 		ev.Prompt = strings.Join(parts, "\n")
+		if bootstrapContext(ev.Prompt) {
+			return nil, nil
+		}
 	case r.Type == "response_item" && (x.Type == "function_call" || x.Type == "custom_tool_call"):
 		ev.Kind = event.ToolEdit
 		ev.ToolName = x.Name
@@ -105,10 +108,36 @@ func (p *Parser) Feed(line []byte) ([]event.Event, error) {
 		if ev.Text == "" {
 			return nil, nil
 		}
-	case r.Type == "event_msg" && x.Type == "task_complete":
+	case r.Type == "event_msg" && (x.Type == "task_complete" || x.Type == "turn_aborted"):
 		ev.Kind = event.TurnEnd
 	default:
 		return nil, nil
 	}
 	return []event.Event{ev.Sanitized()}, nil
+}
+
+// Codex persists setup instructions and environment/abort notices as user-role
+// messages too. They must not open a turn before the actual user request. Only
+// complete known context envelopes are skipped; appended user text is retained.
+func bootstrapContext(text string) bool {
+	text = strings.TrimSpace(text)
+	if header, rest, ok := strings.Cut(text, "\n"); ok && (header == "# AGENTS.md instructions" || strings.HasPrefix(header, "# AGENTS.md instructions for ")) {
+		rest = strings.TrimSpace(rest)
+		end := strings.LastIndex(rest, "</INSTRUCTIONS>")
+		if !strings.HasPrefix(rest, "<INSTRUCTIONS>") || end < len("<INSTRUCTIONS>") {
+			return false
+		}
+		text = strings.TrimSpace(rest[end+len("</INSTRUCTIONS>"):])
+		if text == "" {
+			return true
+		}
+	}
+	for _, tag := range []string{"environment_context", "user_instructions", "turn_aborted"} {
+		if strings.HasPrefix(text, "<"+tag+">") && strings.HasSuffix(text, "</"+tag+">") {
+			// A second close tag indicates additional text/blocks, not a single
+			// context envelope. Do not silently discard a real request.
+			return strings.Count(text, "</"+tag+">") == 1
+		}
+	}
+	return false
 }

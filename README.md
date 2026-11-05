@@ -103,6 +103,11 @@ Run `trace setup` once to install automatic recording hooks for Claude Code and 
 
 ## Status
 
+Codex rollout capture distinguishes generated AGENTS/environment messages from
+the actual user prompt and closes interrupted turns before recording a resumed
+request. Regression coverage reopens the engine and persisted rollout cursor
+between the interrupted and resumed turns.
+
 The public installation instructions use the coordinated hosted bundle; legacy standalone installers are retained for release testing. macOS credential writes use private command input rather than terminal password prompts, and connections are accepted only after the stored credential is read back unchanged.
 
 `trace connect [--remote you/project]` supports one-time browser approval against
