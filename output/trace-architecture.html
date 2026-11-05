@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trace architecture</title>
+<style>
+:root { color-scheme: light dark; --background: light-dark(#faf9f6,#14191c); --foreground: light-dark(#16252a,#e4ecec); --muted: light-dark(#f0f0eb,#202b30); --border: light-dark(#bdc9c8,#536568); --muted-foreground: light-dark(#526668,#a4b7b8); --viz-series-1: #c0a32c; --font-size-base: 14px; }
+body { background:var(--background); color:var(--foreground); font:14px/1.6 system-ui,sans-serif; max-width:1200px; margin:auto; padding:24px; }
+.table { width:100%; border-collapse:collapse; text-align:left; }
+.table th,.table td { padding:8px; border-bottom:1px solid var(--border); }
+.text-muted { color:var(--muted-foreground); }
+@media(max-width:600px) { body { padding:12px; } }
+</style></head><body>
+<div id="trace-architecture">
+  <h2>Trace architecture</h2>
+  <div class="text-small text-muted">One Go binary · local history per Git worktree · optional companions and hosted sync</div>
+  <div id="trace-architecture-map"></div>
+  <details>
+    <summary>Package and process boundaries</summary>
+    <table class="table table-sm">
+      <thead><tr><th>Layer</th><th>Implementation</th></tr></thead>
+      <tbody>
+        <tr><td>Entry points</td><td><code>cmd/trace</code> → <code>internal/cli</code>; hooks bypass Cobra initialization.</td></tr>
+        <tr><td>Capture</td><td><code>adapters/*</code>, <code>event</code>, <code>redact</code>, <code>daemon</code>, <code>watch</code>. Hooks, embedded JS/TS/Python bridges, and optional transcript/database readers normalize agent activity.</td></tr>
+        <tr><td>History engine</td><td><code>engine</code> coordinates sessions, turns, edit attribution, manifests, keyframes, safety snapshots, and retention. <code>structure</code> adds optional Tree-sitter classification.</td></tr>
+        <tr><td>Persistence</td><td><code>store</code>: SQLite WAL, migrations and update records. <code>manifest</code>: path → hash + mode. <code>blob</code>: SHA-256, zstd, content-defined chunks.</td></tr>
+        <tr><td>Queries and recovery</td><td><code>historysearch</code>, <code>why</code>, <code>restore</code>, <code>export</code>, <code>gitx</code>; CLI commands open the same local engine rather than querying a daemon API.</td></tr>
+        <tr><td>Agent context</td><td><code>mcp</code>: eight read-only tools over stdio. <code>companions</code>: bounded JSON subprocess calls to separate <code>trace-brain</code> and <code>trace-graph</code> executables.</td></tr>
+        <tr><td>Cloud boundary</td><td><code>syncclient</code>: pairing/OAuth, OS credential store, acknowledged upload cursors, chunk transfer and recovery. Hosted internals belong to the separate <code>trace-platform</code> repository.</td></tr>
+        <tr><td>Extensions</td><td>Executables named <code>trace-*</code> on PATH become subcommands. <code>repo</code>, <code>id</code> and <code>textutil</code> provide shared utilities.</td></tr>
+      </tbody>
+    </table>
+  </details>
+  <details>
+    <summary>Stored data relationships</summary>
+    <div id="trace-data-model"></div>
+  </details>
+</div>
+<style>
+  #trace-architecture { color: var(--foreground); }
+  #trace-architecture h2 { margin: 0 0 8px; }
+  #trace-architecture details { margin-top: 16px; }
+  #trace-architecture summary { padding: 8px 0; }
+  #trace-architecture svg { display: block; width: 100%; overflow: visible; }
+  #trace-architecture .node { fill: var(--muted); stroke: var(--border); stroke-width: 1; }
+  #trace-architecture .core { fill: color-mix(in srgb, var(--viz-series-1) 12%, var(--background)); }
+  #trace-architecture .optional { fill: none; stroke: var(--border); stroke-dasharray: 5 4; }
+  #trace-architecture .edge { fill: none; stroke: var(--muted-foreground); stroke-width: 1.2; }
+  #trace-architecture .edge.optional-edge { stroke-dasharray: 4 4; }
+  #trace-architecture .node-title { font-weight: 500; fill: var(--foreground); }
+  #trace-architecture .node-label { fill: var(--foreground); }
+  #trace-architecture .edge-label { fill: var(--muted-foreground); }
+  #trace-architecture text { font-family: inherit; font-size: var(--font-size-base); }
+  #trace-architecture .small { font-size: max(11px, calc(var(--font-size-base) * .86)); }
+  #trace-architecture .table td { overflow-wrap: anywhere; }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('trace-architecture');
+  const mount = root.querySelector('#trace-architecture-map');
+  const modelMount = root.querySelector('#trace-data-model');
+  const ns = 'http://www.w3.org/2000/svg';
+  function element(name, attrs = {}, text) {
+    const e = document.createElementNS(ns, name);
+    Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k, v));
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function makeSvg(target, w, h, title, description, suffix) {
+    const s = element('svg', {viewBox: `0 0 ${w} ${h}`, role: 'img', 'aria-labelledby': `ta-title-${suffix} ta-desc-${suffix}`});
+    s.append(element('title', {id: `ta-title-${suffix}`}, title));
+    s.append(element('desc', {id: `ta-desc-${suffix}`}, description));
+    const defs = element('defs');
+    const marker = element('marker', {id: `ta-arrow-${suffix}`, viewBox:'0 0 8 8', refX:7, refY:4, markerWidth:6, markerHeight:6, orient:'auto-start-reverse'});
+    marker.append(element('path', {d:'M0,0 L8,4 L0,8 Z', fill:'var(--muted-foreground)'}));
+    defs.append(marker); s.append(defs); target.replaceChildren(s); return s;
+  }
+  function text(s, x, y, value, cls = 'small node-label', anchor = 'middle') {
+    s.append(element('text', {x,y,'text-anchor':anchor, class:cls}, value));
+  }
+  function node(s, b, title, lines, kind = '') {
+    function wrap(value, cls) {
+      const measure=element('text',{class:cls,visibility:'hidden'});
+      s.append(measure);
+      const parts=[]; let line='';
+      value.split(' ').forEach(word=>{
+        const candidate=line?line+' '+word:word;
+        measure.textContent=candidate;
+        if(line && measure.getComputedTextLength()>b.w-20) { parts.push(line); line=word; }
+        else line=candidate;
+      });
+      if(line) parts.push(line);
+      measure.remove(); return parts;
+    }
+    const titles=wrap(title,'node-title');
+    const labels=lines.flatMap(line=>wrap(line,'small node-label'));
+    s.append(element('rect', {x:b.x,y:b.y,width:b.w,height:b.h,rx:8,class:`node ${kind}`}));
+    const total = titles.length*20 + 5 + labels.length * 19;
+    const y = b.y + (b.h-total)/2 + 17;
+    titles.forEach((line,i)=>text(s,b.x+b.w/2,y+i*20,line,'node-title'));
+    labels.forEach((line,i) => text(s,b.x+b.w/2,y+titles.length*20+5+i*19,line));
+  }
+  function edge(s, d, optional = false, suffix='main', both=false) {
+    const attrs={d,class:`edge ${optional?'optional-edge':''}`,'marker-end':`url(#ta-arrow-${suffix})`};
+    if(both) attrs['marker-start']=`url(#ta-arrow-${suffix})`;
+    s.append(element('path',attrs));
+  }
+  function bottom(b) { return [b.x+b.w/2,b.y+b.h]; }
+  function top(b) { return [b.x+b.w/2,b.y]; }
+  function connect(s,a,b,optional=false) {
+    const [x1,y1]=bottom(a),[x2,y2]=top(b),m=(y1+y2)/2;
+    edge(s,`M${x1},${y1} V${m} H${x2} V${y2}`,optional);
+  }
+  function draw() {
+    const w = Math.round(mount.getBoundingClientRect().width);
+    if (!w) return;
+    const narrow=w<600, pad=8, gap=narrow?16:20, cw=(w-pad*2-gap*2)/3;
+    const cols=[pad,pad+cw+gap,pad+2*(cw+gap)];
+    const half=(w-pad*2-gap)/2;
+    const box=(x,y,bw,h=94)=>({x,y,w:bw,h});
+    let b, h;
+    if (!narrow) {
+      b={agents:box(cols[0],24,cw),files:box(cols[1],24,cw),users:box(cols[2],24,cw),
+         adapters:box(cols[0],156,cw,104),watch:box(cols[1],156,cw,104),access:box(cols[2],156,cw,104),
+         delivery:box(cols[0],306,cw,114),engine:box(cols[1],306,cw*2+gap,114),
+         db:box(pad,470,half,116),objects:box(pad+half+gap,470,half,116),
+         recovery:box(cols[0],640,cw,112),companions:box(cols[1],640,cw,112),sync:box(cols[2],640,cw,112),
+         git:box(pad,810,half,100),cloud:box(pad+half+gap,810,half,100)};
+      h=950;
+    } else {
+      b={agents:box(pad,24,half,100),files:box(pad+half+gap,24,half,100),
+         adapters:box(pad,164,half,112),watch:box(pad+half+gap,164,half,112),
+         delivery:box(pad,320,w-pad*2,102),engine:box(pad,466,w-pad*2,112),
+         db:box(pad,626,w-pad*2,116),objects:box(pad,782,w-pad*2,108),
+         users:box(pad,940,half,100),access:box(pad+half+gap,940,half,100),
+         recovery:box(pad,1092,w-pad*2,102),git:box(pad,1238,w-pad*2,100),
+         companions:box(pad,1390,w-pad*2,110),sync:box(pad,1550,w-pad*2,110),cloud:box(pad,1704,w-pad*2,110)};
+      h=1854;
+    }
+    const s=makeSvg(mount,w,h,'Trace runtime architecture',
+      'Agent adapters normalize and redact events. Current hooks persist to a durable spool. A per-worktree daemon processes events through the shared engine. A file watcher and optional transcript readers provide more activity. SQLite stores history metadata and references compressed content-addressed snapshots. CLI, TUI, local dashboard and MCP open local history. Recovery uses safety snapshots and Git worktrees. Optional Brain and Graph executables derive context. An opt-in sync client exchanges history with a hosted platform in a separate repository.', 'main');
+    connect(s,b.agents,b.adapters); connect(s,b.files,b.watch); connect(s,b.adapters,b.delivery);
+    if (!narrow) {
+      connect(s,b.users,b.access); connect(s,b.watch,b.engine); connect(s,b.access,b.engine);
+      edge(s,`M${b.delivery.x+b.delivery.w},363 H${b.engine.x}`);
+      text(s,b.delivery.x+b.delivery.w+gap/2,295,'events','small edge-label');
+      const cx=b.engine.x+b.engine.w/2;
+      edge(s,`M${cx},420 V445 H${b.db.x+b.db.w/2} V470`);
+      edge(s,`M${cx},445 H${b.objects.x+b.objects.w/2} V470`);
+      edge(s,`M${b.db.x+b.db.w/2},586 V611 H${b.sync.x+b.sync.w/2}`);
+      edge(s,`M${b.objects.x+b.objects.w/2},586 V611`);
+      [b.recovery,b.companions,b.sync].forEach(n=>edge(s,`M${n.x+n.w/2},611 V640`,n!==b.recovery));
+      connect(s,b.recovery,b.git); connect(s,b.sync,b.cloud,true);
+      edge(s,`M${b.companions.x+b.companions.w},696 H${b.sync.x}`,true);
+      text(s,b.git.x+b.git.w/2,790,'restore / worktrees','small edge-label');
+      text(s,b.cloud.x+b.cloud.w/2,790,'HTTPS upload / recovery','small edge-label');
+    } else {
+      connect(s,b.watch,b.engine);
+      connect(s,b.delivery,b.engine);
+      connect(s,b.engine,b.db); connect(s,b.db,b.objects);
+      connect(s,b.users,b.access);
+      connect(s,b.recovery,b.git);
+      connect(s,b.companions,b.sync,true); connect(s,b.sync,b.cloud,true);
+      text(s,w/2,925,'Local read and recovery surfaces','small edge-label');
+      text(s,w/2,1074,'History + objects → recovery','small edge-label');
+      text(s,w/2,1374,'Optional derived context + cloud','small edge-label');
+    }
+    node(s,b.agents,'Agent + Git',narrow?['CLI / IDE / SDK events','Post-commit hooks']:['Claude · Codex · Cursor','SDKs + Git post-commit']);
+    node(s,b.files,'Repository files',['Tracked + unignored paths']);
+    node(s,b.users,'Consumers',['Developer + coding agent']);
+    node(s,b.adapters,'Capture adapters',['Hooks / plugins / bridges','Normalize + redact']);
+    node(s,b.watch,'File watcher',['fsnotify: debounced edits','150 ms change batches']);
+    node(s,b.access,'CLI · TUI · MCP',['Local dashboard + exports','Open local engine directly']);
+    node(s,b.delivery,'Per-worktree daemon',narrow?['Durable spool + pending files · socket compatibility','Optional Codex / OpenCode readers']:['Spool + pending files','Socket compatibility','Optional session readers']);
+    node(s,b.engine,'Shared history engine',narrow?['Sessions → turns → attributed edits → keyframes','Incremental manifests · periodic full scans']:['Sessions → turns → edits → keyframes','Manifest updates · safety snapshots','Shared Go library: internal/engine'],'core');
+    node(s,b.db,'SQLite · .trace/trace.db',['Sessions · turns · messages · operations','Keyframes · commit links · FTS5 search','Sync updates + context snapshots'],'core');
+    node(s,b.objects,'Objects · .trace/objects/',['Manifest: file path → hash + mode','SHA-256 · zstd · chunk deduplication'],'core');
+    node(s,b.recovery,'Use recorded history',narrow?['Inspect · diff · why · search · export','Rewind with safety snapshot · fork · resume']:['Inspect · why · search','Rewind with safety keyframe','Fork / resume / export']);
+    node(s,b.companions,'Brain + Graph',narrow?['Separate local executables · JSON subprocess protocol','Brain: memories · Graph: current checkout']:['Separate local executables','Memories + code index','Bounded context snapshots'],'optional');
+    node(s,b.sync,'Optional sync client',narrow?['Browser pairing / OAuth · OS credential store','History + blobs · acknowledged cursors','Pro mode: local payload encryption']:['Pairing / OAuth + OS keys','History + blobs + cursors','Pro: encrypted payloads'],'optional');
+    node(s,b.git,'Git binary',['Read repository state · create fork worktrees','Opt-in hidden checkpoint / shadow branches']);
+    node(s,b.cloud,'Hosted Trace platform',['usetrace.si · hosted dashboard + sync API','Separate trace-platform repository'],'optional');
+    text(s,pad,h-12,narrow?'Dashed = optional integration.':'Dashed = optional integration. Local capture works independently.','small edge-label','start');
+    drawModel(w);
+  }
+  function drawModel(w) {
+    const s=makeSvg(modelMount,w,490,'Stored history relationships',
+      'Sessions contain turns. Turns have messages, edit operations, and keyframes. Keyframes reference a manifest object by hash; manifest entries reference file objects. Operations also reference before and after objects. Commits link to keyframes.', 'model');
+    const bw=w-16, rows=[
+      ['Session',['Agent + agent session ID + worktree']],
+      ['Turn',['Prompt · response · tools · usage','Child rows: messages + edit operations']],
+      ['Keyframe',['Step number · Git HEAD · manifest hash','Optional commit → keyframe link']],
+      ['Manifest → file objects',['Path → SHA-256 content hash + file mode','Edit operations also store before / after hashes']]
+    ];
+    rows.forEach((r,i)=>{
+      const y=12+i*120;
+      if(i) edge(s,`M${w/2},${y-14} V${y}`,false,'model');
+      node(s,{x:8,y,w:bw,h:106},r[0],r[1],i===3?'core':'');
+    });
+  }
+  new ResizeObserver(draw).observe(mount);
+  modelMount.parentElement.addEventListener('toggle',()=>drawModel(Math.round(mount.getBoundingClientRect().width)));
+  draw();
+})();
+</script>
+
+</body></html>

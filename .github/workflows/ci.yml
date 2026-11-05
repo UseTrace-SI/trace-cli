@@ -15,6 +15,8 @@ jobs:
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
       - run: make lint test
+      - name: Coordinated publication validation
+        run: python3 -m unittest discover -s scripts -p '*_test.py'
       - name: Repeat companion integration regressions 100 times
         run: go test -race -p 1 -count=100 -run TestCompanion -timeout=15m ./internal/companions ./internal/manifest ./internal/mcp ./internal/cli
       - run: make test-structure
@@ -45,6 +47,16 @@ jobs:
           done
           test -s dist/checksums.txt
       - run: ./scripts/install_snapshot_test.sh
+      - name: Fresh coordinated Homebrew installation
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+        run: |
+          set -euo pipefail
+          brew tap usetrace-si/trace "$GITHUB_WORKSPACE"
+          brew install usetrace-si/trace/trace
+          brew test usetrace-si/trace/trace
   performance:
     strategy:
       matrix:

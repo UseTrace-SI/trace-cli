@@ -32,7 +32,11 @@ func formula(version string, checksums []byte) ([]byte, error) {
 		if _, err := hex.DecodeString(fields[0]); err != nil {
 			continue
 		}
-		known[strings.TrimPrefix(fields[1], "*")] = fields[0]
+		name := strings.TrimPrefix(fields[1], "*")
+		if _, exists := known[name]; exists {
+			return nil, fmt.Errorf("duplicate checksum for %s", name)
+		}
+		known[name] = fields[0]
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("reading checksums: %w", err)
@@ -56,13 +60,14 @@ func formula(version string, checksums []byte) ([]byte, error) {
 				return nil, fmt.Errorf("missing checksum for %s", archive)
 			}
 			fmt.Fprintf(&b, "    on_%s do\n", arch.homebrew)
-			fmt.Fprintf(&b, "      url %q\n", "https://github.com/UseTrace-SI/trace-cli/releases/download/v"+version+"/"+archive)
+			fmt.Fprintf(&b, "      url %q\n", "https://usetrace.si/downloads/v"+version+"/"+archive)
 			fmt.Fprintf(&b, "      sha256 %q\n", sha)
 			b.WriteString("    end\n")
 		}
 		b.WriteString("  end\n\n")
 	}
-	b.WriteString("  def install\n    bin.install \"trace\"\n    bin.install_symlink bin/\"trace\" => \"trc\"\n  end\n")
+	b.WriteString("  def install\n    bin.install \"trace\", \"trace-brain\", \"trace-graph\"\n    bin.install_symlink bin/\"trace\" => \"trc\"\n  end\n\n")
+	b.WriteString("  test do\n    assert_match version.to_s, shell_output(\"#{bin}/trace version\")\n    assert_match version.to_s, shell_output(\"#{bin}/trace-brain version\")\n    assert_match version.to_s, shell_output(\"#{bin}/trace-graph version\")\n  end\n")
 	b.WriteString("end\n")
 	return []byte(b.String()), nil
 }

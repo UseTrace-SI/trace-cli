@@ -2,19 +2,22 @@
 
 Trace keeps local keyframes of coding-agent turns so a project can be inspected, rewound, and forked.
 
-The next coordinated release candidate is `1.1.0-solo.3`. Imports validate and
+The deployed coordinated release is `1.1.0-solo.4`. Imports validate and
 stage portable bundles, merge database rows transactionally, and preserve usage,
 attribution, operation ancestry, comments and trails during cloud recovery.
 Capture streams file chunks, honors `.traceignore`, and checks file, batch and
 free-disk budgets. Run `trace connect --preview` or `trace sync --dry-run` before
 approving uploads. See [privacy](docs/privacy.md) and [release setup](docs/release.md).
 
-| Integration | Release status | Evidence still required |
+| Integration | Verified coverage | Remaining live coverage |
 | --- | --- | --- |
-| Claude Code | Primary launch candidate | Successful live capture, interruption/resume and concurrent-worktree verification on supported macOS/Linux versions |
-| Codex | Primary launch candidate | Successful live capture with trusted hooks, interruption/resume and concurrent-worktree verification on supported macOS/Linux versions |
+| Claude Code | Real macOS capture, file edit, completed turn and keyframe | Real interruption/resume and Linux provider lifecycle |
+| Codex | Real macOS rollout capture, active-turn interruption, daemon crash/restart, same-thread resume and exact file restoration | Linux provider lifecycle and separate trusted-hook-mode acceptance |
 | Other adapters and bridges | Preview | The same live lifecycle and delivery checks before certification |
 
+Linux/macOS CI also checks concurrent worktrees, race safety, optional parsing,
+sync, repeated companion integration, packaging and performance. These offline
+checks do not substitute for the remaining provider-backed lifecycle coverage.
 The isolated acceptance runner is `python3 scripts/live_acceptance.py --agent
 claude-code --trace /absolute/path/to/trace --receipt /private/path/claude.json`
 (or `--agent codex`). It uses existing provider authentication without changing
@@ -166,6 +169,16 @@ The preview `trace run vibe --prompt ...` launcher records bounded, redacted CLI
 
 Kiro hooks recognize its native file and shell tools, validate session and event identity, use the hook's workspace directory, and preserve edited hook files. Refreshed global hooks yield to an unchanged Trace project hook for the same event; run `trace setup --agent kiro` again to refresh older global installs. Live lifecycle and overlap verification remain outstanding.
 
+## Homebrew bundle
+
+```sh
+brew tap usetrace-si/trace https://github.com/UseTrace-SI/trace-cli
+brew install usetrace-si/trace/trace
+```
+
+This formula installs the same coordinated CLI, Brain and Graph bundle as the
+hosted installer. The former `usetrace-si/tap` standalone tap is unavailable.
+
 ## Documentation
 
 | Guide | Covers |
@@ -176,6 +189,7 @@ Kiro hooks recognize its native file and shell tools, validate session and event
 | [Privacy](docs/privacy.md) | Redaction, exclusions, and local storage |
 | [Optional sync](docs/sync.md) | Encryption, recovery, and server protocol |
 | [Release](docs/release.md) | Maintainer checks and packaging |
+| [Architecture diagram](output/trace-architecture.html) | Standalone responsive runtime and data-model diagrams |
 
 ## Repository layout
 
