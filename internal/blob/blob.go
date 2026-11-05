@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,17 @@ import (
 
 type Hash string
 type Store struct{ dir string }
+
+// OpenReadOnly never creates source state. Missing referenced objects fail on
+// lookup; an empty history need not have an objects directory yet.
+func OpenReadOnly(dir string) (*Store, error) {
+	if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+		return nil, fmt.Errorf("objects path is not a real directory")
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return &Store{dir: dir}, nil
+}
 
 const chunkThreshold = 64 * 1024
 const maxMemoryPutBytes = 4 << 20
@@ -77,7 +89,7 @@ func (s *Store) Chunks(h Hash) ([]Hash, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("rewinding blob metadata: %w", err)
 	}
-	b, err := io.ReadAll(f)
+	b, err := io.ReadAll(io.LimitReader(f, 8*1024*1024+1))
 	if err != nil {
 		return nil, fmt.Errorf("reading chunk manifest: %w", err)
 	}
@@ -85,7 +97,10 @@ func (s *Store) Chunks(h Hash) ([]Hash, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parsing chunk manifest: %w", err)
 	}
-	if len(m.Chunks) == 0 {
+	if len(b) > 8*1024*1024 {
+		return nil, errors.New("blob metadata exceeds 8 MiB")
+	}
+	if len(m.Chunks) == 0 || len(m.Chunks) > 100000 {
 		return nil, fmt.Errorf("empty chunk manifest for %s", h)
 	}
 	children := make([]Hash, 0, len(m.Chunks))
@@ -100,44 +115,108 @@ func (s *Store) Chunks(h Hash) ([]Hash, error) {
 }
 
 func (s *Store) Put(r io.Reader) (Hash, error) {
-	// Read up to threshold+1 to decide small vs large without loading huge files.
-	prefix, err := io.ReadAll(io.LimitReader(r, maxMemoryPutBytes+1))
+	prefix, err := io.ReadAll(io.LimitReader(r, chunkThreshold))
 	if err != nil {
 		return "", fmt.Errorf("reading blob: %w", err)
 	}
-	if len(prefix) <= maxMemoryPutBytes {
+	if len(prefix) < chunkThreshold {
 		return s.PutBytes(prefix)
 	}
-	// Large input: spill remainder to a temp file.
-	raw, err := os.CreateTemp(s.dir, ".raw-*")
-	if err != nil {
-		return "", fmt.Errorf("creating temporary blob: %w", err)
-	}
-	defer os.Remove(raw.Name())
-	if err := raw.Chmod(0600); err != nil {
-		raw.Close()
-		return "", fmt.Errorf("setting blob mode: %w", err)
-	}
+	return s.storeStream(io.MultiReader(bytes.NewReader(prefix), r))
+}
+
+// storeStream keeps at most one 64 KiB chunk and a read buffer in memory.
+// The manifest is published only after EOF, with the whole-file content hash.
+func (s *Store) storeStream(r io.Reader) (Hash, error) {
 	sum := sha256.New()
-	_, _ = sum.Write(prefix)
-	if _, err := raw.Write(prefix); err != nil {
-		raw.Close()
-		return "", fmt.Errorf("writing blob: %w", err)
+	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
+	if err != nil {
+		return "", err
 	}
-	if _, err := io.Copy(io.MultiWriter(raw, sum), r); err != nil {
-		raw.Close()
-		return "", fmt.Errorf("reading blob: %w", err)
+	defer encoder.Close()
+	manifest := chunkManifest{}
+	data := make([]byte, 0, 64*1024)
+	buffer := make([]byte, 64*1024)
+	var rolling uint64
+	var window [64]byte
+	position, count := 0, 0
+	flush := func() error {
+		if len(manifest.Chunks) >= 100000 {
+			return errors.New("blob exceeds 100000 chunks")
+		}
+		digest := sha256.Sum256(data)
+		ch := Hash(hex.EncodeToString(digest[:]))
+		chunkPath, err := s.chunkPath(ch)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(chunkPath); os.IsNotExist(err) {
+			if err := writeObject(chunkPath, encoder.EncodeAll(data, nil)); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		manifest.Chunks = append(manifest.Chunks, string(ch))
+		data = data[:0]
+		rolling = 0
+		position = 0
+		count = 0
+		return nil
 	}
-	if err := raw.Close(); err != nil {
-		return "", fmt.Errorf("closing blob: %w", err)
+	emptyReads := 0
+	for {
+		n, err := r.Read(buffer)
+		if n > 0 {
+			emptyReads = 0
+			_, _ = sum.Write(buffer[:n])
+		} else if err == nil {
+			emptyReads++
+			if emptyReads >= 100 {
+				return "", io.ErrNoProgress
+			}
+		}
+		for _, b := range buffer[:n] {
+			data = append(data, b)
+			rolling = rolling*uint64(0x9e3779b97f4a7c15) + uint64(b) + 1
+			if count >= len(window) {
+				rolling -= uint64(window[position]) + 1
+			} else {
+				count++
+			}
+			window[position] = b
+			position = (position + 1) % len(window)
+			if len(data) >= 8*1024 && (len(data) >= 64*1024 || rolling&uint64(32*1024-1) == 0) {
+				if e := flush(); e != nil {
+					return "", e
+				}
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("reading blob: %w", err)
+		}
+	}
+	if len(data) > 0 {
+		if err := flush(); err != nil {
+			return "", err
+		}
 	}
 	h := Hash(hex.EncodeToString(sum.Sum(nil)))
-	// read all bytes back for chunking
-	data, err := os.ReadFile(raw.Name())
+	p, err := s.objectPath(h)
 	if err != nil {
-		return "", fmt.Errorf("reading blob: %w", err)
+		return "", err
 	}
-	return s.storeBytes(h, data)
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return "", err
+	}
+	if err := writeObject(p, encoded); err != nil {
+		return "", err
+	}
+	return h, nil
 }
 
 func (s *Store) PutBytes(b []byte) (Hash, error) {
@@ -167,96 +246,12 @@ func (s *Store) storeBytes(h Hash, data []byte) (Hash, error) {
 		}
 		compressed := enc.EncodeAll(data, nil)
 		enc.Close()
-		tmp, err := os.CreateTemp(filepath.Dir(p), ".tmp-*")
-		if err != nil {
-			return "", fmt.Errorf("creating temporary blob: %w", err)
-		}
-		defer os.Remove(tmp.Name())
-		if err := tmp.Chmod(0600); err != nil {
-			tmp.Close()
-			return "", fmt.Errorf("setting blob mode: %w", err)
-		}
-		if _, err := tmp.Write(compressed); err != nil {
-			tmp.Close()
-			return "", fmt.Errorf("writing blob: %w", err)
-		}
-		if err := tmp.Close(); err != nil {
-			return "", fmt.Errorf("closing blob: %w", err)
-		}
-		if err := os.Rename(tmp.Name(), p); err != nil {
-			return "", fmt.Errorf("publishing blob: %w", err)
+		if err := writeObject(p, compressed); err != nil {
+			return "", err
 		}
 		return h, nil
 	}
-	// large: chunked storage
-	manifest := chunkManifest{}
-	bounds := chunkBoundaries(data)
-	for i := 0; i+1 < len(bounds); i++ {
-		chunk := data[bounds[i]:bounds[i+1]]
-		csum := sha256.Sum256(chunk)
-		ch := Hash(hex.EncodeToString(csum[:]))
-		cp, err := s.chunkPath(ch)
-		if err != nil {
-			return "", err
-		}
-		if _, err := os.Stat(cp); os.IsNotExist(err) {
-			if err := os.MkdirAll(filepath.Dir(cp), 0700); err != nil {
-				return "", fmt.Errorf("creating chunk directory: %w", err)
-			}
-			enc, err := zstd.NewWriter(nil)
-			if err != nil {
-				return "", fmt.Errorf("creating compressor: %w", err)
-			}
-			compressed := enc.EncodeAll(chunk, nil)
-			enc.Close()
-			tmp, err := os.CreateTemp(filepath.Dir(cp), ".tmp-*")
-			if err != nil {
-				return "", fmt.Errorf("creating temporary chunk: %w", err)
-			}
-			defer os.Remove(tmp.Name())
-			if err := tmp.Chmod(0600); err != nil {
-				tmp.Close()
-				return "", fmt.Errorf("setting chunk mode: %w", err)
-			}
-			if _, err := tmp.Write(compressed); err != nil {
-				tmp.Close()
-				return "", fmt.Errorf("writing chunk: %w", err)
-			}
-			if err := tmp.Close(); err != nil {
-				return "", fmt.Errorf("closing chunk: %w", err)
-			}
-			if err := os.Rename(tmp.Name(), cp); err != nil {
-				return "", fmt.Errorf("publishing chunk: %w", err)
-			}
-		} else if err != nil {
-			return "", fmt.Errorf("checking chunk: %w", err)
-		}
-		manifest.Chunks = append(manifest.Chunks, string(ch))
-	}
-	mb, err := json.Marshal(manifest)
-	if err != nil {
-		return "", fmt.Errorf("encoding manifest: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".tmp-*")
-	if err != nil {
-		return "", fmt.Errorf("creating temporary manifest: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0600); err != nil {
-		tmp.Close()
-		return "", fmt.Errorf("setting manifest mode: %w", err)
-	}
-	if _, err := tmp.Write(mb); err != nil {
-		tmp.Close()
-		return "", fmt.Errorf("writing manifest: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("closing manifest: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), p); err != nil {
-		return "", fmt.Errorf("publishing manifest: %w", err)
-	}
-	return h, nil
+	return s.storeStream(bytes.NewReader(data))
 }
 
 func (s *Store) Get(h Hash) (io.ReadCloser, error) {
@@ -264,7 +259,18 @@ func (s *Store) Get(h Hash) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(p)
+	file, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(file, 8*1024*1024+1))
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if len(data) > 8*1024*1024 {
+		return nil, errors.New("stored object exceeds 8 MiB")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reading blob: %w", err)
 	}
@@ -278,17 +284,20 @@ func (s *Store) Get(h Hash) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading blob: %w", err)
 	}
-	dec, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+	dec, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true), zstd.WithDecoderMaxMemory(64<<20))
 	if err != nil {
 		f.Close()
 		return nil, fmt.Errorf("creating decompressor: %w", err)
 	}
-	return &verifyReader{decoder: dec, file: f, expected: string(h), hash: sha256.New()}, nil
+	return &verifyReader{decoder: dec, file: f, expected: string(h), hash: sha256.New(), limit: 8 << 20}, nil
 }
 
 // getChunked opens at most one chunk at a time. Closing a partial read releases
 // it synchronously; there is no producer goroutine or GC-dependent cleanup.
 func (s *Store) getChunked(h Hash, m chunkManifest) (io.ReadCloser, error) {
+	if len(m.Chunks) > 100000 {
+		return nil, errors.New("blob exceeds 100000 chunks")
+	}
 	for _, ch := range m.Chunks {
 		if _, err := s.chunkPath(Hash(ch)); err != nil {
 			return nil, err
@@ -377,12 +386,12 @@ func (s *Store) GetChunk(h Hash) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	decoder, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+	decoder, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true), zstd.WithDecoderMaxMemory(64<<20))
 	if err != nil {
 		f.Close()
 		return nil, err
 	}
-	return &verifyReader{decoder: decoder, file: f, hash: sha256.New(), expected: string(h)}, nil
+	return &verifyReader{decoder: decoder, file: f, hash: sha256.New(), expected: string(h), limit: 64 << 10}, nil
 }
 
 // PutChunk stores a network chunk only after validating its content hash.
@@ -453,10 +462,17 @@ func writeObject(path string, data []byte) error {
 		f.Close()
 		return err
 	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), path)
+	if err := os.Rename(f.Name(), path); err != nil {
+		return err
+	}
+	return nil
 }
 
 // verifyReader streams decompressed content and verifies the content hash once
@@ -467,10 +483,16 @@ type verifyReader struct {
 	hash     hash.Hash
 	expected string
 	checked  bool
+	limit    int64
+	read     int64
 }
 
 func (v *verifyReader) Read(p []byte) (int, error) {
 	n, err := v.decoder.Read(p)
+	v.read += int64(n)
+	if v.read > v.limit {
+		return 0, errors.New("decoded object exceeds its size limit")
+	}
 	if n > 0 {
 		_, _ = v.hash.Write(p[:n])
 	}

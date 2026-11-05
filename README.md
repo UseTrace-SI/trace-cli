@@ -2,6 +2,29 @@
 
 Trace keeps local keyframes of coding-agent turns so a project can be inspected, rewound, and forked.
 
+The deployed coordinated release is `1.1.0-solo.4`. Imports validate and
+stage portable bundles, merge database rows transactionally, and preserve usage,
+attribution, operation ancestry, comments and trails during cloud recovery.
+Capture streams file chunks, honors `.traceignore`, and checks file, batch and
+free-disk budgets. Run `trace connect --preview` or `trace sync --dry-run` before
+approving uploads. See [privacy](docs/privacy.md) and [release setup](docs/release.md).
+
+| Integration | Verified coverage | Remaining live coverage |
+| --- | --- | --- |
+| Claude Code | Real macOS capture, file edit, completed turn and keyframe | Real interruption/resume and Linux provider lifecycle |
+| Codex | Real macOS rollout capture, active-turn interruption, daemon crash/restart, same-thread resume and exact file restoration | Linux provider lifecycle and separate trusted-hook-mode acceptance |
+| Other adapters and bridges | Preview | The same live lifecycle and delivery checks before certification |
+
+Linux/macOS CI also checks concurrent worktrees, race safety, optional parsing,
+sync, repeated companion integration, packaging and performance. These offline
+checks do not substitute for the remaining provider-backed lifecycle coverage.
+The isolated acceptance runner is `python3 scripts/live_acceptance.py --agent
+claude-code --trace /absolute/path/to/trace --receipt /private/path/claude.json`
+(or `--agent codex`). It uses existing provider authentication without changing
+global hook configuration or bypassing hook trust. A failed provider turn does
+not certify an integration. Repeat successful, interrupted, resumed and parallel
+worktree sessions on macOS and Linux before changing a status above.
+
 The solo workflow connects your CLI to a private hosted dashboard. Install the
 coordinated Trace bundle, initialize your coding agent, sign in at usetrace.si,
 and run `trace connect`. Approve the device in your browser; recorded history
@@ -83,6 +106,11 @@ Run `trace setup` once to install automatic recording hooks for Claude Code and 
 
 ## Status
 
+Codex rollout capture distinguishes generated AGENTS/environment messages from
+the actual user prompt and closes interrupted turns before recording a resumed
+request. Regression coverage reopens the engine and persisted rollout cursor
+between the interrupted and resumed turns.
+
 The public installation instructions use the coordinated hosted bundle; legacy standalone installers are retained for release testing. macOS credential writes use private command input rather than terminal password prompts, and connections are accepted only after the stored credential is read back unchanged.
 
 `trace connect [--remote you/project]` supports one-time browser approval against
@@ -141,6 +169,16 @@ The preview `trace run vibe --prompt ...` launcher records bounded, redacted CLI
 
 Kiro hooks recognize its native file and shell tools, validate session and event identity, use the hook's workspace directory, and preserve edited hook files. Refreshed global hooks yield to an unchanged Trace project hook for the same event; run `trace setup --agent kiro` again to refresh older global installs. Live lifecycle and overlap verification remain outstanding.
 
+## Homebrew bundle
+
+```sh
+brew tap usetrace-si/trace https://github.com/UseTrace-SI/trace-cli
+brew install usetrace-si/trace/trace
+```
+
+This formula installs the same coordinated CLI, Brain and Graph bundle as the
+hosted installer. The former `usetrace-si/tap` standalone tap is unavailable.
+
 ## Documentation
 
 | Guide | Covers |
@@ -151,6 +189,7 @@ Kiro hooks recognize its native file and shell tools, validate session and event
 | [Privacy](docs/privacy.md) | Redaction, exclusions, and local storage |
 | [Optional sync](docs/sync.md) | Encryption, recovery, and server protocol |
 | [Release](docs/release.md) | Maintainer checks and packaging |
+| [Architecture diagram](output/trace-architecture.html) | Standalone responsive runtime and data-model diagrams |
 
 ## Repository layout
 
@@ -165,6 +204,10 @@ The Go module and project Makefile live at the repository root. Run `make lint t
 Trace is licensed under [Apache 2.0](LICENSE).
 
 ## Production connection health
+
+`trace connect` requests the clean `/connect` approval URL and reports the dashboard at `/workspace`. Older servers remain supported; legacy approval links redirect to the clean page after the hosted upgrade.
+
+The real-agent acceptance harness uses normal Codex rollout persistence and waits for Trace's initial adapter baseline before starting a turn. Codex `--ephemeral` sessions omit that file and are outside the default rollout capture mode.
 
 `trace sync status --json` reports pending rows, last upload attempt/success, the last redacted error, connection expiry and credential-store availability. `trace doctor` flags recorded sync failures. Personal credentials are keyed by connection identity, so two accounts using the same project label cannot replace each other's local credentials. A legacy credential migrates only when its connection identity matches the checkout; otherwise reconnect explicitly.
 

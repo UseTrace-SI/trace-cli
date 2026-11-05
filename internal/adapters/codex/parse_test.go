@@ -69,3 +69,46 @@ func TestSessionDirectoryResolvesWorktree(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupContextDoesNotReplaceUserPrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		context    bool
+	}{
+		{"observed bootstrap", "# AGENTS.md instructions\n\n<INSTRUCTIONS>workspace rules</INSTRUCTIONS><environment_context>fixture</environment_context>", true},
+		{"scoped instructions", "# AGENTS.md instructions for /repo\n<INSTRUCTIONS>rules</INSTRUCTIONS>", true},
+		{"environment", "<environment_context>fixture</environment_context>", true},
+		{"abort notice", "<turn_aborted>interrupted</turn_aborted>", true},
+		{"ordinary request", "Change acceptance.txt", false},
+		{"request after instructions", "# AGENTS.md instructions\n<INSTRUCTIONS>rules</INSTRUCTIONS>\nPlease update those rules", false},
+		{"request after environment", "<environment_context>fixture</environment_context>\nPlease fix this", false},
+		{"request mentioning tags", "Explain <environment_context>fixture</environment_context>", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Parser{Root: "/repo", SessionID: "s", Active: true}
+			line, err := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []map[string]string{{"type": "input_text", "text": tc.text}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			events, err := p.Feed(line)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.context {
+				if len(events) != 0 {
+					t.Fatalf("setup opened a turn: %v", events)
+				}
+			} else if len(events) != 1 || events[0].Kind != event.TurnStart || events[0].Prompt != tc.text {
+				t.Fatalf("user request lost: %v", events)
+			}
+		})
+	}
+}
+
+func TestInterruptedRolloutClosesTurn(t *testing.T) {
+	p := Parser{Root: "/repo", SessionID: "s", Active: true}
+	events, err := p.Feed([]byte(`{"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"interrupted-turn","reason":"interrupted"}}`))
+	if err != nil || len(events) != 1 || events[0].Kind != event.TurnEnd || events[0].AgentSessionID != "s" {
+		t.Fatalf("abort = %v, %v", events, err)
+	}
+}

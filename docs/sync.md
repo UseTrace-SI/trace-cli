@@ -97,3 +97,18 @@ Only blobs referenced by retained keyframes or operations are offered to the ser
 Use `trace sync status --json` to inspect local upload attempts, success, backlog, errors and connection expiry without a network request. The background daemon records credential failures as well as upload failures. Run `trace sync` to retry immediately; reconnect when a device is expired or revoked. Linux unattended sync requires an unlocked Secret Service on the daemon's D-Bus session.
 
 Personal credentials are isolated per connection identity. Legacy entries migrate only after their saved identity matches the checkout. Hosted accounts have cumulative storage/record limits and a write-rate budget; quota errors explain how to remove a hosted project. Deleting a synced project in the dashboard disconnects its devices and schedules removal of hosted history and objects. Local history is preserved. Reconnect only after cleanup finishes if you want to upload that project again.
+
+## History schema 1
+
+The `1.1.0-solo.3` coordinated server advertises `history-schema-v1` in health
+capabilities. Deploy it before upgrading clients that upload comments and trails;
+older servers reject those table names. Transport protocol remains 2. Portable
+history now shares one explicit column contract covering usage/cost, actors,
+operation parent IDs, comments and trails. A schema coverage regression fails
+when a persisted history column is omitted from recovery. Runtime transcript
+offsets, device credentials and companion databases remain local.
+
+Trail step references are uploaded with immutable keyframe IDs so recovery can
+resolve their steps after merging histories with overlapping sequence numbers.
+Recovery inserts all rows in a transaction with deferred reference checks, then
+checks manifests and file hashes before publishing the new local history.

@@ -25,7 +25,9 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 	result := GCResult{DryRun: dryRun}
 	cutoff := time.Now().AddDate(0, 0, -keepDays).UnixMilli()
 	rows, err := e.DB.Query(`SELECT k.id,COALESCE(k.turn_id,'') FROM keyframes k
-		WHERE k.seq!=0 AND k.created_at<? AND NOT EXISTS(SELECT 1 FROM commits c WHERE c.keyframe_id=k.id)`, cutoff)
+		WHERE k.seq!=0 AND k.created_at<? AND NOT EXISTS(SELECT 1 FROM commits c WHERE c.keyframe_id=k.id)
+ AND NOT EXISTS(SELECT 1 FROM comments c WHERE c.turn_id=k.turn_id)
+ AND NOT EXISTS(SELECT 1 FROM trails t WHERE k.seq BETWEEN min(t.base_step,t.head_step) AND max(t.base_step,t.head_step))`, cutoff)
 	if err != nil {
 		return result, fmt.Errorf("finding old keyframes: %w", err)
 	}
@@ -75,6 +77,9 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 	defer tx.Rollback()
 	for _, v := range victims {
 		if v.turnID != "" {
+			if _, err := tx.Exec("UPDATE ops SET parent_op_id=NULL WHERE parent_op_id IN (SELECT id FROM ops WHERE turn_id=?)", v.turnID); err != nil {
+				return result, err
+			}
 			if _, err := tx.Exec("DELETE FROM sync_updates WHERE table_name='ops' AND row_id IN (SELECT id FROM ops WHERE turn_id=?)", v.turnID); err != nil {
 				return result, fmt.Errorf("removing obsolete operation updates: %w", err)
 			}

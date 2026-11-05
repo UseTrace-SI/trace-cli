@@ -26,18 +26,14 @@ import (
 var downloadID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var downloadHash = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
-var columns = map[string][]string{
-	"sessions":          {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
-	"turns":             {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at"},
-	"keyframes":         {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
-	"ops":               {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail"},
-	"commits":           {"sha", "keyframe_id", "at"},
-	"messages":          {"id", "session_id", "turn_id", "role", "content", "at"},
-	"sync_updates":      {"id", "table_name", "row_id", "data"},
-	"context_snapshots": {"id", "source_step", "created_at", "payload", "fingerprint"},
+var columns = store.HistoryColumns
+
+type historyWriter interface {
+	Exec(string, ...any) (sql.Result, error)
+	QueryRow(string, ...any) *sql.Row
 }
 
-func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
+func applyDownloadedUpdate(db historyWriter, row Row, plain []byte) error {
 	var update struct {
 		ID        string          `json:"id"`
 		TableName string          `json:"table_name"`
@@ -50,8 +46,12 @@ func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
 	if update.ID != row.ID || !downloadID.MatchString(update.RowID) {
 		return errors.New("downloaded update has an invalid ID")
 	}
+	cleaned, err := (redact.Redactor{}).JSON(update.Data)
+	if err != nil {
+		return fmt.Errorf("redacting downloaded update: %w", err)
+	}
 	var snapshot map[string]any
-	if err := json.Unmarshal(update.Data, &snapshot); err != nil || snapshot["id"] != update.RowID {
+	if err := json.Unmarshal(cleaned, &snapshot); err != nil || snapshot["id"] != update.RowID {
 		return errors.New("downloaded update has invalid row data")
 	}
 	var fields []string
@@ -64,6 +64,13 @@ func applyDownloadedUpdate(db *sql.DB, row Row, plain []byte) error {
 		fields = []string{"turn_id", "session_id"}
 	default:
 		return errors.New("downloaded update names an invalid table")
+	}
+	// Older correction rows omit newer nullable metadata. Preserve existing
+	// values when absent, and restore values explicitly present in newer rows.
+	for _, field := range map[string][]string{"turns": {"tokens_in", "tokens_out", "cost_usd"}, "ops": {"actor", "parent_op_id"}}[update.TableName] {
+		if _, ok := snapshot[field]; ok {
+			fields = append(fields, field)
+		}
 	}
 	values := make([]any, 0, len(fields)+1)
 	assignments := make([]string, 0, len(fields))
@@ -150,7 +157,7 @@ func (c *Client) openDownloaded(encoded, salt, aad, passphrase string, ciphers m
 	return cipher.Open(encoded, aad)
 }
 
-func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
+func insertDownloaded(db historyWriter, row Row, plain []byte) error {
 	cols, ok := columns[row.Table]
 	if !ok || !downloadID.MatchString(row.ID) {
 		return errors.New("download contains an invalid row")
@@ -195,7 +202,7 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 			data["seq"] = next
 		}
 	}
-	for _, field := range []string{"prompt", "reasoning", "tool_calls", "files_read", "detail", "content"} {
+	for _, field := range []string{"prompt", "reasoning", "tool_calls", "files_read", "detail", "content", "body", "title", "actor"} {
 		if value, ok := data[field].(string); ok {
 			data[field] = (redact.Redactor{}).Text(value)
 		}
@@ -205,13 +212,27 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 		if !ok || len(payload) > 1<<20 || !json.Valid([]byte(payload)) {
 			return errors.New("download contains invalid companion context")
 		}
-		payload = (redact.Redactor{}).Text(payload)
-		if !json.Valid([]byte(payload)) {
-			return errors.New("redacted companion context is invalid")
+		cleaned, err := (redact.Redactor{}).JSON([]byte(payload))
+		if err != nil {
+			return fmt.Errorf("redacting companion context: %w", err)
 		}
+		payload = string(cleaned)
 		data["payload"] = payload
 		sum := sha256.Sum256([]byte(payload))
 		data["fingerprint"] = hex.EncodeToString(sum[:])
+	}
+	if row.Table == "trails" {
+		for _, field := range []string{"base", "head"} {
+			key, ok := data[field+"_keyframe_id"].(string)
+			if !ok || key == "" {
+				return errors.New("downloaded trail is missing its keyframe identity")
+			}
+			var step int64
+			if err := db.QueryRow("SELECT seq FROM keyframes WHERE id=?", key).Scan(&step); err != nil {
+				return fmt.Errorf("resolving trail step: %w", err)
+			}
+			data[field+"_step"] = step
+		}
 	}
 	values := make([]any, len(cols))
 	for i, col := range cols {
@@ -229,6 +250,14 @@ func insertDownloaded(db *sql.DB, row Row, plain []byte) error {
 
 func (c *Client) pullRows(ctx context.Context, db *sql.DB, passphrase string, ciphers map[string]*Cipher) (int, error) {
 	total := 0
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("PRAGMA defer_foreign_keys=ON"); err != nil {
+		return 0, err
+	}
 	for _, table := range c.syncTables() {
 		after := ""
 		for {
@@ -259,7 +288,7 @@ func (c *Client) pullRows(ctx context.Context, db *sql.DB, passphrase string, ci
 				if err != nil {
 					return total, fmt.Errorf("decrypting downloaded row: %w", err)
 				}
-				if err := insertDownloaded(db, row, plain); err != nil {
+				if err := insertDownloaded(tx, row, plain); err != nil {
 					return total, err
 				}
 				after = row.ID
@@ -272,6 +301,9 @@ func (c *Client) pullRows(ctx context.Context, db *sql.DB, passphrase string, ci
 				return total, errors.New("sync server returned an invalid next cursor")
 			}
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return total, fmt.Errorf("committing recovered history: %w", err)
 	}
 	return total, nil
 }

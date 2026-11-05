@@ -240,6 +240,47 @@ func TestGCProtectsBaselineAndCurrentTree(t *testing.T) {
 	}
 }
 
+func TestGCRetainsAnnotatedHistoryAndDetachesPrunedParents(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.DB.Exec(`
+INSERT INTO sessions(id,agent,worktree,started_at) VALUES('s','codex','.',1);
+INSERT INTO turns(id,session_id,seq,started_at) VALUES('commented','s',1,1),('named','s',2,1),('pruned','s',3,1);
+INSERT INTO keyframes(id,turn_id,seq,manifest_hash,created_at) SELECT 'kc','commented',1,manifest_hash,1 FROM keyframes WHERE seq=0;
+INSERT INTO keyframes(id,turn_id,seq,manifest_hash,created_at) SELECT 'kn','named',2,manifest_hash,1 FROM keyframes WHERE seq=0;
+INSERT INTO keyframes(id,turn_id,seq,manifest_hash,created_at) SELECT 'kp','pruned',3,manifest_hash,1 FROM keyframes WHERE seq=0;
+INSERT INTO comments(id,file,line,body,turn_id,at) VALUES('c','main.go',1,'keep','commented',1);
+INSERT INTO trails(id,title,kind,base_step,head_step,created_at) VALUES('trail','keep','range',2,2,1);
+INSERT INTO ops(id,turn_id,path,kind,source,at) VALUES('ancestor','pruned','main.go','edit','fixture',1);
+INSERT INTO ops(id,turn_id,path,kind,source,at,parent_op_id) VALUES('child','named','main.go','edit','fixture',1,'ancestor');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := e.GC(30, false)
+	if err != nil || result.RemovedKeyframes != 1 {
+		t.Fatalf("GC: %+v, %v", result, err)
+	}
+	for _, step := range []int64{1, 2} {
+		if _, err := e.ManifestAt(step); err != nil {
+			t.Fatalf("annotated step %d removed: %v", step, err)
+		}
+	}
+	var detached int
+	if err := e.DB.QueryRow("SELECT parent_op_id IS NULL FROM ops WHERE id='child'").Scan(&detached); err != nil || detached != 1 {
+		t.Fatalf("retained child has a dangling parent: %d, %v", detached, err)
+	}
+}
+
 func TestGCKeepsChunksForRetainedKeyframes(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {

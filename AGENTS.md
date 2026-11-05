@@ -5,7 +5,7 @@ inspect history, rewind, fork, resume, and ask why a line exists. This public re
 contains only the CLI; the companion Cloudflare app lives in a separate private `trace-platform`
 repository. Website: usetrace.si. Module: `github.com/UseTrace-SI/trace-cli`.
 
-Work phase by phase from `IMPLEMENTATION_PLAN.md`. Do only the phase you were asked to do.
+Work in reviewable phases within the requested scope. Keep README and release documentation aligned with verified behavior; preserve unrelated user changes unless the user asks to include them.
 
 ## Commands
 

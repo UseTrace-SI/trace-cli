@@ -6,7 +6,11 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/id"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
+	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/spf13/cobra"
+	"strconv"
 )
 
 func commentsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
@@ -21,7 +25,10 @@ func commentsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
-		id := fmt.Sprintf("cmt-%d", nowMillis())
+		commentID, err := id.New()
+		if err != nil {
+			return err
+		}
 		body := ""
 		for i := 2; i < len(args); i++ {
 			if i > 2 {
@@ -29,15 +36,22 @@ func commentsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 			body += args[i]
 		}
-		f := args[0]
+		f, err := repo.RelativePath(root, args[0])
+		if err != nil || manifest.Excluded(f) {
+			return fmt.Errorf("comment file must be a non-excluded repository path")
+		}
 		ln, err := atoi(args[1])
-		if err != nil {
+		if err != nil || ln < 1 {
+			return fmt.Errorf("comment line must be a positive integer")
+		}
+		body = e.Redactor.Text(body)
+		if _, err := e.DB.Exec("INSERT INTO comments(id,file,line,body,at) VALUES(?,?,?,?,?)", commentID, f, ln, body, nowMillis()); err != nil {
 			return err
 		}
-		if _, err := e.DB.Exec("INSERT INTO comments(id,file,line,body,at) VALUES(?,?,?,?,?)", id, f, ln, body, nowMillis()); err != nil {
-			return err
+		if *jsonOutput {
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"id": commentID, "file": f, "line": ln})
 		}
-		_, err = fmt.Fprintf(c.OutOrStdout(), "added comment %s on %s:%d\n", id, f, ln)
+		_, err = fmt.Fprintf(c.OutOrStdout(), "added comment %s on %s:%d\n", commentID, f, ln)
 		return err
 	}}
 	list := &cobra.Command{Use: "list [file]", Args: cobra.MaximumNArgs(1), RunE: func(c *cobra.Command, args []string) error {
@@ -72,8 +86,14 @@ func commentsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		var out []cmt
 		for rows.Next() {
 			var cm cmt
-			rows.Scan(&cm.ID, &cm.File, &cm.Line, &cm.Body, &cm.At)
+			if err := rows.Scan(&cm.ID, &cm.File, &cm.Line, &cm.Body, &cm.At); err != nil {
+				return err
+			}
+			cm.Body = e.Redactor.Text(cm.Body)
 			out = append(out, cm)
+		}
+		if err := rows.Err(); err != nil {
+			return err
 		}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(out)
@@ -91,8 +111,4 @@ func nowMillis() int64 {
 	return time.Now().UnixMilli()
 }
 
-func atoi(s string) (int, error) {
-	var n int
-	_, err := fmt.Sscanf(s, "%d", &n)
-	return n, err
-}
+func atoi(s string) (int, error) { return strconv.Atoi(s) }

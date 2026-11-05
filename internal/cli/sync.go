@@ -459,11 +459,14 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 }
 
 func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
-	var watch bool
+	var watch, dryRun bool
 	cmd := &cobra.Command{Use: "sync", Short: "Upload local history after login", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
 			return err
+		}
+		if dryRun {
+			return printUploadPreview(c.Context(), root, c.OutOrStdout(), *jsonOutput)
 		}
 		b, err := os.ReadFile(loginPath(root))
 		if os.IsNotExist(err) {
@@ -529,6 +532,7 @@ func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 		}
 	}}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview uploads without sending data")
 	cmd.Flags().BoolVar(&watch, "watch", false, "sync every 15 seconds until interrupted")
 	cmd.AddCommand(&cobra.Command{Use: "disable-auto", Short: "Stop background sync for this repository", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)

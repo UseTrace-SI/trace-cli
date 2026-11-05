@@ -20,6 +20,8 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
+	"github.com/UseTrace-SI/trace-cli/internal/store"
 )
 
 const rowBatchSize = 40
@@ -27,7 +29,7 @@ const blobHaveBatchSize = 500
 const targetRowRequestBytes = 128 << 10
 const maxRowRequestBytes = 7 << 20
 
-var tables = []string{"sessions", "turns", "keyframes", "ops", "commits", "messages", "sync_updates"}
+var tables = append([]string(nil), store.HistoryTables[:len(store.HistoryTables)-1]...)
 
 func (c *Client) syncTables() []string {
 	if c.Config.Mode == "personal" {
@@ -374,8 +376,12 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 				default:
 					return nil, nil, errors.New("local sync update has invalid data")
 				}
+				cleaned, err := (redact.Redactor{}).JSON(raw)
+				if err != nil {
+					return nil, nil, fmt.Errorf("redacting local sync update: %w", err)
+				}
 				var snapshot map[string]any
-				if err := json.Unmarshal(raw, &snapshot); err != nil {
+				if err := json.Unmarshal(cleaned, &snapshot); err != nil {
 					return nil, nil, fmt.Errorf("decoding local sync update: %w", err)
 				}
 				data[col] = snapshot
@@ -383,6 +389,11 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 				data[col] = string(b)
 			} else {
 				data[col] = values[i]
+			}
+		}
+		for _, field := range []string{"prompt", "reasoning", "tool_calls", "files_read", "detail", "content", "body", "title", "actor"} {
+			if text, ok := data[field].(string); ok {
+				data[field] = (redact.Redactor{}).Text(text)
 			}
 		}
 		id, _ := data["id"].(string)
@@ -403,6 +414,29 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 	}
 	if err := result.Err(); err != nil {
 		return nil, nil, err
+	}
+	if err := result.Close(); err != nil {
+		return nil, nil, err
+	}
+	if table == "trails" {
+		for i := range out {
+			var data map[string]any
+			if err := json.Unmarshal(out[i].Data, &data); err != nil {
+				return nil, nil, err
+			}
+			for _, field := range []string{"base", "head"} {
+				var key string
+				if err := db.QueryRow("SELECT id FROM keyframes WHERE seq=?", data[field+"_step"]).Scan(&key); err != nil {
+					return nil, nil, fmt.Errorf("resolving trail identity: %w", err)
+				}
+				data[field+"_keyframe_id"] = key
+			}
+			encoded, err := json.Marshal(data)
+			if err != nil {
+				return nil, nil, err
+			}
+			out[i].Data = encoded
+		}
 	}
 	return out, cursors, nil
 }

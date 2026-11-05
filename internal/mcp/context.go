@@ -82,6 +82,12 @@ func GetContext(ctx context.Context, e *engine.Engine, in ContextInput) (Context
 	for i := range out.Graph.Relations {
 		r := &out.Graph.Relations[i]
 		r.From, r.To, r.Kind, r.File = redact(r.From), redact(r.To), redact(r.Kind), redact(r.File)
+		r.FromID, r.ToID = redact(r.FromID), redact(r.ToID)
 	}
+	for i := range out.Graph.Analysis.Limitations {
+		out.Graph.Analysis.Limitations[i] = redact(out.Graph.Analysis.Limitations[i])
+	}
+	out.Graph.Analysis.Analyzer = redact(out.Graph.Analysis.Analyzer)
+	out.Graph.Analysis.Relationships = redact(out.Graph.Analysis.Relationships)
 	return out, nil
 }

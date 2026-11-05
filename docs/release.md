@@ -1,19 +1,83 @@
 # Release setup
 
-This guide is for maintainers. Users install the coordinated release from [the hosted installer](../README.md#install).
+Users install the coordinated CLI, Brain and Graph bundle from
+[the hosted installer](../README.md#install). The current production version is
+`1.1.0-solo.4`.
 
-## Packaging
+## Homebrew
 
-The legacy standalone release workflow builds pure-Go archives for macOS and Linux on amd64 and arm64, writes checksums, signs the checksum file with keyless cosign, and generates a Homebrew formula. When a tap token is configured, it publishes the formula to `UseTrace-SI/homebrew-tap`. The formula installs `trace` and the `trc` alias.
+The public CLI repository also contains its coordinated formula. Use an explicit
+repository URL, as supported by [Homebrew custom taps](https://docs.brew.sh/Taps):
 
-## Credentials
+```sh
+brew tap usetrace-si/trace https://github.com/UseTrace-SI/trace-cli
+brew install usetrace-si/trace/trace
+brew test usetrace-si/trace/trace
+```
 
-The release workflow's `GITHUB_TOKEN` publishes archives in the source repository, and its `id-token: write` permission supports keyless signing. Homebrew publishing needs a repository secret named `TAP_GITHUB_TOKEN` with permission to write contents in `UseTrace-SI/homebrew-tap`. Without that secret, the formula publish step skips and the signed binary archives remain available; publish the generated formula to the tap by hand.
+The formula downloads the exact hosted archives and installs all three executables
+plus `trc`. The old `usetrace-si/tap` repository is unavailable; its legacy formula
+installed only the standalone CLI. Existing users can keep using the hosted
+installer under `~/.local/bin`; do not overwrite Homebrew-managed binaries with it.
+Use the fully qualified formula name for a fresh Homebrew installation.
 
-## Verify and tag
+## Publish qualified artifacts
 
-Run `make lint test test-structure test-sync build e2e perf` before release. CI runs the lint, race, Tree-sitter, sync client, end-to-end, and performance checks on pull requests. On macOS and Ubuntu it also builds all four GoReleaser snapshot archives, installs the current platform archive through `scripts/install.sh`, verifies its checksum, and runs the end-to-end harness with the installed binary. With the private app checked out beside the CLI, `make test-sync-integration` checks the client and Worker together. A maintainer can then create a `vX.Y.Z` tag in the Git repository; the tag triggers `.github/workflows/release.yml`. Trace itself never writes commits, branches, or tags.
+The private platform builds all four target bundles from committed source pins.
+Qualify and deploy that coordinated version first. Review the resulting public
+`stack.json` and checksum inventory, then generate the matching formula:
 
-`goreleaser release --snapshot --clean` can validate packaging in a real checkout. It cannot run in a directory without Git history. The Homebrew tap and companion sync Worker are separate repositories.
+```sh
+go run ./scripts/homebrew --version 1.1.0-solo.4 --checksums /private/path/checksums.txt --out Formula/trace.rb
+```
 
-The connected solo release is built by trace-platform from its pinned stack.lock.json and includes CLI, Brain and Graph. The public installer at https://usetrace.si/install.sh installs that bundle. The Homebrew generator and standalone workflow above are retained for legacy release tooling; do not advertise them as the coordinated release.
+Commit the formula and release tooling before creating a `vX.Y.Z` publication tag.
+The tag workflow downloads the hosted archives with byte limits, verifies their
+hashes, required binary members, compiler/source metadata and embedded manifests,
+and refuses missing targets or ambiguous checksums. It also verifies that the
+published CLI source is an ancestor of the publication tag and that `cmd`,
+`internal`, `go.mod` and `go.sum` have not changed. Packaging/docs-only commits
+can therefore publish the already-tested binaries without rebuilding them.
+
+The workflow signs the checksum file with keyless cosign and publishes those
+same archives, source manifest, checksums, signing bundle and formula to GitHub.
+Its standard repository `GITHUB_TOKEN` and OIDC permission are sufficient. No
+cross-repository tap token is required. The checked-in formula must match the
+published version exactly. Existing release assets are never replaced by the
+workflow; retries against an already-created release require review.
+
+Tag the exact four source commits from `stack.json` separately as
+`stack/<version>` in their respective repositories. Those provenance tags do not
+trigger standalone companion publication. A `v<version>` CLI publication tag
+identifies the release tooling commit; the archived `stack.json` remains the
+source of truth for the exact binary revisions.
+
+## Validation
+
+Run `make lint test test-structure test-sync build e2e perf` before runtime changes
+are released. Run `python3 scripts/prepare_coordinated_release_test.py` for
+publication validation. Linux/macOS CI checks race safety, optional parsing,
+repeated companion integration, sync, end-to-end behavior, release snapshots and
+performance. The macOS snapshot job also performs a fresh coordinated Homebrew
+installation and tests all three executables. GoReleaser snapshots remain
+standalone CLI fixtures; their installer test explicitly opts out of companions.
+The normal installer requires the complete coordinated bundle.
+
+The platform deployment gate requires current security scans, browser checks,
+real Claude/Codex capture, application-level staging recovery and delivered alert
+evidence. Preserve raw acceptance receipts and record any reviewed equivalence
+of unchanged execution inputs rather than rewriting their source metadata.
+Successful Codex interruption, daemon crash/restart, same-thread resume and exact
+file restoration were verified on macOS for solo.4. Other provider/platform
+lifecycle coverage remains explicit in the README.
+
+Review user changes before committing them. Build production archives from clean
+committed checkouts, pin companion revisions after committing them, and retain
+previous release archives. Private backup files, recovery vaults, credentials and
+owner receipts belong outside these repositories.
+
+Local object writes flush contents before atomic publication. Checkpoints do not
+force every parent-directory metadata update to stable storage and do not promise
+recovery from every sudden power loss. Maintain verified backups. The owner has
+verified local encrypted backups and recovery-key escrow; an off-device copy is
+still needed for loss of the Mac.

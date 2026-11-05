@@ -8,6 +8,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,28 +17,21 @@ jobs:
         with:
           go-version: '1.27.3'
       - uses: sigstore/cosign-installer@v3
-      - uses: goreleaser/goreleaser-action@v7
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate Homebrew formula
-        run: go run ./scripts/homebrew --version "${GITHUB_REF_NAME#v}" --checksums dist/checksums.txt --out dist/trace.rb
-      - name: Publish Homebrew formula
-        env:
-          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      - name: Stage the qualified coordinated release
         run: |
           set -euo pipefail
-          if [ -z "$GH_TOKEN" ]; then
-            echo 'Homebrew tap token is not configured; release archives are still available.'
-            exit 0
-          fi
-          content=$(base64 < dist/trace.rb | tr -d '\n')
-          existing_sha=$(gh api repos/UseTrace-SI/homebrew-tap/contents/Formula/trace.rb --jq .sha 2>/dev/null || true)
-          args=(-f "message=Release trace $GITHUB_REF_NAME" -f "content=$content")
-          if [ -n "$existing_sha" ]; then
-            args+=(-f "sha=$existing_sha")
-          fi
-          gh api --method PUT repos/UseTrace-SI/homebrew-tap/contents/Formula/trace.rb "${args[@]}" >/dev/null
+          python3 scripts/prepare_coordinated_release.py --version "$GITHUB_REF_NAME" --out dist/coordinated
+          source=$(cat dist/coordinated/source-cli.txt)
+          git merge-base --is-ancestor "$source" HEAD
+          git diff --exit-code "$source" HEAD -- cmd internal go.mod go.sum
+          go run ./scripts/homebrew --version "${GITHUB_REF_NAME#v}" --checksums dist/coordinated/checksums.txt --out dist/coordinated/trace.rb
+          cmp Formula/trace.rb dist/coordinated/trace.rb
+      - name: Sign checksums
+        run: cosign sign-blob --bundle=dist/coordinated/checksums.sigstore.json dist/coordinated/checksums.txt --yes
+      - name: Publish the exact hosted archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf 'Coordinated CLI, Brain and Graph release. Archives are byte-identical to the qualified hosted release. Exact source revisions are recorded in stack.json.\n' > dist/coordinated/notes.txt
+          gh release create "$GITHUB_REF_NAME" --verify-tag --latest --title "Trace $GITHUB_REF_NAME" --notes-file dist/coordinated/notes.txt dist/coordinated/*.tar.gz dist/coordinated/checksums.txt dist/coordinated/checksums.sigstore.json dist/coordinated/stack.json dist/coordinated/trace.rb

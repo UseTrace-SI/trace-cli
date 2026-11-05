@@ -66,13 +66,13 @@ func StartPairing(ctx context.Context, client *http.Client, cfg Config, device s
 	verifier := base64.RawURLEncoding.EncodeToString(random)
 	sum := sha256.Sum256([]byte(verifier))
 	var out Pairing
-	_, err := pairingRequest(ctx, client, cfg.Endpoint, "/v1/cli/pair", map[string]string{"challenge": hex.EncodeToString(sum[:]), "repo": cfg.Remote, "device": device}, &out)
+	_, err := pairingRequest(ctx, client, cfg.Endpoint, "/v1/cli/pair", map[string]string{"challenge": hex.EncodeToString(sum[:]), "repo": cfg.Remote, "device": device, "verification_path": "/connect"}, &out)
 	if err != nil {
 		return Pairing{}, err
 	}
 	verification, err := url.Parse(out.VerificationURI)
 	expected, _ := url.Parse(cfg.Endpoint)
-	if err != nil || verification.Scheme != "https" || verification.Host != expected.Host || verification.User != nil || verification.Fragment != "" || verification.Path != "/app/connect.html" || verification.Query().Get("request") != out.ID || len(out.ID) != 43 || out.ExpiresAt <= time.Now().UnixMilli() || out.ExpiresAt > time.Now().Add(15*time.Minute).UnixMilli() || out.Interval < 1 || out.Interval > 30 {
+	if err != nil || verification.Scheme != "https" || verification.Host != expected.Host || verification.User != nil || verification.Fragment != "" || (verification.Path != "/connect" && verification.Path != "/app/connect.html") || verification.Query().Get("request") != out.ID || len(out.ID) != 43 || out.ExpiresAt <= time.Now().UnixMilli() || out.ExpiresAt > time.Now().Add(15*time.Minute).UnixMilli() || out.Interval < 1 || out.Interval > 30 {
 		return Pairing{}, errors.New("trace server returned an invalid connection request")
 	}
 	out.verifier = verifier

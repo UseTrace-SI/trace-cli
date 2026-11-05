@@ -79,9 +79,14 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	policy, err := loadPolicy(root)
+	if err != nil {
+		return nil, err
+	}
+	var total int64
 	m := Manifest{}
 	for _, rel := range paths {
-		if excluded(rel) || (ig != nil && ig.Ignored(rel, false)) {
+		if excluded(rel) || policy.excluded(rel) || (ig != nil && ig.Ignored(rel, false)) {
 			continue
 		}
 		p := filepath.Join(root, filepath.FromSlash(rel))
@@ -95,11 +100,16 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 		if !info.Mode().IsRegular() {
 			continue
 		}
+		if err := policy.check(root, rel, info.Size(), total); err != nil {
+			return nil, err
+		}
 		f, err := os.Open(p)
 		if err != nil {
 			return nil, fmt.Errorf("opening %s: %w", rel, err)
 		}
-		h, putErr := bs.Put(f)
+		reader := &boundedFile{Reader: f, remaining: min(policy.fileBytes, policy.totalBytes-total)}
+		h, putErr := bs.Put(reader)
+		total += reader.read
 		closeErr := f.Close()
 		if putErr != nil {
 			return nil, fmt.Errorf("storing %s: %w", rel, putErr)
@@ -113,11 +123,16 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 }
 
 func Update(prev Manifest, root string, dirty []string, ig Ignorer, bs *blob.Store) (Manifest, error) {
+	policy, err := loadPolicy(root)
+	if err != nil {
+		return nil, err
+	}
+	var total int64
 	m := clone(prev)
 	// Old checkpoints may contain state written before an exclusion existed.
 	// Drop it from new snapshots without modifying historical checkpoints.
 	for rel := range m {
-		if excluded(rel) {
+		if excluded(rel) || policy.excluded(rel) {
 			delete(m, rel)
 		}
 	}
@@ -139,7 +154,7 @@ func Update(prev Manifest, root string, dirty []string, ig Ignorer, bs *blob.Sto
 		if rel == "." || rel == ".." || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
 			return nil, fmt.Errorf("invalid dirty path %q", path)
 		}
-		if excluded(rel) || (ig != nil && ig.Ignored(rel, false)) || seen[rel] {
+		if excluded(rel) || policy.excluded(rel) || (ig != nil && ig.Ignored(rel, false)) || seen[rel] {
 			continue
 		}
 		seen[rel] = true
@@ -170,11 +185,16 @@ func Update(prev Manifest, root string, dirty []string, ig Ignorer, bs *blob.Sto
 			delete(m, rel)
 			continue
 		}
+		if err := policy.check(root, rel, info.Size(), total); err != nil {
+			return nil, err
+		}
 		f, err := os.Open(p)
 		if err != nil {
 			return nil, fmt.Errorf("opening %s: %w", rel, err)
 		}
-		h, putErr := bs.Put(f)
+		reader := &boundedFile{Reader: f, remaining: min(policy.fileBytes, policy.totalBytes-total)}
+		h, putErr := bs.Put(reader)
+		total += reader.read
 		closeErr := f.Close()
 		if putErr != nil {
 			return nil, fmt.Errorf("storing %s: %w", rel, putErr)
@@ -209,9 +229,12 @@ func Load(h blob.Hash, bs *blob.Store) (Manifest, error) {
 		return nil, fmt.Errorf("loading manifest: %w", err)
 	}
 	defer r.Close()
-	b, err := io.ReadAll(r)
+	b, err := io.ReadAll(io.LimitReader(r, 32*1024*1024+1))
 	if err != nil {
 		return nil, fmt.Errorf("reading manifest: %w", err)
+	}
+	if len(b) > 32*1024*1024 {
+		return nil, fmt.Errorf("manifest exceeds 32 MiB")
 	}
 	var m Manifest
 	if err := json.Unmarshal(b, &m); err != nil {

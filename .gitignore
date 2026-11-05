@@ -10,3 +10,5 @@ bin/
 !.env.example
 *.test
 *.prof
+__pycache__/
+*.py[cod]

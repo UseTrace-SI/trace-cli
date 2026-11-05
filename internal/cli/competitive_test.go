@@ -636,3 +636,33 @@ func TestTUIDiffShowsSelectedStep(t *testing.T) {
 		t.Fatalf("diff message = %#v", message)
 	}
 }
+
+func TestCommentAndTrailTextRedactedBeforeStorage(t *testing.T) {
+	root := competitiveRepo(t)
+	secret := "sk-abcdefghijklmnopqrstuvwxyz1234567890"
+	jsonOutput := true
+	cmd := commentsCommand(&root, &jsonOutput)
+	cmd.SetArgs([]string{"add", "file.go", "1", secret})
+	cmd.SetOut(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	var body string
+	if err := e.DB.QueryRow("SELECT body FROM comments").Scan(&body); err != nil || strings.Contains(body, secret) || !strings.Contains(body, "redacted") {
+		t.Fatalf("unsafe comment: %s %v", body, err)
+	}
+	for _, line := range []string{"0", "-1", "1oops"} {
+		cmd := commentsCommand(&root, &jsonOutput)
+		cmd.SetArgs([]string{"add", "file.go", line, "text"})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("invalid line accepted: %s", line)
+		}
+	}
+}
