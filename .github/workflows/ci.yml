@@ -1,5 +1,8 @@
 name: CI
 on: [push, pull_request]
+concurrency:
+  group: cli-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   test:
     strategy:
