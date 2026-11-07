@@ -48,9 +48,28 @@ mock_agents=$(mktemp -d)
 hermes_profile=$(mktemp -d)
 work_fork=$(mktemp -d)
 fork_target="${work_fork}-fork-1-e2e"
+# On failure, print each daemon's state and recent log before it is stopped, so
+# an intermittent CI failure can be attributed to a stalled or exited daemon
+# rather than to the event pipeline.
+diagnose() {
+  echo "== $1/.trace" >&2
+  case "$2" in
+    ''|*[!0-9]*) echo 'daemon pid: none' >&2 ;;
+    *) if kill -0 "$2" 2>/dev/null; then echo "daemon pid $2: running" >&2; else echo "daemon pid $2: exited" >&2; fi ;;
+  esac
+  for d in "$1/.trace" "$1/.trace/spool-pending"; do
+    [ -d "$d" ] && { echo "-- $d" >&2; ls -la "$d" >&2 2>/dev/null; } || true
+  done
+  tail -n 30 "$1/.trace/daemon.log" >&2 || true
+}
 cleanup() {
+  exit_status=$?
+  [ "$exit_status" -eq 0 ] || echo "e2e failed with exit $exit_status; daemon diagnostics follow" >&2
   for dir in "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$work_fork" "$fork_target"; do
     pid=$(cat "$dir/.trace/daemon.pid" 2>/dev/null || true)
+    if [ "$exit_status" -ne 0 ] && [ -f "$dir/.trace/daemon.log" ]; then
+      diagnose "$dir" "$pid"
+    fi
     if ! "$binary" --repo "$dir" daemon stop >/dev/null 2>&1; then
       continue
     fi
