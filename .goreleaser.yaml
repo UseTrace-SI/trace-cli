@@ -18,6 +18,10 @@ archives:
   - id: trace
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+snapshot:
+  # Provenance tags are stack/<version>, which is not semver. Strip the prefix so
+  # snapshot archives keep flat names and the installer accepts the version.
+  version_template: '{{ trimprefix .Version "stack/" }}-SNAPSHOT-{{ .ShortCommit }}'
 checksum:
   name_template: checksums.txt
 signs:
