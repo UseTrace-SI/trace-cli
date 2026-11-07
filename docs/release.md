@@ -56,6 +56,18 @@ workflow identity rather than the tag's.
 
 The workflow signs the checksum file with keyless cosign and publishes those
 same archives, source manifest, checksums, signing bundle and formula to GitHub.
+Verify a published bundle with
+
+```sh
+cosign verify-blob --bundle checksums.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/UseTrace-SI/trace-cli/\.github/workflows/release\.yml@refs/(tags/v[0-9][^/]*|heads/main)$' \
+  checksums.txt
+```
+
+Tag runs carry the `refs/tags/v<version>` identity and manual republications
+carry `refs/heads/main`; accept only those two. The `v1.0.0` release predates the
+coordinated workflow and names its bundle `checksums.txt.sigstore.json`.
 Its standard repository `GITHUB_TOKEN` and OIDC permission are sufficient. No
 cross-repository tap token is required. The checked-in formula must match the
 published version exactly. Existing release assets are never replaced by the
