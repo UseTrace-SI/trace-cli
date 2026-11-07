@@ -11,6 +11,10 @@ import tempfile
 import urllib.request
 
 ORIGIN = 'https://usetrace.si'
+# The hosted origin's bot protection answered urllib's default "Python-urllib/3.x"
+# agent with HTTP 403 (curl, an empty agent and a descriptive agent were accepted),
+# so identify this tooling.
+USER_AGENT = 'trace-cli-release/1 (+https://github.com/UseTrace-SI/trace-cli)'
 LIMIT = 20 * 1024 * 1024
 REPOS = {'trace-cli', 'trace-brain', 'trace-graph', 'trace-platform'}
 
@@ -27,6 +31,7 @@ def prepare(version, output, origin=ORIGIN):
     if output.exists():
         raise ValueError('output already exists; refusing to overwrite artifacts')
     opener = urllib.request.build_opener(NoRedirect)
+    opener.addheaders = [('User-Agent', USER_AGENT)]
 
     def fetch(path, limit):
         with opener.open(origin + path, timeout=90) as response:
