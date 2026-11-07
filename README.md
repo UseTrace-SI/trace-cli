@@ -136,7 +136,7 @@ curl -fsSL https://usetrace.si/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-This installs `trace`, `trace-brain`, `trace-graph` and the `trc` alias together, with checksum verification. The default directory is `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. Homebrew is not currently a supported installation route. Older standalone GitHub releases contain only the CLI.
+This installs `trace`, `trace-brain`, `trace-graph` and the `trc` alias together, with checksum verification. The default directory is `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. Homebrew installs the same coordinated bundle; see [Homebrew bundle](#homebrew-bundle). Older standalone GitHub releases contain only the CLI.
 
 To build the CLI from source, use Go 1.26 or newer (the module selects the reviewed Go 1.27.3 compiler):
 
