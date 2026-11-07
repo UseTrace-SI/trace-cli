@@ -2,6 +2,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v<version> publication tag to publish with this tooling revision
+        required: true
+        type: string
 permissions:
   contents: write
   id-token: write
@@ -9,22 +15,37 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.3'
       - uses: sigstore/cosign-installer@v3
       - name: Stage the qualified coordinated release
         run: |
           set -euo pipefail
-          python3 scripts/prepare_coordinated_release.py --version "$GITHUB_REF_NAME" --out dist/coordinated
+          case "$RELEASE_TAG" in
+            v[0-9]*) ;;
+            *) echo "refusing to publish non-publication tag '$RELEASE_TAG'" >&2; exit 1 ;;
+          esac
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "manual publication runs only from main, not '$GITHUB_REF'" >&2; exit 1
+          fi
+          # Manual runs republish an existing tag with main's tooling. The tag is never
+          # moved, and the runtime checks compare the hosted source with the tag's own tree.
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          tag_commit=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")
+          git merge-base --is-ancestor "$tag_commit" HEAD
+          python3 scripts/prepare_coordinated_release.py --version "$RELEASE_TAG" --out dist/coordinated
           source=$(cat dist/coordinated/source-cli.txt)
-          git merge-base --is-ancestor "$source" HEAD
-          git diff --exit-code "$source" HEAD -- cmd internal go.mod go.sum
-          go run ./scripts/homebrew --version "${GITHUB_REF_NAME#v}" --checksums dist/coordinated/checksums.txt --out dist/coordinated/trace.rb
+          git merge-base --is-ancestor "$source" "$tag_commit"
+          git diff --exit-code "$source" "$tag_commit" -- cmd internal go.mod go.sum
+          go run ./scripts/homebrew --version "${RELEASE_TAG#v}" --checksums dist/coordinated/checksums.txt --out dist/coordinated/trace.rb
           cmp Formula/trace.rb dist/coordinated/trace.rb
       - name: Sign checksums
         run: cosign sign-blob --bundle=dist/coordinated/checksums.sigstore.json dist/coordinated/checksums.txt --yes
@@ -34,4 +55,4 @@ jobs:
         run: |
           set -euo pipefail
           printf 'Coordinated CLI, Brain and Graph release. Archives are byte-identical to the qualified hosted release. Exact source revisions are recorded in stack.json.\n' > dist/coordinated/notes.txt
-          gh release create "$GITHUB_REF_NAME" --verify-tag --latest --title "Trace $GITHUB_REF_NAME" --notes-file dist/coordinated/notes.txt dist/coordinated/*.tar.gz dist/coordinated/checksums.txt dist/coordinated/checksums.sigstore.json dist/coordinated/stack.json dist/coordinated/trace.rb
+          gh release create "$RELEASE_TAG" --verify-tag --latest --title "Trace $RELEASE_TAG" --notes-file dist/coordinated/notes.txt dist/coordinated/*.tar.gz dist/coordinated/checksums.txt dist/coordinated/checksums.sigstore.json dist/coordinated/stack.json dist/coordinated/trace.rb
