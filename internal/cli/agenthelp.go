@@ -12,6 +12,14 @@ func agentHelpCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		text := `Trace agent help
 
 Commands:
+  trace agents --json       discover supported integrations and detection state
+  trace login               sign in once with a code entered on the website
+  trace login --status      inspect saved login metadata without sign-in
+  trace enable --all        configure supported installed CLI/desktop agents
+  trace enable --agent NAME enable one integration across projects
+  trace disable             pause recording and automatic uploads
+  trace disable --agent NAME pause recording for one integration
+  trace sync                optional immediate upload; normal sync is automatic
   trace status              daemon, sessions, latest step, size
   trace log                 step timeline
   trace show <step>         prompt, reasoning, tools, diff

@@ -13,21 +13,16 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/id"
-	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
 )
 
 // Only an explicitly approved personal connection publishes derived context.
 // Manual notes and companion database files remain local.
 func saveCompanionSnapshot(ctx context.Context, e *engine.Engine) error {
-	data, err := os.ReadFile(loginPath(e.Root))
+	cfg, err := readSyncConfig(e.Root)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
-		return err
-	}
-	var cfg syncclient.Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
 		return err
 	}
 	if cfg.Mode != "personal" {

@@ -32,6 +32,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/qwen"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/windsurf"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/zoo"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/spf13/cobra"
 )
 
@@ -183,11 +184,18 @@ func setupAgent(home, name string, remove bool) error {
 }
 
 func setupCommand(jsonOutput *bool) *cobra.Command {
+	return setupCommandWithDefaults(jsonOutput, nil)
+}
+
+func setupCommandWithDefaults(jsonOutput *bool, defaults []string) *cobra.Command {
 	var agents []string
 	var remove bool
 	cmd := &cobra.Command{Use: "setup", Short: "Enable automatic recording across repositories", RunE: func(c *cobra.Command, _ []string) error {
 		if len(agents) == 0 {
-			agents = []string{"claude-code", "codex"}
+			agents = defaults
+			if len(agents) == 0 {
+				agents = []string{"claude-code", "codex"}
+			}
 		}
 		for _, name := range agents {
 			if name != "copilot" && name != "windsurf" && name != "factory" && name != "claude-code" && name != "codex" && name != "openclaude" && name != "kiro" && name != "kimi" && name != "auggie" && name != "openhands" && name != "cline" && name != "poolside" && name != "hermes" && name != "zoo" && name != "cursor" && name != "gemini" && name != "qwen" && name != "amp" && name != "pi" && name != "omp" && name != "kilo" && name != "opencode" {
@@ -206,6 +214,11 @@ func setupCommand(jsonOutput *bool) *cobra.Command {
 			}
 			if err := setupAgent(home, name, remove); err != nil {
 				return fmt.Errorf("setting up %s: %w", name, err)
+			}
+		}
+		if !remove {
+			if err := userstate.SetDisabled(false); err != nil {
+				return fmt.Errorf("enabling Trace: %w", err)
 			}
 		}
 		if *jsonOutput {

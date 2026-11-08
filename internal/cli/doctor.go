@@ -140,7 +140,7 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		})
 		add(".trace size", true, fmt.Sprintf("%d bytes", size))
 
-		if _, err := os.Stat(loginPath(root)); err == nil {
+		if _, err := readSyncConfig(root); err == nil {
 			health, readErr := syncclient.ReadHealth(td)
 			add("sync health", readErr == nil && health.LastError == "", "Inspect progress with: trace sync status")
 		}

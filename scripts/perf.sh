@@ -34,6 +34,7 @@ check_benchmark Why5000UnrelatedChanges 120000000
 # Match the stripped binaries shipped by GoReleaser.
 go build -ldflags='-s -w' -o bin/trace ./cmd/trace
 perf_repo=$(mktemp -d)
+export TRACE_HOME="$perf_repo/trace-user"
 cleanup() {
   if [[ -f "$perf_repo/.trace/daemon.pid" ]]; then
     ./bin/trace --repo "$perf_repo" daemon stop >/dev/null 2>&1 || true
