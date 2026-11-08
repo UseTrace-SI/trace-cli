@@ -246,6 +246,10 @@ The real-agent acceptance harness uses normal Codex rollout persistence and wait
 
 Current daemons advertise durable spool delivery. Hooks append a redacted frame before returning success, and the daemon ingests it asynchronously; processing failures retain frames for replay. Delivery is at least once, so replay may repeat already processed events. This protects against daemon process crashes, not storage failure or sudden machine power loss. Older resident daemons keep their legacy socket behavior until restarted. On Linux, hosted sync requires `secret-tool`, an unlocked Secret Service and its D-Bus session; local recording remains available without them.
 
+Concurrent CLI inspection cannot invalidate an active capture transaction.
+Replacement database connections retain their integrity and lock settings, and
+database paths preserve special characters such as `?`, `#` and `%`.
+
 The hosted installer supplies the coordinated CLI/Brain/Graph stack. Older standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.
 
 Production builds select Go 1.27.3 to include the patched certificate verifier. CI pins this compiler and runs Govulncheck. The language version remains Go 1.26; release builds reject a different compiler. Existing runtime dependencies are pinned to their reviewed updates in go.mod/go.sum.

@@ -1,9 +1,100 @@
 package store
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
+
+func TestWriteTransactionKeepsItsSnapshotWhileOtherConnectionsWrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trace.db")
+	first, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if _, err := first.Exec("CREATE TABLE contention(value TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Exec("PRAGMA busy_timeout=1"); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := first.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRow("SELECT count(*) FROM contention").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	_, competingErr := second.Exec("INSERT INTO contention VALUES('other writer')")
+	if _, err := tx.Exec("INSERT INTO contention VALUES('recorded event')"); err != nil {
+		t.Fatalf("recording after a competing write invalidated the transaction: %v", err)
+	}
+	var busy *sqlite.Error
+	if !errors.As(competingErr, &busy) || busy.Code()&0xff != sqlite3.SQLITE_BUSY {
+		t.Fatalf("competing writer was not held behind the transaction: %v", competingErr)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Exec("INSERT INTO contention VALUES('other writer')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.QueryRow("SELECT count(*) FROM contention").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("retained writes = %d, %v", count, err)
+	}
+	read, err := first.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback()
+	if err := read.QueryRow("SELECT count(*) FROM contention").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Exec("INSERT INTO contention VALUES('writer beside reader')"); err != nil {
+		t.Fatalf("read-only transaction blocked a writer: %v", err)
+	}
+}
+
+func TestOpenConfiguresReplacementConnections(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "trace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxIdleConns(0)
+	for pragma, want := range map[string]int{"foreign_keys": 1, "busy_timeout": 30000} {
+		var got int
+		if err := db.QueryRow("PRAGMA " + pragma).Scan(&got); err != nil || got != want {
+			t.Fatalf("replacement connection %s = %d, want %d: %v", pragma, got, want, err)
+		}
+	}
+}
+
+func TestOpenPreservesSpecialCharactersInDatabasePaths(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "project #?% &", "trace.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("database was not created at the exact path: %v", err)
+	}
+}
 
 func TestOpenTwice(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "trace.db")
