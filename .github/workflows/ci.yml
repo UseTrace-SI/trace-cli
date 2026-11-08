@@ -28,6 +28,8 @@ jobs:
       - run: make test-sync
       - run: make build e2e
   release-snapshot:
+    env:
+      GORELEASER_VERSION: v2.20.0
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -39,11 +41,19 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.3'
-      - uses: goreleaser/goreleaser-action@v7
+      - name: Install pinned GoReleaser binary
+        id: goreleaser
+        uses: goreleaser/goreleaser-action@v7
+        continue-on-error: true
         with:
           distribution: goreleaser
-          version: "~> v2"
-          args: release --snapshot --clean --skip=sign
+          version: ${{ env.GORELEASER_VERSION }}
+          install-only: true
+      - name: Build pinned GoReleaser if release downloads are unavailable
+        if: steps.goreleaser.outcome == 'failure'
+        run: go install -p 2 github.com/goreleaser/goreleaser/v2@"$GORELEASER_VERSION"
+      - name: Build release snapshot
+        run: goreleaser release --snapshot --clean --skip=sign
       - name: Verify release archives
         run: |
           set -euo pipefail

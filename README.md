@@ -249,3 +249,7 @@ Current daemons advertise durable spool delivery. Hooks append a redacted frame 
 The hosted installer supplies the coordinated CLI/Brain/Graph stack. Older standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.
 
 Production builds select Go 1.27.3 to include the patched certificate verifier. CI pins this compiler and runs Govulncheck. The language version remains Go 1.26; release builds reject a different compiler. Existing runtime dependencies are pinned to their reviewed updates in go.mod/go.sum.
+
+Snapshot CI pins GoReleaser 2.20.0. If its binary download fails, CI builds the
+same version through the Go module proxy before running the required archive
+and installation checks.
