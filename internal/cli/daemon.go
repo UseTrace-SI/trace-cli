@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/UseTrace-SI/trace-cli/internal/watch"
 	"github.com/spf13/cobra"
 )
@@ -130,7 +132,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		defer stop()
 		defer cancel()
 		companionWorker := companions.StartDelayed(ctx, func(ctx context.Context) {
-			if !companions.AutoEnabled(root) {
+			if userstate.Disabled() || !companions.AutoEnabled(root) {
 				return
 			}
 			if _, err := os.Stat(filepath.Join(dir, "trace.db")); err != nil {
@@ -146,6 +148,9 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}, time.Second)
 		defer companionWorker.Close()
 		process := func(ev event.Event) error {
+			if userstate.DisabledFor(ev.Agent) {
+				return nil
+			}
 			err := e.Process(ev)
 			if err == nil && (ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd) {
 				companionWorker.Notify()
@@ -168,6 +173,9 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		defer os.Remove(personalReady)
 		go func() {
 			if err := watch.Run(ctx, root, func(paths []string) {
+				if !watchedCaptureAllowed(e) {
+					return
+				}
 				if err := e.RecordChanges(paths); err != nil {
 					logger.Error("recording file changes", "error", err)
 				}
@@ -264,4 +272,17 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		return err
 	}})
 	return cmd
+}
+
+func watchedCaptureAllowed(e *engine.Engine) bool {
+	if userstate.Disabled() {
+		return false
+	}
+	var agent string
+	err := e.DB.QueryRow(`SELECT s.agent FROM turns t JOIN sessions s ON s.id=t.session_id
+		WHERE s.worktree=? AND t.ended_at IS NULL ORDER BY t.started_at DESC LIMIT 1`, e.Root).Scan(&agent)
+	if err == sql.ErrNoRows {
+		return true
+	}
+	return err == nil && !userstate.AgentDisabled(agent)
 }

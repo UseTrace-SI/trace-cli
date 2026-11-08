@@ -22,7 +22,7 @@ import (
 func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 	worker := startWorkerBridge(t)
 	ctx := context.Background()
-	cfg := Config{Endpoint: "https://usetrace.si", Remote: "solo/project", Mode: "personal"}
+	cfg := Config{Endpoint: "https://usetrace.si", Remote: "solo/project", Mode: "personal", Device: true}
 	request := func(method, path, cookie string, body any) (*http.Response, map[string]any) {
 		t.Helper()
 		var encoded []byte
@@ -59,14 +59,14 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 		return strings.Split(response.Header.Get("Set-Cookie"), ";")[0]
 	}
 	connect := func(cookie string) Credentials {
-		flow, err := StartPairing(ctx, worker, cfg, "Integration laptop")
+		flow, err := StartDeviceLogin(ctx, worker, cfg, "Integration laptop")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if flow.VerificationURI != cfg.Endpoint+"/connect?request="+flow.ID {
+		if flow.VerificationURI != cfg.Endpoint+"/connect" {
 			t.Fatalf("pairing did not use the clean approval route: %s", flow.VerificationURI)
 		}
-		response, _ := request("POST", "/api/cli/pairings/"+flow.ID, cookie, map[string]any{})
+		response, _ := request("POST", "/api/cli/device/approve", cookie, map[string]any{"code": flow.UserCode})
 		if response.StatusCode != 200 {
 			t.Fatalf("approval: %d", response.StatusCode)
 		}
@@ -132,8 +132,14 @@ func TestPersonalAccountConnectionSyncDashboardAndRecovery(t *testing.T) {
 	if err != nil || rows != 8 {
 		t.Fatalf("personal sync: %d, %v", rows, err)
 	}
+	other := *client
+	other.Config.Remote = "solo/another-project"
+	other.TraceDir = t.TempDir()
+	if _, n, err := other.Sync(ctx); err != nil || n != 8 {
+		t.Fatalf("second project with one login: %d %v", n, err)
+	}
 	response, listing := request("GET", "/api/repos?scope=personal", alice, nil)
-	if response.StatusCode != 200 || len(listing["repos"].([]any)) != 1 {
+	if response.StatusCode != 200 || len(listing["repos"].([]any)) != 2 {
 		t.Fatalf("dashboard list: %+v", listing)
 	}
 	_, listing = request("GET", "/api/repos?scope=personal", bob, nil)

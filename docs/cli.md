@@ -1,5 +1,9 @@
 # CLI reference
 
+`trace login [--endpoint https://usetrace.si] [--device NAME] [--no-browser]` signs this computer in with a short code entered on the website. It works outside a repository. `trace enable [--agent NAME,...]` enables the supported user-level integrations across projects; without `--agent`, it resumes the saved selection or detects supported installed agents. `trace disable` pauses recording and automatic uploads across projects without removing the login or history. Agent trust/restart/extension steps remain required where reported.
+
+`trace sync` uploads the current project immediately; normal uploads happen automatically after login and enablement. `trace sync disable-auto` and `enable-auto` control this project independently. `trace login --mode pro` and `--mode team` preserve legacy GitHub sync.
+
 `trace connect [--remote you/project] [--endpoint https://usetrace.si] [--no-browser]`
 approves a private connection to your hosted dashboard and enables background
 upload. Run it from an initialized repository. Sign in and approve the displayed

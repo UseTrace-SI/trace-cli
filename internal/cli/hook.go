@@ -31,6 +31,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/spf13/cobra"
 )
 
@@ -143,6 +144,9 @@ func runHook(repoPath, agent, hookEvent string) {
 	}
 	if agent == "codex" && hookEvent == "Stop" {
 		defer fmt.Fprintln(os.Stdout, "{}")
+	}
+	if userstate.DisabledFor(agent) {
+		return
 	}
 	var b []byte
 	if agent == "openhands" && repoPath == "" {

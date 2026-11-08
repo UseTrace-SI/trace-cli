@@ -40,7 +40,8 @@ class ReleaseTest(unittest.TestCase):
         class Opener:
             def open(self, url, timeout):
                 return Response(contents[urlsplit(url).path])
-        self.transport = patch('prepare_coordinated_release.urllib.request.build_opener', return_value=Opener())
+        self.opener = Opener()
+        self.transport = patch('prepare_coordinated_release.urllib.request.build_opener', return_value=self.opener)
         self.transport.start()
         self.origin = 'https://fixture.invalid'
 
@@ -80,6 +81,13 @@ class ReleaseTest(unittest.TestCase):
         self.contents['/stack.json'] = json.dumps(self.stack).encode()
         with self.assertRaisesRegex(ValueError, 'incomplete coordinated'):prepare(self.version, self.root / 'release', self.origin)
         self.assertFalse((self.root / 'release').exists())
+
+    def test_requests_identify_the_release_tooling(self):
+        prepare(self.version, self.root / 'release', self.origin)
+        headers = getattr(self.opener, 'addheaders', [])
+        agent = next((value for name, value in headers if name.lower() == 'user-agent'), '')
+        self.assertTrue(agent.startswith('trace-cli-release/'), headers)
+        self.assertNotIn('urllib', agent.lower())
 
 
 if __name__ == '__main__':unittest.main()

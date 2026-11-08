@@ -26,6 +26,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/spf13/cobra"
 )
 
@@ -108,6 +109,9 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 		}
 		if !cfg.GitHubApp {
 			if cfg.Mode == "personal" {
+				if cfg.Device {
+					return "", errors.New("computer connection expired; run trace login again")
+				}
 				return "", errors.New("dashboard connection expired; run trace connect again")
 			}
 			return "", errors.New("GitHub login expired; run trace login again")
@@ -224,7 +228,6 @@ func browserCallbackHandler(flow syncclient.BrowserCode, result chan<- browserCa
 
 // autoSyncLoop uploads acknowledged local history without holding up hook delivery.
 func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *slog.Logger, wake <-chan struct{}) {
-	path := loginPath(root)
 	const retryBase = 15 * time.Second
 	const retryMax = 5 * time.Minute
 	const idleDelay = 5 * time.Minute
@@ -250,17 +253,15 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 			continue
 		case <-timer.C:
 		}
-		b, err := os.ReadFile(path)
+		if userstate.Disabled() {
+			reset(configCheckDelay)
+			continue
+		}
+		cfg, err := readSyncConfig(root)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				logger.Warn("automatic sync configuration unavailable", "error", err)
 			}
-			reset(configCheckDelay)
-			continue
-		}
-		var cfg syncclient.Config
-		if err := json.Unmarshal(b, &cfg); err != nil {
-			logger.Warn("automatic sync configuration invalid", "error", err)
 			reset(configCheckDelay)
 			continue
 		}
@@ -296,7 +297,7 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 				continue
 			}
 		}
-		blobs, rows, err := client.Sync(ctx)
+		blobs, rows, err := syncAutomatically(ctx, client)
 		if err != nil {
 			logger.Warn("automatic sync failed; will retry", "error", err)
 			reset(retryDelay)
@@ -313,12 +314,52 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 	}
 }
 
+// A pause also cancels an upload in progress. Requests already accepted by the
+// server stay uploaded; cancellation prevents the remaining transfer work.
+func syncAutomatically(ctx context.Context, client *syncclient.Client) (int, int, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			if userstate.Disabled() {
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	defer func() { cancel(); <-done }()
+	if userstate.Disabled() {
+		return 0, 0, context.Canceled
+	}
+	return client.Sync(ctx)
+}
+
 func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var remote, mode, endpoint, clientID string
 	var githubApp bool
 	var autoSync bool
 	var deviceAuth bool
-	cmd := &cobra.Command{Use: "login", Short: "Connect optional sync with GitHub", RunE: func(c *cobra.Command, _ []string) error {
+	var noBrowser bool
+	var device string
+	var status bool
+	cmd := &cobra.Command{Use: "login", Short: "Sign in once to connect this computer to your Trace dashboard", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		if status {
+			return deviceLoginStatus(c, *jsonOutput)
+		}
+		if mode == "personal" {
+			if remote != "" {
+				return errors.New("use trace connect --remote for a project-only connection")
+			}
+			return runDeviceLogin(c, endpoint, device, noBrowser, *jsonOutput)
+		}
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
 			return err
@@ -364,7 +405,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 			serveErr := make(chan error, 1)
 			go func() { serveErr <- server.Serve(listener) }()
-			if !openLoginBrowser(flow.AuthURL) {
+			if noBrowser || !openLoginBrowser(flow.AuthURL) {
 				_, _ = fmt.Fprintf(c.ErrOrStderr(), "Open this URL to sign in: %s\n", flow.AuthURL)
 			} else if _, err := fmt.Fprintln(c.ErrOrStderr(), "Opening GitHub sign-in in your browser..."); err != nil {
 				_ = server.Close()
@@ -397,7 +438,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opened := openLoginBrowser(code.VerifyURL)
+			opened := !noBrowser && openLoginBrowser(code.VerifyURL)
 			if opened {
 				if _, err := fmt.Fprintf(c.ErrOrStderr(), "Opening GitHub device sign-in. If needed, visit %s and enter code %s.\n", code.VerifyURL, code.UserCode); err != nil {
 					return err
@@ -444,7 +485,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		return err
 	}}
 	cmd.Flags().StringVar(&remote, "remote", "", "GitHub owner/repo")
-	cmd.Flags().StringVar(&mode, "mode", "pro", "sync mode: pro or team")
+	cmd.Flags().StringVar(&mode, "mode", "personal", "personal computer login, or legacy pro/team GitHub sync")
 	defaultEndpoint := os.Getenv("TRACE_SYNC_URL")
 	if defaultEndpoint == "" {
 		defaultEndpoint = defaultSyncEndpoint
@@ -454,7 +495,9 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().BoolVar(&githubApp, "github-app", false, "use fine-grained GitHub App authorization")
 	cmd.Flags().BoolVar(&autoSync, "auto-sync", false, "opt in to background upload after login")
 	cmd.Flags().BoolVar(&deviceAuth, "device-auth", false, "use device-code sign-in for remote or headless environments")
-	cmd.Flags().BoolVar(&deviceAuth, "no-browser", false, "alias for --device-auth")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the sign-in URL and code without opening a browser")
+	cmd.Flags().StringVar(&device, "device", "", "computer name shown when approving login")
+	cmd.Flags().BoolVar(&status, "status", false, "show saved computer login metadata without starting sign-in or checking remote revocation")
 	return cmd
 }
 
@@ -468,16 +511,9 @@ func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if dryRun {
 			return printUploadPreview(c.Context(), root, c.OutOrStdout(), *jsonOutput)
 		}
-		b, err := os.ReadFile(loginPath(root))
-		if os.IsNotExist(err) {
-			return errors.New("sync is off; run trace login first")
-		}
+		cfg, err := readSyncConfig(root)
 		if err != nil {
-			return err
-		}
-		var cfg syncclient.Config
-		if err := json.Unmarshal(b, &cfg); err != nil {
-			return fmt.Errorf("reading sync configuration: %w", err)
+			return fmt.Errorf("reading sync login; run trace login first: %w", err)
 		}
 		tokenProvider, err := syncTokenProvider(cfg)
 		if err != nil {
@@ -534,31 +570,25 @@ func syncCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	}}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview uploads without sending data")
 	cmd.Flags().BoolVar(&watch, "watch", false, "sync every 15 seconds until interrupted")
-	cmd.AddCommand(&cobra.Command{Use: "disable-auto", Short: "Stop background sync for this repository", RunE: func(c *cobra.Command, _ []string) error {
-		root, err := initializedRoot(*repoPath)
-		if err != nil {
+	for _, name := range []string{"enable-auto", "disable-auto"} {
+		cmd.AddCommand(&cobra.Command{Use: name, Short: "Control background uploads for this project", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+			root, err := initializedRoot(*repoPath)
+			if err != nil {
+				return err
+			}
+			cfg, err := readSyncConfig(root)
+			if err != nil {
+				return err
+			}
+			cfg.AutoSync = name == "enable-auto"
+			if err := writeSyncConfig(loginPath(root), cfg); err != nil {
+				return fmt.Errorf("saving sync configuration: %w", err)
+			}
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Automatic sync for this project: %t. Run trace sync to upload immediately.\n", cfg.AutoSync)
 			return err
-		}
-		path := loginPath(root)
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		var cfg syncclient.Config
-		if err := json.Unmarshal(b, &cfg); err != nil {
-			return fmt.Errorf("reading sync configuration: %w", err)
-		}
-		cfg.AutoSync = false
-		b, err = json.Marshal(cfg)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(path, b, 0600); err != nil {
-			return fmt.Errorf("saving sync configuration: %w", err)
-		}
-		_, err = fmt.Fprintln(c.OutOrStdout(), "Automatic sync disabled. Run trace sync to upload manually.")
-		return err
-	}})
+		}})
+	}
+
 	cmd.AddCommand(syncStatusCommand(repoPath, jsonOutput))
 	cmd.AddCommand(pullCommand(repoPath, jsonOutput))
 	return cmd
@@ -574,13 +604,9 @@ func pullCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if into == "" {
 			return errors.New("--into must name an existing Git checkout")
 		}
-		b, err := os.ReadFile(loginPath(root))
+		cfg, err := readSyncConfig(root)
 		if err != nil {
 			return fmt.Errorf("reading sync login: %w", err)
-		}
-		var cfg syncclient.Config
-		if err := json.Unmarshal(b, &cfg); err != nil {
-			return fmt.Errorf("decoding sync login: %w", err)
 		}
 		tokenProvider, err := syncTokenProvider(cfg)
 		if err != nil {

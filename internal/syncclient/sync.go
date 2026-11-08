@@ -39,6 +39,7 @@ func (c *Client) syncTables() []string {
 }
 
 type Config struct {
+	Device              bool   `json:"device,omitempty"`
 	ConnectionExpiresAt int64  `json:"connection_expires_at,omitempty"`
 	ConnectionID        string `json:"connection_id,omitempty"`
 	Endpoint            string `json:"endpoint"`
@@ -51,6 +52,9 @@ type Config struct {
 }
 
 func (cfg Config) Validate() error {
+	if cfg.Device && cfg.Mode != "personal" {
+		return errors.New("device login requires personal sync")
+	}
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("sync endpoint must be an HTTPS URL without credentials or query")
@@ -70,6 +74,9 @@ func (cfg Config) Validate() error {
 // CredentialKey keeps account-scoped connections separate from GitHub login
 // credentials and from connections to another Trace server.
 func (cfg Config) CredentialKey() string {
+	if cfg.Device {
+		return "device|" + strings.TrimRight(cfg.Endpoint, "/") + "|" + cfg.ConnectionID
+	}
 	if cfg.Mode == "personal" {
 		return cfg.legacyCredentialKey() + "|" + cfg.ConnectionID
 	}

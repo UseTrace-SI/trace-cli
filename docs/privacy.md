@@ -2,12 +2,17 @@
 
 ## Local history and network access
 
-Trace stores data locally in `.trace/` by default. It contacts the sync server only after you run `trace sync` or explicitly opt in with `trace login --auto-sync` or approve `trace connect`. Automatic sync sends existing and new history from the local daemon in the background; stop it with `trace sync disable-auto`. Pro sync encrypts rows and blobs on the client, with its derived key held in the OS credential store for unattended sync. Team sync sends rows and blobs over HTTPS for server-side encryption. See [sync](sync.md) for the protocol and setup.
+Trace stores data locally in `.trace/` by default. It contacts the sync server for explicit login/connection or manual sync, and for background uploads after you approve computer login and enable Trace, opt into legacy `trace login --mode pro --auto-sync`, or approve `trace connect`. Automatic sync sends existing and new history from the local daemon in the background; stop it with `trace sync disable-auto`. Pro sync encrypts rows and blobs on the client, with its derived key held in the OS credential store for unattended sync. Team sync sends rows and blobs over HTTPS for server-side encryption. See [sync](sync.md) for the protocol and setup.
 
 An approved personal connection uploads history and bounded derived Brain/Graph
 snapshots to your hosted account. Payloads are encrypted on the server and readable
 in your signed-in dashboard; this mode is not end-to-end encrypted. Tokens stay
-in the OS credential store, are scoped to one project, expire, and can be revoked.
+in the OS credential store, expire, and can be revoked. `trace connect` grants
+access to one project; `trace login` explicitly approves this computer for all
+traced projects in the signed-in account. First computer login starts paused
+until `trace enable`. `trace disable` pauses recording and automatic uploads
+without deleting history or credentials. Per-agent pause stops that integration
+from recording; previously captured history can still sync.
 Manual memories and raw companion SQLite files are excluded from derived uploads.
 Revoking a device does not delete uploaded history.
 

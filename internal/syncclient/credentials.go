@@ -27,10 +27,13 @@ func loadConfigCredentials(cfg Config, read func(string) (Credentials, error), s
 	}
 	credentials, err := read(cfg.CredentialKey())
 	if err == nil {
-		if credentials.ConnectionID != cfg.ConnectionID {
+		if credentials.ConnectionID != cfg.ConnectionID || (cfg.Device && credentials.Scope != "account") {
 			return Credentials{}, errors.New("dashboard credential identity mismatch; run trace connect again")
 		}
 		return credentials, nil
+	}
+	if cfg.Device {
+		return Credentials{}, errors.New("computer credentials unavailable; run trace login again")
 	}
 	credentials, err = read(cfg.legacyCredentialKey())
 	if err != nil || credentials.ConnectionID != cfg.ConnectionID {
@@ -43,6 +46,7 @@ func loadConfigCredentials(cfg Config, read func(string) (Credentials, error), s
 }
 
 type Credentials struct {
+	Scope            string `json:"scope,omitempty"`
 	ConnectionID     string `json:"connection_id,omitempty"`
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token,omitempty"`

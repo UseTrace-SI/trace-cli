@@ -25,7 +25,7 @@ def main():
                 ["go", "build", "-buildvcs=false", "-o", str(binaries / binary), "./cmd/" + binary],
                 cwd=repo, check=True, env=dict(os.environ, CGO_ENABLED="0"),
             )
-        environment = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ["PATH"], TRACE_COMPANIONS="1")
+        environment = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ["PATH"], TRACE_COMPANIONS="1", TRACE_HOME=str(temporary / "trace-user"))
         trace = str(binaries / "trace")
         project = temporary / "project"
         recovered = temporary / "recovered"
@@ -106,6 +106,30 @@ def main():
             assert "ghp_abcdefghijklmnopqrstuvwxyz" not in json.dumps(context), "context leaked manual memory token"
             assert (project / ".trace/brain/memory.db").exists(), "Brain wrote outside integrated state"
             assert (project / ".trace/graph/graph.db").exists(), "Graph wrote outside integrated state"
+            # Pausing also affects an already-running daemon, without deleting
+            # the project history or requiring hooks to be uninstalled.
+            with sqlite3.connect(project / ".trace/trace.db") as db:
+                before_pause = db.execute("SELECT count(*) FROM turns").fetchone()[0]
+                before_ops = db.execute("SELECT count(*) FROM ops").fetchone()[0]
+            run(project, "disable")
+            (project / "paused-note.txt").write_text("edited while paused\n")
+            time.sleep(0.5)
+            hook("UserPromptSubmit", prompt="must-not-record-while-paused")
+            hook("Stop")
+            with sqlite3.connect(project / ".trace/trace.db") as db:
+                assert db.execute("SELECT count(*) FROM turns").fetchone()[0] == before_pause
+                assert db.execute("SELECT count(*) FROM ops").fetchone()[0] == before_ops, "file watcher recorded while paused"
+            setup_home = temporary / "enable-home"
+            setup_home.mkdir()
+            subprocess.run([trace, "enable", "--agent", "claude-code"],
+                           env=dict(environment, HOME=str(setup_home), CLAUDE_CONFIG_DIR=str(setup_home / "claude")),
+                           check=True, capture_output=True, text=True, timeout=30)
+            hook("UserPromptSubmit", prompt="authentication resumed capture")
+            hook("Stop")
+            def resumed():
+                with sqlite3.connect(project / ".trace/trace.db") as db:
+                    return db.execute("SELECT count(*) FROM turns WHERE prompt='authentication resumed capture' AND ended_at IS NOT NULL").fetchone()[0] == 1
+            wait_for(resumed, "recording resumed without restarting the daemon")
             run(project, "companions", "disable-auto")
             assert not run(project, "companions", "status", json_output=True)["automatic"]
             run(project, "companions", "enable-auto")
@@ -134,7 +158,7 @@ def main():
             run(project, "companions", "refresh", json_output=True)
             source_context = run(project, "context", "authentication", json_output=True)
             assert any(m["source"] == "manual" for m in source_context["brain"]["memories"]), source_context
-            print("companions e2e passed: automatic refresh, shared context, redaction, isolated project state and derived recovery")
+            print("companions e2e passed: automatic refresh, shared context, redaction, pause/resume, isolated project state and derived recovery")
         finally:
             for process in daemons:
                 process.terminate()

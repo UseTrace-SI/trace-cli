@@ -1,5 +1,43 @@
 # Quickstart
 
+## Install once, log in, enable
+
+Install the coordinated bundle and put its binary directory on your `PATH`.
+Then, from any directory:
+
+```sh
+trace login
+trace enable
+```
+
+Enter the short code printed by `trace login` on the website it opens. Approval
+connects this computer to your Trace account. `trace enable` detects supported installed CLI and desktop integrations, or resumes the saved selection. Complete the reported hook trust,
+restart or extension activation steps, then work in Git projects normally.
+History and derived context sync automatically into your private dashboard.
+The supported install targets are macOS/Linux on Intel/ARM. Integrations that
+are marked preview are still preview; desktop apps without an integration are
+not captured. SDK bridges still need registration in the application.
+
+```sh
+trace agents --json          # discover integrations for automation
+trace enable --all           # enable supported agents detected here
+trace enable --agent codex   # choose one agent, remembered across projects
+trace disable --agent codex  # pause recording for one agent
+trace disable               # pause recording and automatic uploads
+trace enable                # resume, preserving login and history
+trace sync                  # optional immediate upload in a project
+trace sync status           # inspect pending rows and last upload
+trace sync disable-auto     # keep this project local
+trace sync enable-auto      # resume automatic uploads for this project
+```
+
+Use `trace login --no-browser` on a remote machine and enter its code in a browser
+on another device. Sign in separately for each OS user/computer. For local-only
+recording, skip login and run `trace enable`. Existing project-only connections
+and per-project pauses take precedence over the global login.
+
+The commands below remain available for explicit per-project setup.
+
 For automatic recording in new Git repositories, run `trace setup` once for Claude Code and Codex. Review and trust the Codex hooks using `/hooks`. Start the agent from a repository; Trace starts its local daemon and creates `.trace/` automatically. Run `trace status --json` to get the repo name and path. Use `trace setup --agent codex` to select one agent, or `trace setup --remove` to remove the global hooks. For OpenClaude or Kiro CLI V3, use `trace setup --agent openclaude` or `trace setup --agent kiro` (preview). Its default configuration is `~/.openclaude/settings.json`, or the directory specified by `OPENCLAUDE_CONFIG_DIR`. Other adapters use the per-repository commands below. The first baseline is created asynchronously, so edits made immediately after the session starts may precede it.
 
 Factory Droid has preview global setup via `trace setup --agent factory`; remove it with `trace setup --agent factory --remove`. If Droid has a legacy `.factory/hooks/hooks.json`, migrate it using Droid's hooks manager before setup. Live hook delivery has not yet been verified.
