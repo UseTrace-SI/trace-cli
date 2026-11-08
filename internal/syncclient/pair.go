@@ -18,6 +18,7 @@ import (
 )
 
 type Pairing struct {
+	UserCode        string `json:"user_code,omitempty"`
 	ID              string `json:"id"`
 	VerificationURI string `json:"verification_uri"`
 	ExpiresAt       int64  `json:"expires_at"`
@@ -53,6 +54,14 @@ func pairingRequest(ctx context.Context, client *http.Client, endpoint, path str
 }
 
 func StartPairing(ctx context.Context, client *http.Client, cfg Config, device string) (Pairing, error) {
+	return startPairing(ctx, client, cfg, device, false)
+}
+
+func StartDeviceLogin(ctx context.Context, client *http.Client, cfg Config, device string) (Pairing, error) {
+	return startPairing(ctx, client, cfg, device, true)
+}
+
+func startPairing(ctx context.Context, client *http.Client, cfg Config, device string, account bool) (Pairing, error) {
 	if err := cfg.Validate(); err != nil {
 		return Pairing{}, err
 	}
@@ -66,17 +75,39 @@ func StartPairing(ctx context.Context, client *http.Client, cfg Config, device s
 	verifier := base64.RawURLEncoding.EncodeToString(random)
 	sum := sha256.Sum256([]byte(verifier))
 	var out Pairing
-	_, err := pairingRequest(ctx, client, cfg.Endpoint, "/v1/cli/pair", map[string]string{"challenge": hex.EncodeToString(sum[:]), "repo": cfg.Remote, "device": device, "verification_path": "/connect"}, &out)
+	path := "/v1/cli/pair"
+	if account {
+		path = "/v1/cli/login"
+	}
+	_, err := pairingRequest(ctx, client, cfg.Endpoint, path, map[string]string{"challenge": hex.EncodeToString(sum[:]), "repo": cfg.Remote, "device": device, "verification_path": "/connect"}, &out)
 	if err != nil {
 		return Pairing{}, err
 	}
 	verification, err := url.Parse(out.VerificationURI)
 	expected, _ := url.Parse(cfg.Endpoint)
-	if err != nil || verification.Scheme != "https" || verification.Host != expected.Host || verification.User != nil || verification.Fragment != "" || (verification.Path != "/connect" && verification.Path != "/app/connect.html") || verification.Query().Get("request") != out.ID || len(out.ID) != 43 || out.ExpiresAt <= time.Now().UnixMilli() || out.ExpiresAt > time.Now().Add(15*time.Minute).UnixMilli() || out.Interval < 1 || out.Interval > 30 {
+	validTarget := err == nil && (verification.Path == "/connect" || verification.Path == "/app/connect.html")
+	if account {
+		validTarget = err == nil && verification.Path == "/connect" && verification.RawQuery == "" && validUserCode(out.UserCode)
+	} else {
+		validTarget = validTarget && verification.Query().Get("request") == out.ID
+	}
+	if err != nil || verification.Scheme != "https" || verification.Host != expected.Host || verification.User != nil || verification.Fragment != "" || !validTarget || len(out.ID) != 43 || out.ExpiresAt <= time.Now().UnixMilli() || out.ExpiresAt > time.Now().Add(15*time.Minute).UnixMilli() || out.Interval < 1 || out.Interval > 30 {
 		return Pairing{}, errors.New("trace server returned an invalid connection request")
 	}
 	out.verifier = verifier
 	return out, nil
+}
+
+func validUserCode(code string) bool {
+	if len(code) != 9 || code[4] != '-' {
+		return false
+	}
+	for i, c := range code {
+		if i != 4 && !strings.ContainsRune("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", c) {
+			return false
+		}
+	}
+	return true
 }
 
 func WaitPairing(ctx context.Context, client *http.Client, endpoint string, pairing Pairing) (Credentials, error) {
@@ -98,6 +129,9 @@ func WaitPairing(ctx context.Context, client *http.Client, endpoint string, pair
 				return Credentials{}, err
 			}
 			if status == http.StatusOK {
+				if pairing.UserCode != "" && out.Scope != "account" {
+					return Credentials{}, errors.New("trace server did not approve a computer connection")
+				}
 				if out.ConnectionID == "" || len(out.ConnectionID) > 128 || !strings.HasPrefix(out.AccessToken, "trace_") || len(out.AccessToken) != 49 || out.ExpiresAt <= time.Now().UnixMilli() {
 					return Credentials{}, errors.New("trace server returned an invalid connection credential")
 				}

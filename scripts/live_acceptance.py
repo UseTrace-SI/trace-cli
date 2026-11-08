@@ -37,7 +37,7 @@ if args.manifest:
 with tempfile.TemporaryDirectory(prefix='trace-live-') as directory:
  root=pathlib.Path(directory)/'repo';root.mkdir()
  tools=pathlib.Path(directory)/'bin';tools.mkdir();shutil.copy2(binary,tools/'trace')
- env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'],TRACE_COMPANIONS='0')
+ env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'],TRACE_COMPANIONS='0',TRACE_HOME=str(pathlib.Path(directory)/'trace-user'))
  # Owner-only Vaultly privileges must never be inherited by an agent run.
  env.pop('VAULTLY_HUMAN_MODE',None)
  subprocess.run(['git','init','-q',str(root)],check=True)

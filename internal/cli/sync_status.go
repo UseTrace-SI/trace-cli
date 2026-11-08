@@ -14,6 +14,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/spf13/cobra"
 )
 
@@ -23,16 +24,9 @@ func syncStatusCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		b, err := os.ReadFile(loginPath(root))
-		if os.IsNotExist(err) {
-			return fmt.Errorf("sync is off; run trace connect")
-		}
+		cfg, err := readSyncConfig(root)
 		if err != nil {
-			return err
-		}
-		var cfg syncclient.Config
-		if err = json.Unmarshal(b, &cfg); err != nil {
-			return err
+			return fmt.Errorf("sync is off; run trace login: %w", err)
 		}
 		h, err := syncclient.ReadHealth(repo.TraceDir(root))
 		if err != nil {
@@ -96,12 +90,18 @@ func syncStatusCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			storeReady = lookupErr == nil && os.Getenv("DBUS_SESSION_BUS_ADDRESS") != ""
 		}
 		expired := cfg.ConnectionExpiresAt > 0 && cfg.ConnectionExpiresAt <= time.Now().UnixMilli()
+		paused := userstate.Disabled()
+		automatic := cfg.AutoSync && !paused
 		if *jsonOutput {
-			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"remote": cfg.Remote, "mode": cfg.Mode, "automatic": cfg.AutoSync, "pending_rows": pending, "health": h, "expired": expired, "credential_store_available": storeReady})
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"remote": cfg.Remote, "mode": cfg.Mode, "automatic": automatic, "paused": paused, "device": cfg.Device, "pending_rows": pending, "health": h, "expired": expired, "credential_store_available": storeReady})
 		}
-		_, err = fmt.Fprintf(c.OutOrStdout(), "Project: %s (%s)\nAutomatic sync: %t\nPending rows: %d\nLast success: %d\nLast error: %s\n", cfg.Remote, cfg.Mode, cfg.AutoSync, pending, h.LastSuccess, h.LastError)
+		_, err = fmt.Fprintf(c.OutOrStdout(), "Project: %s (%s)\nAutomatic sync: %t\nTrace paused: %t\nPending rows: %d\nLast success: %d\nLast error: %s\n", cfg.Remote, cfg.Mode, automatic, paused, pending, h.LastSuccess, h.LastError)
 		if expired {
-			fmt.Fprintln(c.OutOrStdout(), "Connection expired: run trace connect again.")
+			if cfg.Device {
+				fmt.Fprintln(c.OutOrStdout(), "Computer connection expired: run trace login again.")
+			} else {
+				fmt.Fprintln(c.OutOrStdout(), "Connection expired: run trace connect again.")
+			}
 		}
 		if !storeReady {
 			fmt.Fprintln(c.OutOrStdout(), "Linux sync needs secret-tool and an unlocked Secret Service in this user's D-Bus session.")

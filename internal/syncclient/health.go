@@ -51,6 +51,9 @@ func RecordAttempt(dir string, cfg Config, attemptErr error) error {
 		}
 		h.LastError = message
 		h.Action = "Run trace sync to retry; run trace connect again if the device is expired or revoked."
+		if cfg.Device {
+			h.Action = "Run trace sync to retry; run trace login again if this computer is expired or revoked."
+		}
 	}
 	b, err := json.Marshal(h)
 	if err != nil {

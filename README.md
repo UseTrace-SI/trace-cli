@@ -25,11 +25,11 @@ global hook configuration or bypassing hook trust. A failed provider turn does
 not certify an integration. Repeat successful, interrupted, resumed and parallel
 worktree sessions on macOS and Linux before changing a status above.
 
-The solo workflow connects your CLI to a private hosted dashboard. Install the
-coordinated Trace bundle, initialize your coding agent, sign in at usetrace.si,
-and run `trace connect`. Approve the device in your browser; recorded history
-and bounded Brain/Graph context then upload in the background. Personal
-connections do not require GitHub repository authorization.
+The solo workflow connects your computer to a private hosted dashboard. Install
+the coordinated Trace bundle, run `trace login`, enter its code on the website,
+and approve this computer. Run `trace enable` to configure supported agents.
+Projects are detected automatically and history plus bounded Brain/Graph context
+uploads in the background. No GitHub repository authorization is required.
 
 
 Cline CLI has preview hooks: `trace setup --agent cline` enables global hooks, while `trace init --agent cline` or `trace agent add cline` installs project hooks. Existing hook scripts are preserved. Live Cline lifecycle verification remains outstanding.
@@ -105,6 +105,35 @@ Continue, Mistral Vibe, Crush, and Aider have preview single-prompt capture with
 Run `trace setup` once to install automatic recording hooks for Claude Code and Codex in Git repositories. Their hook events use the reported session directory to select the worktree; Codex interruptions also close the current recorded turn. For other global integrations, choose an agent with `trace setup --agent NAME`; several are previews and may require a restart or other activation. Codex requires reviewing the installed hooks in `/hooks`. Start an agent in a repo and Trace creates its local history automatically. Use `trace status --json` to see the repository name and path. `trace setup --remove` removes the default global hooks. Per-repository setup is also available through `trace init` or `trace agent add`.
 
 ## Status
+
+Install once per macOS/Linux user, then run `trace login` from any directory.
+The CLI opens Trace's website and displays a short code to enter there. Approve
+this computer, then run `trace enable` once. Supported installed CLI and desktop
+integrations are configured across Git projects; no per-project initialization
+or connection is needed. Agent trust, extension activation and restart steps
+still apply, and preview integrations retain the verification limits listed above.
+
+History uploads automatically after login and enablement. `trace sync` uploads
+immediately; `trace sync status` reports progress. `trace disable` pauses new
+recording and automatic uploads across projects, including existing daemons;
+`trace enable` resumes them. Login and history remain saved. New snapshots after
+resuming reflect the current checkout. Use `trace sync disable-auto` to keep a
+particular project local, and `trace sync enable-auto` to resume its uploads.
+`trace connect` remains available for an explicit project-only connection.
+
+`trace agents` lists the supported integrations and their detection/recording
+state. Choose one with `trace enable --agent codex`, use positional agent names,
+or enable all detected agents with `trace enable --all`. Each selection is saved
+and repeatable. `trace disable --agent codex` pauses only that agent's recording;
+other agents and already captured history uploads are unaffected. Commands
+support `--json`; `trace login --status --json` inspects saved login metadata
+without starting browser approval. `trace login --no-browser --json` emits the
+pending device-code event as JSON on stderr and the final result on stdout.
+
+Computer login uses an account-scoped, revocable credential in the OS credential
+store. `~/.trace/device.json` contains connection metadata only. An absolute `TRACE_HOME` selects a separate Trace state profile. New computers
+and OS users sign in separately. First login starts paused until `trace enable`.
+Local recording without a hosted account remains available through `trace enable`.
 
 `trace context --format json` and `--json` both return machine-readable context;
 `--json` takes precedence over text/prompt formats. Poolside setup allows up to

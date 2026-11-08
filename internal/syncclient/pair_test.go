@@ -100,3 +100,41 @@ func TestPersonalPairingCanonicalAndLegacyPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestDeviceLoginCodeAndAccountScope(t *testing.T) {
+	cfg := Config{Endpoint: "https://trace.example", Remote: "device/all-projects", Mode: "personal", Device: true}
+	for _, tc := range []struct {
+		code, target string
+		valid        bool
+	}{
+		{"ABCD-EFGH", cfg.Endpoint + "/connect", true},
+		{"1234-5678", cfg.Endpoint + "/connect", false},
+		{"ABCD-EFGH", "https://evil.example/connect", false},
+		{"ABCD-EFGH", cfg.Endpoint + "/connect?request=other", false},
+	} {
+		t.Run(tc.code+tc.target, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path != "/v1/cli/login" {
+					t.Fatal("not a computer login")
+				}
+				data, _ := json.Marshal(Pairing{UserCode: tc.code, ID: strings.Repeat("a", 43), VerificationURI: tc.target, ExpiresAt: time.Now().Add(time.Minute).UnixMilli(), Interval: 1})
+				return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(string(data)))}, nil
+			})}
+			_, err := StartDeviceLogin(context.Background(), client, cfg, "Computer")
+			if (err == nil) != tc.valid {
+				t.Fatalf("code/target validation: %v", err)
+			}
+		})
+	}
+	flow := Pairing{UserCode: "ABCD-EFGH", ID: strings.Repeat("a", 43), verifier: strings.Repeat("b", 43), ExpiresAt: time.Now().Add(time.Minute).UnixMilli(), Interval: 1}
+	for _, scope := range []string{"account", "project"} {
+		client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			data, _ := json.Marshal(Credentials{Scope: scope, AccessToken: "trace_" + strings.Repeat("x", 43), ConnectionID: "device", ExpiresAt: time.Now().Add(time.Hour).UnixMilli()})
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(data)))}, nil
+		})}
+		_, err := WaitPairing(context.Background(), client, cfg.Endpoint, flow)
+		if (err == nil) != (scope == "account") {
+			t.Fatalf("accepted wrong connection scope: %s %v", scope, err)
+		}
+	}
+}

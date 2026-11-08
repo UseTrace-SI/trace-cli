@@ -45,6 +45,8 @@ work_kimi_global=$(mktemp -d)
 work_codex_global=$(mktemp -d)
 work_zoo=$(mktemp -d)
 mock_agents=$(mktemp -d)
+TRACE_HOME="$mock_agents/trace-user"
+export TRACE_HOME
 hermes_profile=$(mktemp -d)
 work_fork=$(mktemp -d)
 fork_target="${work_fork}-fork-1-e2e"

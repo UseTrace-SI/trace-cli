@@ -1,3 +1,11 @@
+Computer-wide personal sync: run `trace login` outside or inside a repository,
+enter its code on the website, approve the computer, then run `trace enable`.
+Supported agents route events to the active Git project and the daemon uploads
+history automatically. `trace sync` is optional for immediate upload.
+`trace disable` pauses recording and automatic uploads across projects; login
+and history remain saved. Explicit project connections and project pauses take
+precedence. `trace connect` still approves one project only.
+
 # Optional sync client
 
 ## Personal hosted dashboard
