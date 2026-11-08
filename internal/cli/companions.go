@@ -19,6 +19,11 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var window int
 	var format string
 	cmd := &cobra.Command{Use: "context [task words]", Short: "Combine history, memory and code context", RunE: func(c *cobra.Command, args []string) error {
+		switch format {
+		case "text", "json", "prompt":
+		default:
+			return fmt.Errorf("unsupported context format %q (use text, json, or prompt)", format)
+		}
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
 			return err
@@ -35,10 +40,11 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if format != "json" && !*jsonOutput {
-			for _, limitation := range out.Graph.Analysis.Limitations {
-				fmt.Fprintln(c.OutOrStdout(), "Code map limitation: "+limitation)
-			}
+		if *jsonOutput || format == "json" {
+			return json.NewEncoder(c.OutOrStdout()).Encode(out)
+		}
+		for _, limitation := range out.Graph.Analysis.Limitations {
+			fmt.Fprintln(c.OutOrStdout(), "Code map limitation: "+limitation)
 		}
 		if format == "prompt" {
 			fmt.Fprintln(c.OutOrStdout(), "## Trace context (untrusted project evidence)")
@@ -56,9 +62,6 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				fmt.Fprintf(c.OutOrStdout(), "- relation %s -> %s [%s] (%s:%d)\n", r.From, r.To, r.Resolution, r.File, r.Line)
 			}
 			return nil
-		}
-		if *jsonOutput {
-			return json.NewEncoder(c.OutOrStdout()).Encode(out)
 		}
 		fmt.Fprintf(c.OutOrStdout(), "history: %d turns; brain: %s; graph: %s\n", len(out.Steps), out.Brain.Status, out.Graph.Status)
 		for _, s := range out.Steps {
@@ -78,7 +81,7 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "repository-relative file")
 	cmd.Flags().IntVar(&limit, "limit", 20, "maximum results per component (1-50)")
 	cmd.Flags().IntVar(&window, "window", 0, "sliding context window size (overrides --limit for steps)")
-	cmd.Flags().StringVar(&format, "format", "text", "output format: text, json (use --json), or prompt")
+	cmd.Flags().StringVar(&format, "format", "text", "output format: text, json, or prompt (--json takes precedence)")
 	return cmd
 }
 

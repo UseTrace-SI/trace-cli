@@ -43,14 +43,21 @@ const qwenEnableNotice = "Use a Qwen Code version that supports hooks and confir
 var poolVersionPattern = regexp.MustCompile(`^(?:pool\s+)?v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:[-+][0-9A-Za-z.-]+)?$`)
 
 func poolsideSetupNotice() string {
-	const instruction = "Poolside 1.0.16 or later is required; restart Poolside after setup."
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// Cold executable startup can exceed one second on macOS. Setup is an
+	// explicit user operation; allow startup while keeping the probe bounded.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "pool", "--version").Output()
+	cmd := exec.CommandContext(ctx, "pool", "--version")
+	cmd.WaitDelay = 250 * time.Millisecond
+	output, err := cmd.Output()
 	if err != nil {
-		return instruction
+		return poolsideVersionNotice("")
 	}
-	version := strings.TrimSpace(string(output))
+	return poolsideVersionNotice(strings.TrimSpace(string(output)))
+}
+
+func poolsideVersionNotice(version string) string {
+	const instruction = "Poolside 1.0.16 or later is required; restart Poolside after setup."
 	match := poolVersionPattern.FindStringSubmatch(version)
 	if len(match) != 4 {
 		return instruction

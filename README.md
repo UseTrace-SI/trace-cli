@@ -106,6 +106,10 @@ Run `trace setup` once to install automatic recording hooks for Claude Code and 
 
 ## Status
 
+`trace context --format json` and `--json` both return machine-readable context;
+`--json` takes precedence over text/prompt formats. Poolside setup allows up to
+five seconds for its version check, including cold executable startup on macOS.
+
 Codex rollout capture distinguishes generated AGENTS/environment messages from
 the actual user prompt and closes interrupted turns before recording a resumed
 request. Regression coverage reopens the engine and persisted rollout cursor

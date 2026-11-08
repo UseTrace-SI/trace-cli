@@ -237,8 +237,6 @@ func TestPoolsideSetupReportsVersionAndRestart(t *testing.T) {
 }
 
 func TestPoolsideSetupVersionParsing(t *testing.T) {
-	bin := t.TempDir()
-	t.Setenv("PATH", bin)
 	for _, tt := range []struct {
 		version string
 		old     bool
@@ -247,10 +245,7 @@ func TestPoolsideSetupVersionParsing(t *testing.T) {
 		{"pool 1.1.0", false}, {"2.0.0", false}, {"unknown", false},
 	} {
 		t.Run(tt.version, func(t *testing.T) {
-			if err := os.WriteFile(filepath.Join(bin, "pool"), []byte("#!/bin/sh\nprintf '%s\\n' '"+tt.version+"'\n"), 0700); err != nil {
-				t.Fatal(err)
-			}
-			if got := strings.Contains(poolsideSetupNotice(), "too old"); got != tt.old {
+			if got := strings.Contains(poolsideVersionNotice(tt.version), "too old"); got != tt.old {
 				t.Fatalf("version %s: got old=%t", tt.version, got)
 			}
 		})
