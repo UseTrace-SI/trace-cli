@@ -168,6 +168,22 @@ func TestPerAgentPauseAndGlobalResumeSelection(t *testing.T) {
 	t.Setenv("CODEX_HOME", "")
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	jsonOutput := true
+	selectedCmd := enableCommand(&jsonOutput)
+	selectedCmd.SetArgs([]string{"--agent", "codex"})
+	var selectedOutput bytes.Buffer
+	selectedCmd.SetOut(&selectedOutput)
+	if err := selectedCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var selection struct {
+		Agents []string `json:"agents"`
+	}
+	if err := json.Unmarshal(selectedOutput.Bytes(), &selection); err != nil {
+		t.Fatal(err)
+	}
+	if len(selection.Agents) != 1 || selection.Agents[0] != "codex" {
+		t.Fatalf("explicit selection duplicated: %s", selectedOutput.String())
+	}
 	run := func(cmd *cobra.Command, args ...string) {
 		t.Helper()
 		cmd.SetOut(&bytes.Buffer{})

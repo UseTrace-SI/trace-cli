@@ -176,7 +176,11 @@ func enableCommand(jsonOutput *bool) *cobra.Command {
 				return fmt.Errorf("unknown global integration %q; run trace agents --json", name)
 			}
 		}
-		if err := c.Flags().Set("agent", strings.Join(selected, ",")); err != nil {
+		value, ok := c.Flags().Lookup("agent").Value.(interface{ Replace([]string) error })
+		if !ok {
+			return fmt.Errorf("agent selection flag has an unsupported type")
+		}
+		if err := value.Replace(selected); err != nil {
 			return err
 		}
 		// An explicit selection while globally paused resumes only those saved
