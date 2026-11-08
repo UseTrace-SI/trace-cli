@@ -257,3 +257,5 @@ Production builds select Go 1.27.3 to include the patched certificate verifier. 
 Snapshot CI pins GoReleaser 2.20.0. If its binary download fails, CI builds the
 same version through the Go module proxy before running the required archive
 and installation checks.
+Terminal fixtures wait for the child exit after PTY closure while enforcing
+the original deadline and checking its exit status and output.

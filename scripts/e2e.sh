@@ -953,9 +953,11 @@ for agent in continue vibe crush aider; do
     [ "$status" -eq 7 ] && [ "$(cat "$run_repo/error.txt")" = 'agent error' ] || { echo "$agent launcher changed error behavior" >&2; exit 1; }
   fi
 done
-python3 - "$binary" "$work_vibe" "$mock_agents" <<'PY'
-import os, pty, select, subprocess, sys, time
-binary, repo, mock = sys.argv[1:]
+python3 - "$binary" "$work_vibe" "$mock_agents" "$project/scripts" <<'PY'
+import os, pty, subprocess, sys
+binary, repo, mock, scripts = sys.argv[1:]
+sys.path.insert(0, scripts)
+from terminal_streams import read_terminal_process
 vibe = os.path.join(mock, 'vibe')
 with open(vibe, 'w') as f:
     f.write('#!/bin/sh\n[ -t 1 ] && [ -t 2 ] || exit 19\nprintf "terminal streams preserved\\n"\n')
@@ -968,21 +970,13 @@ env = dict(os.environ, PATH=mock + os.pathsep + os.environ['PATH'])
 proc = subprocess.Popen([binary, '--repo', repo, 'run', 'vibe', '--prompt', 'terminal test'],
                         cwd=repo, stdout=slave, stderr=slave, env=env)
 os.close(slave)
-data = bytearray(); deadline = time.monotonic() + 15
-while proc.poll() is None and time.monotonic() < deadline:
-    if select.select([master], [], [], 0.1)[0]:
-        try: data.extend(os.read(master, 4096))
-        except OSError: break
-if proc.poll() is None:
-    proc.kill(); proc.wait(); raise AssertionError('terminal run timed out')
-while select.select([master], [], [], 0)[0]:
-    try:
-        chunk = os.read(master, 4096)
-        if not chunk: break
-        data.extend(chunk)
-    except OSError: break
-os.close(master)
-assert proc.returncode == 0 and b'terminal streams preserved' in data, (proc.returncode, bytes(data))
+try:
+    data = read_terminal_process(proc, master, timeout=15)
+finally:
+    os.close(master)
+    if proc.poll() is None:
+        proc.kill(); proc.wait()
+assert proc.returncode == 0 and b'terminal streams preserved' in data, (proc.returncode, data)
 PY
 git -C "$work_goose" init -q
 printf 'before\n' > "$work_goose/main.txt"
