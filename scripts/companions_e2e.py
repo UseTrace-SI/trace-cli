@@ -10,6 +10,8 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import zipfile
+from xml.sax.saxutils import escape
 
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -56,6 +58,13 @@ def main():
             root.mkdir()
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             (root / "main.go").write_text(content)
+
+        def write_docx(path, content):
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/content/body.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+                archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="main" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="content/body.xml"/></Relationships>')
+                archive.writestr("content/body.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>' + escape(content) + '</w:t></w:r></w:p></w:body></w:document>')
+                archive.writestr("word/comments.xml", "comment-must-not-be-imported")
 
         def hook(event, **fields):
             fields.update(session_id="companion-e2e", hook_event_name=event)
@@ -192,6 +201,21 @@ def main():
             assert document_sync["result"]["imported"] == 1 and document_sync["local_only"], document_sync
             document_recall = run(project, "brain", "recall", "localdocumentkeyword")
             assert "localdocumentkeyword" in document_recall and "ghp_abcdefghijklmnopqrstuvwxyz" not in document_recall
+            office_root = temporary / "office-docs"
+            office_root.mkdir()
+            subprocess.run(["git", "init", "-q", str(office_root)], check=True)
+            (office_root / ".gitignore").write_text("ignored.docx\n")
+            (office_root / "ignored.docx").write_bytes(b"not a ZIP")
+            (office_root / "~$guide.docx").write_bytes(b"temporary lock file")
+            office_document = office_root / "guide.docx"
+            write_docx(office_document, "authentication docx-private-keyword ghp_abcdefghijklmnopqrstuvwxyz")
+            office_original = office_document.read_bytes()
+            office_preview = json.loads(run(project, "brain", "documents", "sync", "--root", str(office_root), "--dry-run"))
+            assert office_preview["files"] == ["guide.docx"] and office_preview["database_changed"] is False, office_preview
+            office_import = json.loads(run(project, "brain", "documents", "sync", "--root", str(office_root)))
+            assert office_import["result"]["imported"] == 1 and office_import["local_only"] and office_document.read_bytes() == office_original, office_import
+            office_recall = run(project, "brain", "recall", "docx-private-keyword")
+            assert "docx-private-keyword" in office_recall and "ghp_abcdefghijklmnopqrstuvwxyz" not in office_recall, office_recall
             run(project, "brain", "update", manual_id, "authentication revised note ghp_abcdefghijklmnopqrstuvwxyz")
             manual = json.loads(run(project, "brain", "get", manual_id))
             assert "revised note" in manual["content"] and "ghp_abcdefghijklmnopqrstuvwxyz" not in manual["content"], manual
@@ -240,6 +264,7 @@ def main():
             assert snapshot["brain"]["memories"], snapshot
             assert all(m["source"] in ("trace-import", "agent-extract") for m in snapshot["brain"]["memories"]), snapshot
             assert "localdocumentkeyword" not in json.dumps(snapshot), "local document was uploaded"
+            assert "docx-private-keyword" not in json.dumps(snapshot), "local DOCX body was uploaded"
             assert str(project) not in json.dumps(snapshot), "snapshot exposed the local repository path"
             assert context["brain"]["status"] == context["graph"]["status"] == "ready", context
             assert any(r["from_symbol"] == "Login" and r["to_symbol"] == "Validate" for r in context["graph"]["relations"]), context
@@ -335,6 +360,19 @@ def main():
             assert refreshed["result"]["imported"] == 1, refreshed
             assert "localdocumentkeyword" not in run(project, "brain", "recall", "localdocumentkeyword")
             assert "freshdocumentkeyword" in run(project, "brain", "recall", "freshdocumentkeyword")
+            office_before_failure = json.loads(run(project, "brain", "documents", "list", "--root", str(office_root)))
+            write_docx(office_document, "freshdocxkeyword")
+            (office_root / "zzz-bad.docx").write_bytes(b"not a ZIP")
+            failed_office = subprocess.run([trace, "--repo", str(project), "brain", "documents", "sync", "--root", str(office_root), "--prune"], env=environment, text=True, capture_output=True, timeout=30)
+            assert failed_office.returncode != 0, "invalid DOCX scan succeeded"
+            assert json.loads(run(project, "brain", "documents", "list", "--root", str(office_root))) == office_before_failure
+            assert "docx-private-keyword" in run(project, "brain", "recall", "docx-private-keyword")
+            (office_root / "zzz-bad.docx").unlink()
+            office_refresh = json.loads(run(project, "brain", "documents", "sync", "--root", str(office_root)))
+            assert office_refresh["result"]["imported"] == 1 and "freshdocxkeyword" in run(project, "brain", "recall", "freshdocxkeyword"), office_refresh
+            office_document.unlink()
+            office_prune = json.loads(run(project, "brain", "documents", "sync", "--root", str(office_root), "--prune"))
+            assert office_prune["result"]["pruned"] == 1 and "freshdocxkeyword" not in run(project, "brain", "recall", "freshdocxkeyword"), office_prune
             document.unlink()
             pruned = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs), "--prune"))
             assert pruned["result"]["pruned"] == 1, pruned
