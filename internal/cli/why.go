@@ -97,6 +97,11 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		var results []whyResult
 		uncertain := false
+		uncertaintyMessage := "origin uncertain after a large edit"
+		// The working file may have changed since the latest capture, including
+		// during a Git rewrite. Align it with each recorded state before using
+		// stored line ranges; never attribute an uncaptured line to an agent.
+		recordedText := string(current)
 		type cachedText struct {
 			text      string
 			truncated bool
@@ -125,6 +130,28 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 			group := changes[i:j]
 			i = j
+			oldText, err := loadText(ch.before)
+			if err != nil {
+				return err
+			}
+			newText, err := loadText(ch.after)
+			if err != nil {
+				return err
+			}
+			if oldText.truncated || newText.truncated {
+				uncertain = true
+				break
+			}
+			if recordedText != newText.text {
+				mapped, touched := why.MapLine(newText.text, recordedText, line)
+				if touched || mapped < 1 {
+					uncertain = true
+					uncertaintyMessage = "origin uncertain: line cannot be matched to the recorded history"
+					break
+				}
+				line = mapped
+			}
+			recordedText = oldText.text
 			laterInFile := true
 			for _, candidate := range group {
 				if candidate.start == 0 || candidate.start <= line {
@@ -135,19 +162,7 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if laterInFile {
 				continue
 			}
-			before, after, turnID, at := ch.before, ch.after, ch.turnID, ch.at
-			oldText, err := loadText(before)
-			if err != nil {
-				return err
-			}
-			newText, err := loadText(after)
-			if err != nil {
-				return err
-			}
-			if oldText.truncated || newText.truncated {
-				uncertain = true
-				break
-			}
+			turnID, at := ch.turnID, ch.at
 			oldLine, touched := why.MapLine(oldText.text, newText.text, line)
 			if oldLine < 0 {
 				uncertain = true
@@ -189,7 +204,7 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 		}
 		if uncertain {
-			results = append(results, whyResult{Agent: "unknown", Message: "origin uncertain after a large edit"})
+			results = append(results, whyResult{Agent: "unknown", Message: uncertaintyMessage})
 		} else if len(results) == 0 {
 			results = append(results, whyResult{Agent: "baseline", Message: "present at baseline"})
 		}

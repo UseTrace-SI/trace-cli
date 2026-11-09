@@ -18,7 +18,39 @@ approving uploads. See [privacy](docs/privacy.md) and [release setup](docs/relea
 Linux/macOS CI also checks concurrent worktrees, race safety, optional parsing,
 sync, repeated companion integration, packaging and performance. These offline
 checks do not substitute for the remaining provider-backed lifecycle coverage.
-The isolated acceptance runner is `python3 scripts/live_acceptance.py --agent
+
+The development branch adds `trace review --agents claude-code,codex` for
+independent headless reviews of unstaged changes (`--staged` selects the index).
+`--no-launch` prints a redacted plan; `--json` returns per-reviewer results and
+preserves successful results when another reviewer fails. Diffs are capped at
+64 KiB, secret paths are excluded and file paths are interpreted literally.
+Claude review disables built-in tools and inherited MCP servers; Codex uses its
+read-only sandbox. A per-reviewer timeout terminates the owned process group.
+Offline subprocess regressions pass; live provider review acceptance is pending.
+
+`trace why` maps current lines back through recorded file states, including
+line shifts and gaps between captures. Unmatched lines report an uncertain origin
+instead of inheriting an agent attribution. This does not yet qualify attribution
+across every Git rewrite or formatting workflow.
+
+The development CLI also supports `trace cloud-run --project PROJECT_ID
+--include example.js -- node example.js`, plus `cloud-run status JOB_ID` and
+`cloud-run cancel JOB_ID`, `cloud-run list --project PROJECT_ID`, and
+`cloud-run forget JOB_ID`. Forget removes hosted inputs/results and revokes an
+active lease; download needed results first. Retry a failed submission with its
+reported `--request-id UUID` and identical inputs to avoid a duplicate job.
+`--dry-run` lists the selected paths and byte counts
+without submitting data or reading credentials. Uploads are explicit, bounded,
+exclude secret and ignored paths, and reject symlinks. Actual execution requires
+a personal connection with a separate expiring dashboard execution grant and the
+qualified NUC executor; history sync alone does not grant execution. Live NUC
+qualification is pending. Results do not automatically change local files.
+
+`trace plugin` manages signed local bundles with separately pinned Ed25519 public
+keys, immutable versions, revocation, bounded retention and verification before
+each explicit run. Installation stays offline. See [verified plugins](docs/plugins.md).
+
+The isolated capture acceptance runner is `python3 scripts/live_acceptance.py --agent
 claude-code --trace /absolute/path/to/trace --receipt /private/path/claude.json`
 (or `--agent codex`). It uses existing provider authentication without changing
 global hook configuration or bypassing hook trust. A failed provider turn does

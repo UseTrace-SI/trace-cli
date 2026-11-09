@@ -65,6 +65,7 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(expertsCommand(&repoPath, &jsonOutput))
 	root.AddCommand(importCommand(&repoPath, &jsonOutput))
 	root.AddCommand(reviewCommand(&repoPath, &jsonOutput))
+	root.AddCommand(pluginManagerCommand(&repoPath, &jsonOutput))
 	loadPlugins(root)
 	if err := root.Execute(); err != nil {
 		var agentErr agentExit

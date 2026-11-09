@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise the actual CLI, Brain and Graph binaries in isolated checkouts."""
+import base64
 import json
 import os
 from pathlib import Path
@@ -73,7 +74,29 @@ def main():
             wait_for(lambda: (project / ".trace/spool.ready").exists() or (project / ".trace/sock").exists(), "daemon readiness")
             run(project, "init")
             run(project, "daemon", "start")
-            run(project, "brain", "remember", "authentication manual note ghp_abcdefghijklmnopqrstuvwxyz")
+            manual_id = run(project, "brain", "remember", "authentication manual note ghp_abcdefghijklmnopqrstuvwxyz").strip().split()[-1]
+            private_docs = temporary / "private-docs"
+            private_docs.mkdir()
+            document = private_docs / "guide.md"
+            document.write_text("authentication localdocumentkeyword ghp_abcdefghijklmnopqrstuvwxyz")
+            document_sync = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs)))
+            assert document_sync["result"]["imported"] == 1 and document_sync["local_only"], document_sync
+            document_recall = run(project, "brain", "recall", "localdocumentkeyword")
+            assert "localdocumentkeyword" in document_recall and "ghp_abcdefghijklmnopqrstuvwxyz" not in document_recall
+            run(project, "brain", "update", manual_id, "authentication revised note ghp_abcdefghijklmnopqrstuvwxyz")
+            manual = json.loads(run(project, "brain", "get", manual_id))
+            assert "revised note" in manual["content"] and "ghp_abcdefghijklmnopqrstuvwxyz" not in manual["content"], manual
+            versions = json.loads(run(project, "brain", "history", manual_id))
+            fact = json.loads(run(project, "brain", "facts", "assert", "project", "uses", "sqlite", "--evidence", manual_id,
+                                  "--from", "2024-01-01T00:00:00Z", "--exclusive"))
+            assert fact["source_verified"] is False and fact["local_only"], fact
+            claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z"))
+            assert len(claims["result"]["facts"]) == 1 and claims["result"]["facts"][0]["object"] == "sqlite", claims
+            fact_graph = json.loads(run(project, "brain", "facts", "graph", "project"))
+            assert any(item["id"] == fact["fact"]["id"] for item in fact_graph["result"]["facts"]), fact_graph
+            assert len(versions["revisions"]) == 2, versions
+            verified = json.loads(run(project, "brain", "verify", manual_id))
+            assert verified["status"] == "unlinked" and verified["content_verified"] is False, verified
             hook("SessionStart")
             hook("UserPromptSubmit", prompt="authentication Login change")
             (project / "main.go").write_text("package p\nfunc Validate() bool {return true}\nfunc Login() bool {return Validate()}\n")
@@ -99,13 +122,30 @@ def main():
             assert snapshot["brain"]["status"] == snapshot["graph"]["status"] == "ready", snapshot
             assert snapshot["graph"]["repo"] == "solo/project", snapshot
             assert snapshot["brain"]["memories"], snapshot
-            assert all(m["source"] not in ("manual", "mcp") for m in snapshot["brain"]["memories"]), snapshot
+            assert all(m["source"] in ("trace-import", "agent-extract") for m in snapshot["brain"]["memories"]), snapshot
+            assert "localdocumentkeyword" not in json.dumps(snapshot), "local document was uploaded"
             assert str(project) not in json.dumps(snapshot), "snapshot exposed the local repository path"
             assert context["brain"]["status"] == context["graph"]["status"] == "ready", context
             assert any(r["from_symbol"] == "Login" and r["to_symbol"] == "Validate" for r in context["graph"]["relations"]), context
             assert "ghp_abcdefghijklmnopqrstuvwxyz" not in json.dumps(context), "context leaked manual memory token"
             assert (project / ".trace/brain/memory.db").exists(), "Brain wrote outside integrated state"
             assert (project / ".trace/graph/graph.db").exists(), "Graph wrote outside integrated state"
+            # Exercise the new graph API through the parent CLI's real plugin
+            # dispatch, including complete exports and a later symbol change.
+            graph_health = json.loads(run(project, "graph", "health"))
+            assert graph_health["resolved_calls"] >= 1, graph_health
+            graph_base = temporary / "graph-before.ndjson"
+            graph_base.write_text(run(project, "graph", "snapshot"))
+            exported = [json.loads(line) for line in graph_base.read_text().splitlines()]
+            assert exported[0]["format"] == "trace.graph/v1" and exported[-1]["type"] == "complete", exported
+            assert exported[-1]["truncated"] is False, exported
+            with (project / "main.go").open("a") as changed:
+                changed.write("func Controller() bool {return Login()}\n")
+            run(project, "companions", "refresh", json_output=True)
+            impact = json.loads(run(project, "graph", "impact", "Validate", "--json"))
+            assert {node["name"] for node in impact["nodes"]} == {"Login", "Controller"}, impact
+            changes = json.loads(run(project, "graph", "changes", "--base", str(graph_base)))
+            assert any(item["name"] == "Controller" and item["kind"] == "added" for item in changes["changes"]), changes
             # Pausing also affects an already-running daemon, without deleting
             # the project history or requiring hooks to be uninstalled.
             with sqlite3.connect(project / ".trace/trace.db") as db:
@@ -151,6 +191,8 @@ def main():
             report = run(recovered, "companions", "refresh", json_output=True)
             assert report["brain"]["status"] == report["graph"]["status"] == "ready", report
             recovery = run(recovered, "context", "authentication", "--path", "main.go", json_output=True)
+            recovered_claims = json.loads(run(recovered, "brain", "facts", "query", "--subject", "project"))
+            assert recovered_claims["result"]["facts"] == [], "local fact assertions were transferred"
             assert recovery["steps"] and any(m.get("turn_id") for m in recovery["brain"]["memories"]), recovery
             assert recovery["graph"]["repo"] == str(recovered), recovery
             assert not any(m["source"] == "manual" for m in recovery["brain"]["memories"]), "manual memories were transferred"
@@ -158,7 +200,48 @@ def main():
             run(project, "companions", "refresh", json_output=True)
             source_context = run(project, "context", "authentication", json_output=True)
             assert any(m["source"] == "manual" for m in source_context["brain"]["memories"]), source_context
-            print("companions e2e passed: automatic refresh, shared context, redaction, pause/resume, isolated project state and derived recovery")
+            workspace = json.loads(run(project, "brain", "workspace", "query", "authentication", "--databases",
+                                       str(project / ".trace/brain/memory.db"), "--databases", str(recovered / ".trace/brain/memory.db")))
+            assert workspace["partial"] is False and len(workspace["sources"]) == 2, workspace
+            run(project, "brain", "forget", manual_id)
+            assert json.loads(run(project, "brain", "facts", "query", "--subject", "project"))["result"]["facts"] == [], "forgotten evidence left fact content"
+            document.write_text("freshdocumentkeyword")
+            refreshed = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs)))
+            assert refreshed["result"]["imported"] == 1, refreshed
+            assert "localdocumentkeyword" not in run(project, "brain", "recall", "localdocumentkeyword")
+            assert "freshdocumentkeyword" in run(project, "brain", "recall", "freshdocumentkeyword")
+            document.unlink()
+            pruned = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs), "--prune"))
+            assert pruned["result"]["pruned"] == 1, pruned
+            # Exercise the shipped CLI's offline trust/install/run/revoke flow.
+            # The fixture key is ephemeral; no existing credential is accessed.
+            plugin_bundle = temporary / "plugin-bundle"
+            plugin_bundle.mkdir()
+            generator = """import {generateKeyPairSync,sign,createHash} from 'node:crypto';
+import {writeFileSync} from 'node:fs';import {join} from 'node:path';
+const path=process.argv[1],keys=generateKeyPairSync('ed25519');
+const binary=Buffer.from(process.argv[2],'base64');
+const manifest={format:1,name:'example',publisher:'fixture',version:'1.0.0',os:process.platform,arch:process.arch==='x64'?'amd64':process.arch,sha256:createHash('sha256').update(binary).digest('hex'),bytes:binary.length};
+const raw=Buffer.from(JSON.stringify(manifest));
+writeFileSync(join(path,'publisher.pem'),keys.publicKey.export({type:'spki',format:'pem'}));
+writeFileSync(join(path,'manifest.json'),raw);writeFileSync(join(path,'manifest.sig'),sign(null,raw,keys.privateKey).toString('base64'));writeFileSync(join(path,'plugin'),binary);
+"""
+            plugin_code = base64.b64encode(b'#!/bin/sh\nprintf \'%s\\n\' "$@"\n').decode()
+            subprocess.run(["node", "--input-type=module", "-e", generator, str(plugin_bundle), plugin_code], check=True, cwd=temporary, env=environment, timeout=15)
+            trusted = run(project, "plugin", "trust", "--publisher", "fixture", "--key", str(plugin_bundle / "publisher.pem"), json_output=True)
+            assert trusted["trusted"], trusted
+            installed = run(project, "plugin", "install", str(plugin_bundle), json_output=True)
+            assert installed["verified"] and installed["executed"] is False and installed["network"] is False, installed
+            assert run(project, "plugin", "run", "example", "--", "$(literal)", "--repo=literal") == "$(literal)\n--repo=literal\n"
+            run(project, "plugin", "untrust", "fixture", json_output=True)
+            verified_plugins = run(project, "plugin", "list", json_output=True)
+            assert len(verified_plugins) == 1 and verified_plugins[0]["verified"] is False, verified_plugins
+            run(project, "plugin", "remove", "example", json_output=True)
+            run(project, "plugin", "prune", "example", json_output=True)
+            with sqlite3.connect(project / ".trace/brain/memory.db") as db:
+                assert db.execute("SELECT count(*) FROM memories WHERE id=?", (manual_id,)).fetchone()[0] == 0
+                assert db.execute("SELECT count(*) FROM memory_revisions WHERE memory_id=?", (manual_id,)).fetchone()[0] == 0
+            print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes, signed plugins, redaction, pause/resume and derived recovery")
         finally:
             for process in daemons:
                 process.terminate()

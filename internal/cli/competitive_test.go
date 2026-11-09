@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -569,6 +570,89 @@ func TestWhyIncludesConversation(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Step != 1 || len(got[0].Messages) != 2 || got[0].Messages[0].Content != "please change it" {
 		t.Fatalf("why conversation = %s", out.String())
+	}
+}
+
+func TestWhyAlignsWorkingFileWithRecordedHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name, current, agent string
+		line                 int
+		gap                  bool
+	}{
+		{"shifted_agent_line", "inserted\nheader\nagent value\nfooter\n", "codex", 3, false},
+		{"shifted_baseline_line", "inserted\nheader\nagent value\nfooter\n", "baseline", 2, false},
+		{"unrecorded_insertion", "inserted\nheader\nagent value\nfooter\n", "unknown", 1, false},
+		{"deleted_prefix", "agent value\nfooter\n", "codex", 1, false},
+		{"unrecorded_replacement", "header\nreplaced without capture\nfooter\n", "unknown", 2, false},
+		{"gap_between_captures", "inserted\nheader\nagent value\nfooter\nlater\n", "codex", 3, true},
+		{"uncaptured_line_between_captures", "inserted\nheader\nagent value\nfooter\nlater\n", "unknown", 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := competitiveRepo(t)
+			if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte(tc.current), 0600); err != nil {
+				t.Fatal(err)
+			}
+			e, err := engine.Open(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := e.Blobs.PutBytes([]byte("header\nold value\nfooter\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := e.Blobs.PutBytes([]byte("header\nagent value\nfooter\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			h, err := (manifest.Manifest{}).Save(e.Blobs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, statement := range []struct {
+				query string
+				args  []any
+			}{
+				{"INSERT INTO sessions(id,agent,worktree,started_at) VALUES('s','codex',?,1)", []any{root}},
+				{"INSERT INTO turns(id,session_id,seq,prompt,started_at) VALUES('t','s',1,'change the value',1)", nil},
+				{"INSERT INTO keyframes(id,turn_id,seq,manifest_hash,tag,created_at) VALUES('k','t',1,?,'turn',2)", []any{h}},
+				{"INSERT INTO ops(id,turn_id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES('o','t','file.txt','modify',2,2,?,?,'tool',2)", []any{before, after}},
+			} {
+				if _, err := e.DB.Exec(statement.query, statement.args...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.gap {
+				gapBefore, err := e.Blobs.PutBytes([]byte("inserted\nheader\nagent value\nfooter\n"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				gapAfter, err := e.Blobs.PutBytes([]byte(tc.current))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES('later','file.txt','modify',5,5,?,?,'watcher',3)", gapBefore, gapAfter); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := e.Close(); err != nil {
+				t.Fatal(err)
+			}
+			jsonOutput := true
+			cmd := whyCommand(&root, &jsonOutput)
+			cmd.SetArgs([]string{fmt.Sprintf("file.txt:%d", tc.line)})
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			var got []whyResult
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 || got[0].Agent != tc.agent {
+				t.Fatalf("wrong attribution: %s; want %s", &out, tc.agent)
+			}
+		})
 	}
 }
 
