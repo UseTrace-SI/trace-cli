@@ -18,6 +18,7 @@ test-sync-integration:
 	go test -count=1 -race -tags syncintegration ./internal/syncclient
 	npm --prefix ../trace-platform run check
 lint:
+	python3 -c "import ast; from pathlib import Path; ast.parse(Path('scripts/companions_e2e.py').read_text())"
 	go vet ./...
 	staticcheck ./...
 e2e:

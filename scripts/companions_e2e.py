@@ -288,7 +288,7 @@ writeFileSync(join(path,'manifest.json'),raw);writeFileSync(join(path,'manifest.
             with sqlite3.connect(project / ".trace/brain/memory.db") as db:
                 assert db.execute("SELECT count(*) FROM memories WHERE id=?", (manual_id,)).fetchone()[0] == 0
                 assert db.execute("SELECT count(*) FROM memory_revisions WHERE memory_id=?", (manual_id,)).fetchone()[0] == 0
-        print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes and Git commits, signed plugins, redaction, pause/resume and derived recovery")
+            print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes and Git commits, signed plugins, redaction, pause/resume and derived recovery")
         finally:
             for process in daemons:
                 process.terminate()
