@@ -18,7 +18,39 @@ approving uploads. See [privacy](docs/privacy.md) and [release setup](docs/relea
 Linux/macOS CI also checks concurrent worktrees, race safety, optional parsing,
 sync, repeated companion integration, packaging and performance. These offline
 checks do not substitute for the remaining provider-backed lifecycle coverage.
-The isolated acceptance runner is `python3 scripts/live_acceptance.py --agent
+
+The development branch adds `trace review --agents claude-code,codex` for
+independent headless reviews of unstaged changes (`--staged` selects the index).
+`--no-launch` prints a redacted plan; `--json` returns per-reviewer results and
+preserves successful results when another reviewer fails. Diffs are capped at
+64 KiB, secret paths are excluded and file paths are interpreted literally.
+Claude review disables built-in tools and inherited MCP servers; Codex uses its
+read-only sandbox. A per-reviewer timeout terminates the owned process group.
+Offline subprocess regressions pass; live provider review acceptance is pending.
+
+`trace why` maps current lines back through recorded file states, including
+line shifts and gaps between captures. Unmatched lines report an uncertain origin
+instead of inheriting an agent attribution. This does not yet qualify attribution
+across every Git rewrite or formatting workflow.
+
+The development CLI also supports `trace cloud-run --project PROJECT_ID
+--include example.js -- node example.js`, plus `cloud-run status JOB_ID` and
+`cloud-run cancel JOB_ID`, `cloud-run list --project PROJECT_ID`, and
+`cloud-run forget JOB_ID`. Forget removes hosted inputs/results and revokes an
+active lease; download needed results first. Retry a failed submission with its
+reported `--request-id UUID` and identical inputs to avoid a duplicate job.
+`--dry-run` lists the selected paths and byte counts
+without submitting data or reading credentials. Uploads are explicit, bounded,
+exclude secret and ignored paths, and reject symlinks. Actual execution requires
+a personal connection with a separate expiring dashboard execution grant and the
+qualified NUC executor; history sync alone does not grant execution. Live NUC
+qualification is pending. Results do not automatically change local files.
+
+`trace plugin` manages signed local bundles with separately pinned Ed25519 public
+keys, immutable versions, revocation, bounded retention and verification before
+each explicit run. Installation stays offline. See [verified plugins](docs/plugins.md).
+
+The isolated capture acceptance runner is `python3 scripts/live_acceptance.py --agent
 claude-code --trace /absolute/path/to/trace --receipt /private/path/claude.json`
 (or `--agent codex`). It uses existing provider authentication without changing
 global hook configuration or bypassing hook trust. A failed provider turn does
@@ -155,6 +187,22 @@ Platform migration 0010 and its server encryption key are required; an older
 deployed app cannot accept this connection.
 
 Optional Brain and Graph companions now refresh in the daemon after completed turns and sessions. `trace context --path main.go "authentication" --json` combines history, recalled memories and code relationships; MCP `get_context` returns the same result. `trace companions status` reports refresh status. Recovery rebuilds derived indexes from recovered history and the current checkout; manual memories remain local. Companion state is excluded from new snapshots. See [companion integration](docs/companions.md) for installation, protocol, controls and consistency limits.
+
+With the coordinated Graph companion, `trace graph compare --base main --head HEAD`
+compares symbols in two local commits without changing dirty working files, Git
+history or the persistent graph index. It applies current and both committed
+exclusion policies and returns hashes instead of raw signatures. Missing Git
+objects fail without fetching. Add `--detect-renames` for uniquely matching
+exact-content file relocations with the same extension; copies, duplicate content
+and edited moves remain unpaired. This is source-structure comparison; symbol
+renaming and type-aware behavioral analysis remain unimplemented.
+
+Brain's MCP server can optionally expose read-only learned-memory retrieval with
+`trace brain mcp --semantic-model EXACT_INSTALLED_MODEL`. The server owner selects
+the local model and endpoint; tool callers cannot override them. Startup and
+ordinary recall stay offline. The tool searches existing learned vectors and
+does not download models or build an index. Live installed-model qualification
+remains outstanding.
 
 Local chunk reads now close synchronously, including partial reads and errors. Sync protocol 2 transfers large files as bounded chunks in Team and Pro modes; upgrade the companion platform alongside the CLI. See [sync upgrade notes](docs/sync.md#protocol-2-upgrade) for repository identity changes and legacy hosted history.
 

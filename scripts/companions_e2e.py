@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Exercise the actual CLI, Brain and Graph binaries in isolated checkouts."""
+import base64
 import json
 import os
 from pathlib import Path
+import select
 import shutil
 import sqlite3
 import subprocess
@@ -59,7 +61,115 @@ def main():
             fields.update(session_id="companion-e2e", hook_event_name=event)
             run(project, "hook", "claude-code", event, data=json.dumps(fields) + "\n")
 
+        def check_semantic_mcp(root, enabled):
+            command = [str(binaries / "trace-brain"), "--db", str(root / ".trace-brain/memory.db"), "mcp"]
+            if enabled:
+                command.extend(["--semantic-model", "fixture:never-pull", "--semantic-endpoint", "http://127.0.0.1:1"])
+            process = subprocess.Popen(command, cwd=root, env=environment, stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            sequence = 0
+
+            def rpc(method, params):
+                nonlocal sequence
+                sequence += 1
+                process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": sequence, "method": method, "params": params}) + "\n")
+                process.stdin.flush()
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if not select.select([process.stdout], [], [], max(0, deadline - time.monotonic()))[0]:
+                        break
+                    line = process.stdout.readline()
+                    if not line:
+                        raise AssertionError("MCP server closed before replying")
+                    reply = json.loads(line)
+                    if reply.get("id") == sequence:
+                        return reply
+                raise AssertionError("MCP request timed out: " + method)
+
+            try:
+                initialized = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "trace-e2e", "version": "1"}})
+                assert initialized["result"]["serverInfo"]["name"] == "trace-brain", initialized
+                process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+                process.stdin.flush()
+                tools = rpc("tools/list", {})["result"]["tools"]
+                learned = [tool for tool in tools if tool["name"] == "brain_semantic"]
+                assert bool(learned) == enabled, tools
+                if enabled:
+                    assert learned[0]["annotations"]["readOnlyHint"], learned
+                    assert not ({"endpoint", "model"} & set(learned[0]["inputSchema"]["properties"])), learned
+                    invalid = rpc("tools/call", {"name": "brain_semantic", "arguments": {"query": ""}})
+                    assert invalid.get("error") or invalid.get("result", {}).get("isError"), invalid
+                # Ordinary recall succeeds with no installed/reachable model.
+                recalled = rpc("tools/call", {"name": "brain_recall", "arguments": {"query": "offline_mcp_keyword"}})
+                assert not recalled.get("error") and not recalled["result"].get("isError"), recalled
+                assert "offline_mcp_keyword" in json.dumps(recalled), recalled
+            finally:
+                process.stdin.close()
+                process.stdin = None
+                try:
+                    _, stderr = process.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate(timeout=5)
+                    raise AssertionError("MCP server did not exit after stdin closed")
+                assert process.returncode == 0, stderr
+
         try:
+            semantic_project = temporary / "semantic-mcp"
+            initialize(semantic_project, "package p\n")
+            run(semantic_project, "brain", "remember", "offline_mcp_keyword remains local")
+            semantic_capabilities = json.loads(run(semantic_project, "brain", "capabilities"))
+            assert semantic_capabilities["retrieval"]["mcp_learned_default"] is False and semantic_capabilities["context_network"] is False, semantic_capabilities
+            assert "--semantic-model" in run(semantic_project, "brain", "mcp", "--help")
+            check_semantic_mcp(semantic_project, False)
+            check_semantic_mcp(semantic_project, True)
+
+            # A separate repository has no Trace hooks or daemon: only the
+            # disposable fixture commits may write Git history here.
+            history = temporary / "git-history"
+            initialize(history, "package p\nfunc Version() int {return 1}\n")
+
+            def history_git(*args):
+                return subprocess.check_output(
+                    ["git", "-C", str(history), "-c", "user.name=Fixture",
+                     "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+                     "-c", "core.hooksPath=/dev/null", *args], text=True,
+                ).strip()
+
+            history_git("add", "main.go")
+            history_git("commit", "-qm", "base")
+            base_commit = history_git("rev-parse", "HEAD")
+            (history / "main.go").write_text("package p\nfunc Version() int {return 2}\nfunc Added() {}\n")
+            history_git("add", "main.go")
+            history_git("commit", "-qm", "head")
+            head_commit = history_git("rev-parse", "HEAD")
+            dirty_source = "package p\nfunc DirtyMustNotAppear() {}\n"
+            (history / "main.go").write_text(dirty_source)
+            git_index = (history / ".git/index").read_bytes()
+            revision_changes = json.loads(run(history, "graph", "compare", "--base", base_commit, "--head", "HEAD"))
+            assert revision_changes["base_commit"] == base_commit and revision_changes["head_commit"] == head_commit, revision_changes
+            assert {(item["name"], item["kind"]) for item in revision_changes["changes"]} == {("Version", "source_changed"), ("Added", "added")}, revision_changes
+            assert revision_changes["source_mode"] == "local_git_objects" and revision_changes["signatures"] == "sha256_only", revision_changes
+            assert "DirtyMustNotAppear" not in json.dumps(revision_changes), revision_changes
+            assert (history / "main.go").read_text() == dirty_source
+            assert (history / ".git/index").read_bytes() == git_index and history_git("rev-parse", "HEAD") == head_commit
+            assert not (history / ".trace").exists() and not (history / ".trace-graph").exists()
+
+            (history / "main.go").write_text("package p\nfunc Version() int {return 2}\nfunc Added() {}\n")
+            history_git("mv", "main.go", "renamed.go")
+            history_git("commit", "-qm", "relocate")
+            relocated_commit = history_git("rev-parse", "HEAD")
+            (history / "renamed.go").write_text(dirty_source)
+            git_index = (history / ".git/index").read_bytes()
+            relocations = json.loads(run(history, "graph", "compare", "--base", head_commit, "--detect-renames"))
+            assert relocations["head_commit"] == relocated_commit and relocations["rename_detection"] == "unique_exact_content_same_extension", relocations
+            assert len(relocations["file_renames"]) == 1 and relocations["file_renames"][0]["from"] == "main.go" and relocations["file_renames"][0]["to"] == "renamed.go", relocations
+            assert relocations["rename_ambiguities"] == [] and {(item["name"], item["kind"]) for item in relocations["changes"]} == {("Version", "file_moved"), ("Added", "file_moved")}, relocations
+            assert all(item["before"][0]["file"] == "main.go" and item["after"][0]["file"] == "renamed.go" for item in relocations["changes"]), relocations
+            assert "DirtyMustNotAppear" not in json.dumps(relocations) and (history / "renamed.go").read_text() == dirty_source
+            assert (history / ".git/index").read_bytes() == git_index and history_git("rev-parse", "HEAD") == relocated_commit
+            assert not (history / ".trace").exists() and not (history / ".trace-graph").exists()
+
             initialize(project, "package p\nfunc Validate() bool {return true}\n")
             (project / ".trace").mkdir()
             (project / ".trace/login.json").write_text(json.dumps({
@@ -73,7 +183,36 @@ def main():
             wait_for(lambda: (project / ".trace/spool.ready").exists() or (project / ".trace/sock").exists(), "daemon readiness")
             run(project, "init")
             run(project, "daemon", "start")
-            run(project, "brain", "remember", "authentication manual note ghp_abcdefghijklmnopqrstuvwxyz")
+            manual_id = run(project, "brain", "remember", "authentication manual note ghp_abcdefghijklmnopqrstuvwxyz").strip().split()[-1]
+            private_docs = temporary / "private-docs"
+            private_docs.mkdir()
+            document = private_docs / "guide.md"
+            document.write_text("authentication localdocumentkeyword ghp_abcdefghijklmnopqrstuvwxyz")
+            document_sync = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs)))
+            assert document_sync["result"]["imported"] == 1 and document_sync["local_only"], document_sync
+            document_recall = run(project, "brain", "recall", "localdocumentkeyword")
+            assert "localdocumentkeyword" in document_recall and "ghp_abcdefghijklmnopqrstuvwxyz" not in document_recall
+            run(project, "brain", "update", manual_id, "authentication revised note ghp_abcdefghijklmnopqrstuvwxyz")
+            manual = json.loads(run(project, "brain", "get", manual_id))
+            assert "revised note" in manual["content"] and "ghp_abcdefghijklmnopqrstuvwxyz" not in manual["content"], manual
+            versions = json.loads(run(project, "brain", "history", manual_id))
+            fact = json.loads(run(project, "brain", "facts", "assert", "project", "uses", "sqlite", "--evidence", manual_id,
+                                  "--from", "2024-01-01T00:00:00Z", "--exclusive"))
+            assert fact["source_verified"] is False and fact["local_only"], fact
+            claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z"))
+            assert len(claims["result"]["facts"]) == 1 and claims["result"]["facts"][0]["object"] == "sqlite", claims
+            fact_graph = json.loads(run(project, "brain", "facts", "graph", "project"))
+            assert any(item["id"] == fact["fact"]["id"] for item in fact_graph["result"]["facts"]), fact_graph
+            assert len(versions["revisions"]) == 2, versions
+            verified = json.loads(run(project, "brain", "verify", manual_id))
+            assert verified["status"] == "unlinked" and verified["content_verified"] is False, verified
+            capture = json.loads(run(project, "brain", "facts", "evidence", fact["fact"]["id"]))
+            assert "revised note" in capture["evidence"]["content"] and "ghp_abcdefghijklmnopqrstuvwxyz" not in capture["evidence"]["content"], capture
+            run(project, "brain", "update", manual_id, "authentication final source version")
+            current_claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z"))
+            assert current_claims["result"]["facts"] == [], current_claims
+            captured_claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z", "--evidence-mode", "captured"))
+            assert len(captured_claims["result"]["facts"]) == 1 and captured_claims["result"]["facts"][0]["evidence_stale"] and captured_claims["result"]["facts"][0]["evidence_captured"], captured_claims
             hook("SessionStart")
             hook("UserPromptSubmit", prompt="authentication Login change")
             (project / "main.go").write_text("package p\nfunc Validate() bool {return true}\nfunc Login() bool {return Validate()}\n")
@@ -99,26 +238,51 @@ def main():
             assert snapshot["brain"]["status"] == snapshot["graph"]["status"] == "ready", snapshot
             assert snapshot["graph"]["repo"] == "solo/project", snapshot
             assert snapshot["brain"]["memories"], snapshot
-            assert all(m["source"] not in ("manual", "mcp") for m in snapshot["brain"]["memories"]), snapshot
+            assert all(m["source"] in ("trace-import", "agent-extract") for m in snapshot["brain"]["memories"]), snapshot
+            assert "localdocumentkeyword" not in json.dumps(snapshot), "local document was uploaded"
             assert str(project) not in json.dumps(snapshot), "snapshot exposed the local repository path"
             assert context["brain"]["status"] == context["graph"]["status"] == "ready", context
             assert any(r["from_symbol"] == "Login" and r["to_symbol"] == "Validate" for r in context["graph"]["relations"]), context
             assert "ghp_abcdefghijklmnopqrstuvwxyz" not in json.dumps(context), "context leaked manual memory token"
             assert (project / ".trace/brain/memory.db").exists(), "Brain wrote outside integrated state"
             assert (project / ".trace/graph/graph.db").exists(), "Graph wrote outside integrated state"
+            # Exercise the new graph API through the parent CLI's real plugin
+            # dispatch, including complete exports and a later symbol change.
+            graph_health = json.loads(run(project, "graph", "health"))
+            assert graph_health["resolved_calls"] >= 1, graph_health
+            graph_base = temporary / "graph-before.ndjson"
+            graph_base.write_text(run(project, "graph", "snapshot"))
+            exported = [json.loads(line) for line in graph_base.read_text().splitlines()]
+            assert exported[0]["format"] == "trace.graph/v1" and exported[-1]["type"] == "complete", exported
+            assert exported[-1]["truncated"] is False, exported
+            with (project / "main.go").open("a") as changed:
+                changed.write("func Controller() bool {return Login()}\n")
+                changed.write("type Worker struct{}\ntype WorkerAlias = Worker\nfunc (Worker) Execute(){}\nfunc Dispatch(){instance:=WorkerAlias{};instance.Execute()}\n")
+            run(project, "companions", "refresh", json_output=True)
+            impact = json.loads(run(project, "graph", "impact", "Validate", "--json"))
+            assert {node["name"] for node in impact["nodes"]} == {"Login", "Controller"}, impact
+            receiver_impact = json.loads(run(project, "graph", "impact", "Execute", "--json"))
+            assert {node["name"] for node in receiver_impact["nodes"]} == {"Dispatch"}, receiver_impact
+            changes = json.loads(run(project, "graph", "changes", "--base", str(graph_base)))
+            assert any(item["name"] == "Controller" and item["kind"] == "added" for item in changes["changes"]), changes
             # Pausing also affects an already-running daemon, without deleting
             # the project history or requiring hooks to be uninstalled.
+            run(project, "disable")
             with sqlite3.connect(project / ".trace/trace.db") as db:
                 before_pause = db.execute("SELECT count(*) FROM turns").fetchone()[0]
                 before_ops = db.execute("SELECT count(*) FROM ops").fetchone()[0]
-            run(project, "disable")
             (project / "paused-note.txt").write_text("edited while paused\n")
             time.sleep(0.5)
             hook("UserPromptSubmit", prompt="must-not-record-while-paused")
             hook("Stop")
             with sqlite3.connect(project / ".trace/trace.db") as db:
-                assert db.execute("SELECT count(*) FROM turns").fetchone()[0] == before_pause
-                assert db.execute("SELECT count(*) FROM ops").fetchone()[0] == before_ops, "file watcher recorded while paused"
+                # Earlier, already admitted watcher work can finish after the
+                # marker is written. Test the paused mutations themselves and
+                # preserve the existing history rather than racing row totals.
+                assert db.execute("SELECT count(*) FROM turns").fetchone()[0] >= before_pause
+                assert db.execute("SELECT count(*) FROM ops").fetchone()[0] >= before_ops
+                assert db.execute("SELECT count(*) FROM turns WHERE prompt='must-not-record-while-paused'").fetchone()[0] == 0
+                assert db.execute("SELECT count(*) FROM ops WHERE path='paused-note.txt'").fetchone()[0] == 0, "file watcher recorded while paused"
             setup_home = temporary / "enable-home"
             setup_home.mkdir()
             subprocess.run([trace, "enable", "--agent", "claude-code"],
@@ -151,6 +315,8 @@ def main():
             report = run(recovered, "companions", "refresh", json_output=True)
             assert report["brain"]["status"] == report["graph"]["status"] == "ready", report
             recovery = run(recovered, "context", "authentication", "--path", "main.go", json_output=True)
+            recovered_claims = json.loads(run(recovered, "brain", "facts", "query", "--subject", "project"))
+            assert recovered_claims["result"]["facts"] == [], "local fact assertions were transferred"
             assert recovery["steps"] and any(m.get("turn_id") for m in recovery["brain"]["memories"]), recovery
             assert recovery["graph"]["repo"] == str(recovered), recovery
             assert not any(m["source"] == "manual" for m in recovery["brain"]["memories"]), "manual memories were transferred"
@@ -158,7 +324,49 @@ def main():
             run(project, "companions", "refresh", json_output=True)
             source_context = run(project, "context", "authentication", json_output=True)
             assert any(m["source"] == "manual" for m in source_context["brain"]["memories"]), source_context
-            print("companions e2e passed: automatic refresh, shared context, redaction, pause/resume, isolated project state and derived recovery")
+            workspace = json.loads(run(project, "brain", "workspace", "query", "authentication", "--databases",
+                                       str(project / ".trace/brain/memory.db"), "--databases", str(recovered / ".trace/brain/memory.db")))
+            assert workspace["partial"] is False and len(workspace["sources"]) == 2, workspace
+            run(project, "brain", "forget", manual_id)
+            assert json.loads(run(project, "brain", "facts", "query", "--subject", "project"))["result"]["facts"] == [], "forgotten evidence left fact content"
+            assert json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--evidence-mode", "captured"))["result"]["facts"] == [], "captured evidence survived forgetting its source"
+            document.write_text("freshdocumentkeyword")
+            refreshed = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs)))
+            assert refreshed["result"]["imported"] == 1, refreshed
+            assert "localdocumentkeyword" not in run(project, "brain", "recall", "localdocumentkeyword")
+            assert "freshdocumentkeyword" in run(project, "brain", "recall", "freshdocumentkeyword")
+            document.unlink()
+            pruned = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs), "--prune"))
+            assert pruned["result"]["pruned"] == 1, pruned
+            # Exercise the shipped CLI's offline trust/install/run/revoke flow.
+            # The fixture key is ephemeral; no existing credential is accessed.
+            plugin_bundle = temporary / "plugin-bundle"
+            plugin_bundle.mkdir()
+            generator = """import {generateKeyPairSync,sign,createHash} from 'node:crypto';
+import {writeFileSync} from 'node:fs';import {join} from 'node:path';
+const path=process.argv[1],keys=generateKeyPairSync('ed25519');
+const binary=Buffer.from(process.argv[2],'base64');
+const manifest={format:1,name:'example',publisher:'fixture',version:'1.0.0',os:process.platform,arch:process.arch==='x64'?'amd64':process.arch,sha256:createHash('sha256').update(binary).digest('hex'),bytes:binary.length};
+const raw=Buffer.from(JSON.stringify(manifest));
+writeFileSync(join(path,'publisher.pem'),keys.publicKey.export({type:'spki',format:'pem'}));
+writeFileSync(join(path,'manifest.json'),raw);writeFileSync(join(path,'manifest.sig'),sign(null,raw,keys.privateKey).toString('base64'));writeFileSync(join(path,'plugin'),binary);
+"""
+            plugin_code = base64.b64encode(b'#!/bin/sh\nprintf \'%s\\n\' "$@"\n').decode()
+            subprocess.run(["node", "--input-type=module", "-e", generator, str(plugin_bundle), plugin_code], check=True, cwd=temporary, env=environment, timeout=15)
+            trusted = run(project, "plugin", "trust", "--publisher", "fixture", "--key", str(plugin_bundle / "publisher.pem"), json_output=True)
+            assert trusted["trusted"], trusted
+            installed = run(project, "plugin", "install", str(plugin_bundle), json_output=True)
+            assert installed["verified"] and installed["executed"] is False and installed["network"] is False, installed
+            assert run(project, "plugin", "run", "example", "--", "$(literal)", "--repo=literal") == "$(literal)\n--repo=literal\n"
+            run(project, "plugin", "untrust", "fixture", json_output=True)
+            verified_plugins = run(project, "plugin", "list", json_output=True)
+            assert len(verified_plugins) == 1 and verified_plugins[0]["verified"] is False, verified_plugins
+            run(project, "plugin", "remove", "example", json_output=True)
+            run(project, "plugin", "prune", "example", json_output=True)
+            with sqlite3.connect(project / ".trace/brain/memory.db") as db:
+                assert db.execute("SELECT count(*) FROM memories WHERE id=?", (manual_id,)).fetchone()[0] == 0
+                assert db.execute("SELECT count(*) FROM memory_revisions WHERE memory_id=?", (manual_id,)).fetchone()[0] == 0
+            print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes and Git commits, signed plugins, redaction, pause/resume and derived recovery")
         finally:
             for process in daemons:
                 process.terminate()
