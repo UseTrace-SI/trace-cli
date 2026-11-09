@@ -61,6 +61,37 @@ def main():
             run(project, "hook", "claude-code", event, data=json.dumps(fields) + "\n")
 
         try:
+            # A separate repository has no Trace hooks or daemon: only the
+            # disposable fixture commits may write Git history here.
+            history = temporary / "git-history"
+            initialize(history, "package p\nfunc Version() int {return 1}\n")
+
+            def history_git(*args):
+                return subprocess.check_output(
+                    ["git", "-C", str(history), "-c", "user.name=Fixture",
+                     "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+                     "-c", "core.hooksPath=/dev/null", *args], text=True,
+                ).strip()
+
+            history_git("add", "main.go")
+            history_git("commit", "-qm", "base")
+            base_commit = history_git("rev-parse", "HEAD")
+            (history / "main.go").write_text("package p\nfunc Version() int {return 2}\nfunc Added() {}\n")
+            history_git("add", "main.go")
+            history_git("commit", "-qm", "head")
+            head_commit = history_git("rev-parse", "HEAD")
+            dirty_source = "package p\nfunc DirtyMustNotAppear() {}\n"
+            (history / "main.go").write_text(dirty_source)
+            git_index = (history / ".git/index").read_bytes()
+            revision_changes = json.loads(run(history, "graph", "compare", "--base", base_commit, "--head", "HEAD"))
+            assert revision_changes["base_commit"] == base_commit and revision_changes["head_commit"] == head_commit, revision_changes
+            assert {(item["name"], item["kind"]) for item in revision_changes["changes"]} == {("Version", "source_changed"), ("Added", "added")}, revision_changes
+            assert revision_changes["source_mode"] == "local_git_objects" and revision_changes["signatures"] == "sha256_only", revision_changes
+            assert "DirtyMustNotAppear" not in json.dumps(revision_changes), revision_changes
+            assert (history / "main.go").read_text() == dirty_source
+            assert (history / ".git/index").read_bytes() == git_index and history_git("rev-parse", "HEAD") == head_commit
+            assert not (history / ".trace").exists() and not (history / ".trace-graph").exists()
+
             initialize(project, "package p\nfunc Validate() bool {return true}\n")
             (project / ".trace").mkdir()
             (project / ".trace/login.json").write_text(json.dumps({
@@ -257,7 +288,7 @@ writeFileSync(join(path,'manifest.json'),raw);writeFileSync(join(path,'manifest.
             with sqlite3.connect(project / ".trace/brain/memory.db") as db:
                 assert db.execute("SELECT count(*) FROM memories WHERE id=?", (manual_id,)).fetchone()[0] == 0
                 assert db.execute("SELECT count(*) FROM memory_revisions WHERE memory_id=?", (manual_id,)).fetchone()[0] == 0
-            print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes, signed plugins, redaction, pause/resume and derived recovery")
+        print("companions e2e passed: automatic refresh, local documents, temporal facts, memory lifecycle, federated retrieval, graph impact/snapshots/changes and Git commits, signed plugins, redaction, pause/resume and derived recovery")
         finally:
             for process in daemons:
                 process.terminate()
