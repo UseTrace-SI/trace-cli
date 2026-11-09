@@ -97,6 +97,13 @@ def main():
             assert len(versions["revisions"]) == 2, versions
             verified = json.loads(run(project, "brain", "verify", manual_id))
             assert verified["status"] == "unlinked" and verified["content_verified"] is False, verified
+            capture = json.loads(run(project, "brain", "facts", "evidence", fact["fact"]["id"]))
+            assert "revised note" in capture["evidence"]["content"] and "ghp_abcdefghijklmnopqrstuvwxyz" not in capture["evidence"]["content"], capture
+            run(project, "brain", "update", manual_id, "authentication final source version")
+            current_claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z"))
+            assert current_claims["result"]["facts"] == [], current_claims
+            captured_claims = json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--at", "2024-02-01T00:00:00Z", "--evidence-mode", "captured"))
+            assert len(captured_claims["result"]["facts"]) == 1 and captured_claims["result"]["facts"][0]["evidence_stale"] and captured_claims["result"]["facts"][0]["evidence_captured"], captured_claims
             hook("SessionStart")
             hook("UserPromptSubmit", prompt="authentication Login change")
             (project / "main.go").write_text("package p\nfunc Validate() bool {return true}\nfunc Login() bool {return Validate()}\n")
@@ -213,6 +220,7 @@ def main():
             assert workspace["partial"] is False and len(workspace["sources"]) == 2, workspace
             run(project, "brain", "forget", manual_id)
             assert json.loads(run(project, "brain", "facts", "query", "--subject", "project"))["result"]["facts"] == [], "forgotten evidence left fact content"
+            assert json.loads(run(project, "brain", "facts", "query", "--subject", "project", "--evidence-mode", "captured"))["result"]["facts"] == [], "captured evidence survived forgetting its source"
             document.write_text("freshdocumentkeyword")
             refreshed = json.loads(run(project, "brain", "documents", "sync", "--root", str(private_docs)))
             assert refreshed["result"]["imported"] == 1, refreshed
