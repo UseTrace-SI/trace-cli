@@ -192,8 +192,10 @@ With the coordinated Graph companion, `trace graph compare --base main --head HE
 compares symbols in two local commits without changing dirty working files, Git
 history or the persistent graph index. It applies current and both committed
 exclusion policies and returns hashes instead of raw signatures. Missing Git
-objects fail without fetching. This is source-structure comparison; rename and
-type-aware behavioral analysis remain unimplemented.
+objects fail without fetching. Add `--detect-renames` for uniquely matching
+exact-content file relocations with the same extension; copies, duplicate content
+and edited moves remain unpaired. This is source-structure comparison; symbol
+renaming and type-aware behavioral analysis remain unimplemented.
 
 Local chunk reads now close synchronously, including partial reads and errors. Sync protocol 2 transfers large files as bounded chunks in Team and Pro modes; upgrade the companion platform alongside the CLI. See [sync upgrade notes](docs/sync.md#protocol-2-upgrade) for repository identity changes and legacy hosted history.
 

@@ -92,6 +92,21 @@ def main():
             assert (history / ".git/index").read_bytes() == git_index and history_git("rev-parse", "HEAD") == head_commit
             assert not (history / ".trace").exists() and not (history / ".trace-graph").exists()
 
+            (history / "main.go").write_text("package p\nfunc Version() int {return 2}\nfunc Added() {}\n")
+            history_git("mv", "main.go", "renamed.go")
+            history_git("commit", "-qm", "relocate")
+            relocated_commit = history_git("rev-parse", "HEAD")
+            (history / "renamed.go").write_text(dirty_source)
+            git_index = (history / ".git/index").read_bytes()
+            relocations = json.loads(run(history, "graph", "compare", "--base", head_commit, "--detect-renames"))
+            assert relocations["head_commit"] == relocated_commit and relocations["rename_detection"] == "unique_exact_content_same_extension", relocations
+            assert len(relocations["file_renames"]) == 1 and relocations["file_renames"][0]["from"] == "main.go" and relocations["file_renames"][0]["to"] == "renamed.go", relocations
+            assert relocations["rename_ambiguities"] == [] and {(item["name"], item["kind"]) for item in relocations["changes"]} == {("Version", "file_moved"), ("Added", "file_moved")}, relocations
+            assert all(item["before"][0]["file"] == "main.go" and item["after"][0]["file"] == "renamed.go" for item in relocations["changes"]), relocations
+            assert "DirtyMustNotAppear" not in json.dumps(relocations) and (history / "renamed.go").read_text() == dirty_source
+            assert (history / ".git/index").read_bytes() == git_index and history_git("rev-parse", "HEAD") == relocated_commit
+            assert not (history / ".trace").exists() and not (history / ".trace-graph").exists()
+
             initialize(project, "package p\nfunc Validate() bool {return true}\n")
             (project / ".trace").mkdir()
             (project / ".trace/login.json").write_text(json.dumps({
