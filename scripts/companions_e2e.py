@@ -4,6 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import select
 import shutil
 import sqlite3
 import subprocess
@@ -60,7 +61,69 @@ def main():
             fields.update(session_id="companion-e2e", hook_event_name=event)
             run(project, "hook", "claude-code", event, data=json.dumps(fields) + "\n")
 
+        def check_semantic_mcp(root, enabled):
+            command = [str(binaries / "trace-brain"), "--db", str(root / ".trace-brain/memory.db"), "mcp"]
+            if enabled:
+                command.extend(["--semantic-model", "fixture:never-pull", "--semantic-endpoint", "http://127.0.0.1:1"])
+            process = subprocess.Popen(command, cwd=root, env=environment, stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            sequence = 0
+
+            def rpc(method, params):
+                nonlocal sequence
+                sequence += 1
+                process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": sequence, "method": method, "params": params}) + "\n")
+                process.stdin.flush()
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if not select.select([process.stdout], [], [], max(0, deadline - time.monotonic()))[0]:
+                        break
+                    line = process.stdout.readline()
+                    if not line:
+                        raise AssertionError("MCP server closed before replying")
+                    reply = json.loads(line)
+                    if reply.get("id") == sequence:
+                        return reply
+                raise AssertionError("MCP request timed out: " + method)
+
+            try:
+                initialized = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "trace-e2e", "version": "1"}})
+                assert initialized["result"]["serverInfo"]["name"] == "trace-brain", initialized
+                process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+                process.stdin.flush()
+                tools = rpc("tools/list", {})["result"]["tools"]
+                learned = [tool for tool in tools if tool["name"] == "brain_semantic"]
+                assert bool(learned) == enabled, tools
+                if enabled:
+                    assert learned[0]["annotations"]["readOnlyHint"], learned
+                    assert not ({"endpoint", "model"} & set(learned[0]["inputSchema"]["properties"])), learned
+                    invalid = rpc("tools/call", {"name": "brain_semantic", "arguments": {"query": ""}})
+                    assert invalid.get("error") or invalid.get("result", {}).get("isError"), invalid
+                # Ordinary recall succeeds with no installed/reachable model.
+                recalled = rpc("tools/call", {"name": "brain_recall", "arguments": {"query": "offline_mcp_keyword"}})
+                assert not recalled.get("error") and not recalled["result"].get("isError"), recalled
+                assert "offline_mcp_keyword" in json.dumps(recalled), recalled
+            finally:
+                process.stdin.close()
+                process.stdin = None
+                try:
+                    _, stderr = process.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate(timeout=5)
+                    raise AssertionError("MCP server did not exit after stdin closed")
+                assert process.returncode == 0, stderr
+
         try:
+            semantic_project = temporary / "semantic-mcp"
+            initialize(semantic_project, "package p\n")
+            run(semantic_project, "brain", "remember", "offline_mcp_keyword remains local")
+            semantic_capabilities = json.loads(run(semantic_project, "brain", "capabilities"))
+            assert semantic_capabilities["retrieval"]["mcp_learned_default"] is False and semantic_capabilities["context_network"] is False, semantic_capabilities
+            assert "--semantic-model" in run(semantic_project, "brain", "mcp", "--help")
+            check_semantic_mcp(semantic_project, False)
+            check_semantic_mcp(semantic_project, True)
+
             # A separate repository has no Trace hooks or daemon: only the
             # disposable fixture commits may write Git history here.
             history = temporary / "git-history"
