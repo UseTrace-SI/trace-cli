@@ -141,24 +141,32 @@ def main():
             assert exported[-1]["truncated"] is False, exported
             with (project / "main.go").open("a") as changed:
                 changed.write("func Controller() bool {return Login()}\n")
+                changed.write("type Worker struct{}\ntype WorkerAlias = Worker\nfunc (Worker) Execute(){}\nfunc Dispatch(){instance:=WorkerAlias{};instance.Execute()}\n")
             run(project, "companions", "refresh", json_output=True)
             impact = json.loads(run(project, "graph", "impact", "Validate", "--json"))
             assert {node["name"] for node in impact["nodes"]} == {"Login", "Controller"}, impact
+            receiver_impact = json.loads(run(project, "graph", "impact", "Execute", "--json"))
+            assert {node["name"] for node in receiver_impact["nodes"]} == {"Dispatch"}, receiver_impact
             changes = json.loads(run(project, "graph", "changes", "--base", str(graph_base)))
             assert any(item["name"] == "Controller" and item["kind"] == "added" for item in changes["changes"]), changes
             # Pausing also affects an already-running daemon, without deleting
             # the project history or requiring hooks to be uninstalled.
+            run(project, "disable")
             with sqlite3.connect(project / ".trace/trace.db") as db:
                 before_pause = db.execute("SELECT count(*) FROM turns").fetchone()[0]
                 before_ops = db.execute("SELECT count(*) FROM ops").fetchone()[0]
-            run(project, "disable")
             (project / "paused-note.txt").write_text("edited while paused\n")
             time.sleep(0.5)
             hook("UserPromptSubmit", prompt="must-not-record-while-paused")
             hook("Stop")
             with sqlite3.connect(project / ".trace/trace.db") as db:
-                assert db.execute("SELECT count(*) FROM turns").fetchone()[0] == before_pause
-                assert db.execute("SELECT count(*) FROM ops").fetchone()[0] == before_ops, "file watcher recorded while paused"
+                # Earlier, already admitted watcher work can finish after the
+                # marker is written. Test the paused mutations themselves and
+                # preserve the existing history rather than racing row totals.
+                assert db.execute("SELECT count(*) FROM turns").fetchone()[0] >= before_pause
+                assert db.execute("SELECT count(*) FROM ops").fetchone()[0] >= before_ops
+                assert db.execute("SELECT count(*) FROM turns WHERE prompt='must-not-record-while-paused'").fetchone()[0] == 0
+                assert db.execute("SELECT count(*) FROM ops WHERE path='paused-note.txt'").fetchone()[0] == 0, "file watcher recorded while paused"
             setup_home = temporary / "enable-home"
             setup_home.mkdir()
             subprocess.run([trace, "enable", "--agent", "claude-code"],
