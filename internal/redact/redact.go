@@ -14,7 +14,7 @@ var patterns = []struct {
 	kind string
 	rx   *regexp.Regexp
 }{
-	{"private-key", regexp.MustCompile(`(?s)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----`)},
+	{"private-key", regexp.MustCompile(`(?s)(-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----)`)},
 	{"aws-key", regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)},
 	{"github-token", regexp.MustCompile(`\b(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}\b`)},
 	{"slack-token", regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}\b`)},
@@ -27,7 +27,7 @@ var patterns = []struct {
 // Necessary literal fragments cheaply rule out patterns before invoking the
 // regexp engine on large transcripts. A fragment alone never causes redaction.
 var patternHints = map[string][]string{
-	"private-key":  {"PRIVATE KEY-----"},
+	"private-key":  {"PRIVATE KEY-----", "PGP PRIVATE KEY BLOCK-----"},
 	"aws-key":      {"AKIA", "ASIA"},
 	"github-token": {"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"},
 	"slack-token":  {"xox"},
@@ -41,7 +41,7 @@ var envValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD
 var redactionMarker = regexp.MustCompile(`⟨redacted:[a-z-]+:[0-9a-f]{8}⟩`)
 var email = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b`)
 var phone = regexp.MustCompile(`\b\+?[0-9][0-9 ()-]{8,}[0-9]\b`)
-var candidate = regexp.MustCompile(`[A-Za-z0-9_+/=-]{20,}`)
+var candidate = regexp.MustCompile(`[A-Za-z0-9_+/=-]{12,}`)
 var keyContext = regexp.MustCompile(`(?i)(key|secret|token|password|passwd|api)`)
 
 func marker(kind, value string) string {
@@ -82,7 +82,7 @@ func (r Redactor) Text(s string) string {
 			from = 0
 		}
 		value := original[start:end]
-		if strings.Contains(original[from:start], "⟨redacted:") || !keyContext.MatchString(original[from:start]) || entropy(value) <= 4.0 {
+		if strings.Contains(original[from:start], "⟨redacted:") || !keyContext.MatchString(original[from:start]) || entropy(value) <= 3.5 {
 			continue
 		}
 		s = s[:start] + marker("entropy", value) + s[end:]
