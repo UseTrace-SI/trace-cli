@@ -225,7 +225,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 This installs `trace`, `trace-brain`, `trace-graph` and the `trc` alias together, with checksum verification. The default directory is `$HOME/.local/bin`; set `TRACE_INSTALL_DIR` to change it. Homebrew installs the same coordinated bundle; see [Homebrew bundle](#homebrew-bundle). Older standalone GitHub releases contain only the CLI.
 
-To build the CLI from source, use Go 1.26 or newer (the module selects the reviewed Go 1.27.3 compiler):
+To build the CLI from source, use Go 1.26.0 or newer (the module selects the reviewed Go 1.27.4 toolchain):
 
 ```sh
 git clone https://github.com/UseTrace-SI/trace-cli.git
@@ -304,9 +304,9 @@ Concurrent CLI inspection cannot invalidate an active capture transaction.
 Replacement database connections retain their integrity and lock settings, and
 database paths preserve special characters such as `?`, `#` and `%`.
 
-The hosted installer supplies the coordinated CLI/Brain/Graph stack. Older standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26 or newer.
+The hosted installer supplies the coordinated CLI/Brain/Graph stack. Older standalone GitHub archives supply the CLI alone; use the hosted installer for the connected bundle. `trace update-check` reads the hosted stack manifest and reports only newer versions. Source builds require Go 1.26.0 or newer.
 
-Production builds select Go 1.27.3 to include the patched certificate verifier. CI pins this compiler and runs Govulncheck. The language version remains Go 1.26; release builds reject a different compiler. Existing runtime dependencies are pinned to their reviewed updates in go.mod/go.sum.
+Production builds select the Go 1.27.4 toolchain to include the patched certificate verifier. CI pins this toolchain and runs Govulncheck. The language version remains Go 1.26.0; release builds reject a different toolchain. Existing runtime dependencies are pinned to their reviewed updates in go.mod/go.sum.
 
 Snapshot CI pins GoReleaser 2.20.0. If its binary download fails, CI builds the
 same version through the Go module proxy before running the required archive

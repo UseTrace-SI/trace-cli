@@ -21,7 +21,7 @@ Every phase must end with `make lint test` passing.
 
 ## Stack and constraints
 
-- Go 1.23+. One binary: `trace` (CLI) and `trace daemon` (background process).
+- Go 1.26.0+ language version, using the pinned go1.27.4 toolchain. One binary: `trace` (CLI) and `trace daemon` (background process).
 - SQLite via `modernc.org/sqlite` (pure Go). **No cgo** in the default build.
   cgo is allowed only behind the `treesitter` build tag (Phase 13).
 - Direct dependencies are pinned in `go.mod`, including Cobra, fsnotify, modernc SQLite,
