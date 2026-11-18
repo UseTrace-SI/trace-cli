@@ -82,6 +82,36 @@ func gitExcludePath(root string) (string, error) {
 	return p, nil
 }
 
+// initializationComplete verifies the artifacts a successful init leaves
+// behind. A bare trace.db is not enough: an interrupted earlier run may have
+// skipped hooks, the Git exclude or the daemon.
+func initializationComplete(root, agent string) bool {
+	traceDir := repo.TraceDir(root)
+	for _, name := range []string{"trace.db", "init-complete", "daemon.pid"} {
+		if _, err := os.Stat(filepath.Join(traceDir, name)); err != nil {
+			return false
+		}
+	}
+	marker, err := os.ReadFile(filepath.Join(traceDir, "init-complete"))
+	if err != nil || strings.TrimSpace(string(marker)) != agent {
+		return false
+	}
+	exclude, err := gitExcludePath(root)
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(exclude)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == ".trace/" {
+			return true
+		}
+	}
+	return false
+}
+
 func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var agent string
 	var ifNeeded bool
@@ -97,7 +127,7 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		if ifNeeded {
-			if _, err := os.Stat(filepath.Join(repo.TraceDir(root), "trace.db")); err == nil {
+			if initializationComplete(root, agent) {
 				if *jsonOutput {
 					return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"initialized": false, "already": true, "repo": root})
 				}
@@ -229,6 +259,10 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		if err := daemon.EnsureRunning(root); err != nil {
 			return err
+		}
+		// Written last: --if-needed relies on it to recognise a complete setup.
+		if err := os.WriteFile(filepath.Join(repo.TraceDir(root), "init-complete"), []byte(agent+"\n"), 0600); err != nil {
+			return fmt.Errorf("marking initialization complete: %w", err)
 		}
 		if *jsonOutput {
 			result := map[string]any{"initialized": true, "repo": root}

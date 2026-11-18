@@ -98,18 +98,14 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("creating trace directory: %w", err)
 		}
-		lock, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
+		lock, acquired, err := daemon.TryAcquireDaemonLock(dir)
 		if err != nil {
-			return fmt.Errorf("opening daemon lock: %w", err)
+			return err
 		}
-		defer lock.Close()
-		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			if err == syscall.EWOULDBLOCK || err == syscall.EAGAIN {
-				return nil
-			}
-			return fmt.Errorf("locking daemon: %w", err)
+		if !acquired {
+			return nil
 		}
-		defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		defer daemon.ReleaseDaemonLock(lock)
 		logfile, err := openDaemonLog(filepath.Join(dir, "daemon.log"))
 		if err != nil {
 			return fmt.Errorf("opening daemon log: %w", err)
@@ -131,6 +127,22 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		ctx, cancel := context.WithCancel(ctx)
 		defer stop()
 		defer cancel()
+		// A single worker serializes checkpoints and logs their errors; one
+		// pending request is enough, so a turn cannot spawn an unbounded number
+		// of goroutines each copying the trace directory.
+		checkpointReq := make(chan struct{}, 1)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-checkpointReq:
+					if err := gitx.Checkpoint(root); err != nil {
+						logger.Error("git checkpoint", "error", err)
+					}
+				}
+			}
+		}()
 		companionWorker := companions.StartDelayed(ctx, func(ctx context.Context) {
 			if userstate.Disabled() || !companions.AutoEnabled(root) {
 				return
@@ -155,17 +167,19 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err == nil && (ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd) {
 				companionWorker.Notify()
 				if gitx.GitNativeEnabled(root) {
-					go func() { _ = gitx.Checkpoint(root) }()
+					select {
+					case checkpointReq <- struct{}{}:
+					default:
+					}
 				}
 			}
 			return err
 		}
 		codexEvents := &codexSources{process: process}
-		pidPath := filepath.Join(dir, "daemon.pid")
-		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
-			return fmt.Errorf("writing pid file: %w", err)
+		if err := daemon.WriteDaemonIdentity(dir); err != nil {
+			return err
 		}
-		defer os.Remove(pidPath)
+		defer daemon.RemoveDaemonIdentity(dir)
 		personalReady := filepath.Join(dir, "personal-sync.ready")
 		if err := os.WriteFile(personalReady, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 			return fmt.Errorf("marking personal sync support: %w", err)
@@ -207,7 +221,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				}
 			}()
 		}
-		err = daemon.ServeChecked(ctx, dir, func(ev event.Event) error {
+		err = daemon.ServeCheckedWithLogger(ctx, dir, logger, func(ev event.Event) error {
 			err := codexEvents.hook(ev)
 			if err != nil {
 				logger.Error("processing event", "kind", ev.Kind, "error", err)

@@ -105,11 +105,11 @@ func (e *Engine) blobText(h blob.Hash) (string, error) {
 func (e *Engine) RecordChanges(dirty []string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	_, err := e.recordChanges(dirty, false)
+	_, err := e.recordChanges(dirty, false, nil)
 	return err
 }
 
-func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, error) {
+func (e *Engine) recordChanges(dirty []string, full bool, tx *sql.Tx) (manifest.Manifest, error) {
 	var next manifest.Manifest
 	var err error
 	if full || e.current == nil {
@@ -120,12 +120,39 @@ func (e *Engine) recordChanges(dirty []string, full bool) (manifest.Manifest, er
 	if err != nil {
 		return nil, err
 	}
-	return e.recordManifest(next)
+	return e.recordManifest(next, tx)
 }
 
-func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, error) {
+// recordManifest writes file-change ops. When tx is nil it owns a transaction
+// and updates e.current after committing; callers that pass a transaction are
+// responsible for committing it and updating e.current (used by turnEnd so ops,
+// the keyframe and the turn update commit atomically).
+func (e *Engine) recordManifest(next manifest.Manifest, tx *sql.Tx) (manifest.Manifest, error) {
+	owned := tx == nil
+	if owned {
+		var err error
+		tx, err = e.DB.Begin()
+		if err != nil {
+			return nil, fmt.Errorf("starting change record: %w", err)
+		}
+		defer tx.Rollback()
+	}
+	commit := func() error {
+		if !owned {
+			return nil
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("committing change record: %w", err)
+		}
+		return nil
+	}
 	if e.current == nil {
-		e.current = next
+		if owned {
+			e.current = next
+		}
+		if err := commit(); err != nil {
+			return nil, err
+		}
 		return next, nil
 	}
 	changed := make([]string, 0)
@@ -134,11 +161,16 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 	changed = append(changed, modified...)
 	changed = append(changed, deleted...)
 	if len(changed) == 0 {
-		e.current = next
+		if owned {
+			e.current = next
+		}
+		if err := commit(); err != nil {
+			return nil, err
+		}
 		return next, nil
 	}
 	var turnID, sessionID, agent string
-	err := e.DB.QueryRow(`SELECT t.id,t.session_id,s.agent FROM turns t JOIN sessions s ON s.id=t.session_id
+	err := tx.QueryRow(`SELECT t.id,t.session_id,s.agent FROM turns t JOIN sessions s ON s.id=t.session_id
 		WHERE s.worktree=? AND t.ended_at IS NULL ORDER BY t.started_at DESC LIMIT 1`, e.Root).Scan(&turnID, &sessionID, &agent)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("finding active turn: %w", err)
@@ -146,11 +178,6 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 	if err == sql.ErrNoRows {
 		turnID, sessionID = "", ""
 	}
-	tx, err := e.DB.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("starting change record: %w", err)
-	}
-	defer tx.Rollback()
 	for _, p := range changed {
 		oldHash := e.current[p].Hash
 		newHash := next[p].Hash
@@ -245,9 +272,11 @@ func (e *Engine) recordManifest(next manifest.Manifest) (manifest.Manifest, erro
 			}
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing change record: %w", err)
+	if err := commit(); err != nil {
+		return nil, err
 	}
-	e.current = next
+	if owned {
+		e.current = next
+	}
 	return next, nil
 }

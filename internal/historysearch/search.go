@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type Options struct {
@@ -156,23 +157,40 @@ func terms(query string, fuzzy bool) (string, error) {
 	return strings.Join(result, " AND "), nil
 }
 
+// runeFloor returns the start of the rune at or before i.
+func runeFloor(s string, i int) int {
+	if i >= len(s) {
+		return len(s)
+	}
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return i
+}
+
+// runeCeil returns the start of the rune at or after i, so a slice ending there
+// never cuts a multi-byte character in half.
+func runeCeil(s string, i int) int {
+	if i >= len(s) {
+		return len(s)
+	}
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+	return i
+}
+
 func makeSnippet(text, term string) string {
 	lower := strings.ToLower(text)
 	idx := strings.Index(lower, strings.ToLower(term))
 	if idx < 0 {
 		if len(text) > 120 {
-			return text[:120] + "..."
+			return text[:runeFloor(text, 120)] + "..."
 		}
 		return text
 	}
-	start := idx - 60
-	if start < 0 {
-		start = 0
-	}
-	end := idx + len(term) + 60
-	if end > len(text) {
-		end = len(text)
-	}
+	start := runeFloor(text, max(idx-60, 0))
+	end := runeCeil(text, min(idx+len(term)+60, len(text)))
 	snippet := text[start:end]
 	if start > 0 {
 		snippet = "..." + snippet

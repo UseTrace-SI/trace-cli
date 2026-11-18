@@ -67,6 +67,43 @@ func paths(root, agent, relative string) (string, string, string) {
 	return filepath.Join(root, relative), filepath.Join(root, ".trace", agent+"-hooks.backup"), filepath.Join(root, ".trace", agent+"-hooks.sha")
 }
 
+// atomicWrite replaces path via a synced temporary file and rename, so an
+// interrupted write cannot truncate a user's configuration. An existing
+// file's permissions are preserved; new files are private (0600).
+func atomicWrite(path string, data []byte) error {
+	mode := os.FileMode(0600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking mode of %s: %w", path, err)
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".trace-hook-")
+	if err != nil {
+		return fmt.Errorf("creating temporary file for %s: %w", path, err)
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return fmt.Errorf("writing temporary %s: %w", path, err)
+	}
+	if err := file.Chmod(mode); err != nil {
+		file.Close()
+		return fmt.Errorf("setting mode on %s: %w", path, err)
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("syncing temporary %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("closing temporary %s: %w", path, err)
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		return fmt.Errorf("replacing %s: %w", path, err)
+	}
+	return nil
+}
+
 func Install(root, agent, relative string, names []string, grouped bool) error {
 	return install(root, agent, relative, names, grouped, false, nil)
 }
@@ -162,7 +199,7 @@ func install(root, agent, relative string, names []string, grouped, flat bool, m
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(p, b, 0600); err != nil {
+	if err := atomicWrite(p, b); err != nil {
 		return fmt.Errorf("writing %s hooks: %w", agent, err)
 	}
 	return nil
@@ -282,7 +319,7 @@ func uninstall(root, agent, relative string, grouped, flat bool) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(p, append(b, '\n'), 0600); err != nil {
+	if err := atomicWrite(p, append(b, '\n')); err != nil {
 		return err
 	}
 	return cleanup()

@@ -5,6 +5,54 @@ import (
 	"fmt"
 )
 
+// hasColumn reports whether table already has column. It is used to make
+// ALTER-based migrations idempotent: a crash between an ALTER and its schema
+// version insert in an older build could leave the column present while the
+// version was missing, which otherwise made the database unopenable forever.
+func hasColumn(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, fmt.Errorf("inspecting columns of %s: %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return false, fmt.Errorf("reading columns of %s: %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("reading columns of %s: %w", table, err)
+	}
+	return false, nil
+}
+
+// migrateVersion runs a migration and records its schema version in the same
+// transaction, so a crash can never leave the schema change applied without
+// the matching version (or the reverse).
+func migrateVersion(db *sql.DB, version int, fn func(*sql.Tx) error) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning migration %d: %w", version, err)
+	}
+	defer tx.Rollback()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(?)", version); err != nil {
+		return fmt.Errorf("recording migration %d: %w", version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing migration %d: %w", version, err)
+	}
+	return nil
+}
+
 func migrate(db *sql.DB) error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
@@ -60,18 +108,27 @@ END;`
 		return fmt.Errorf("checking structural migration: %w", err)
 	}
 	if n == 0 {
-		if _, err := db.Exec("ALTER TABLE ops ADD COLUMN detail TEXT"); err != nil {
-			return fmt.Errorf("adding structural detail: %w", err)
-		}
-		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(4)"); err != nil {
-			return fmt.Errorf("recording structural migration: %w", err)
+		if err := migrateVersion(db, 4, func(tx *sql.Tx) error {
+			present, err := hasColumn(tx, "ops", "detail")
+			if err != nil {
+				return err
+			}
+			if present {
+				return nil
+			}
+			if _, err := tx.Exec("ALTER TABLE ops ADD COLUMN detail TEXT"); err != nil {
+				return fmt.Errorf("adding structural detail: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS transcript_offsets (
   session_id TEXT PRIMARY KEY REFERENCES sessions(id),
   path TEXT NOT NULL,
   offset INTEGER NOT NULL
-)`); err != nil {
+ )`); err != nil {
 		return fmt.Errorf("creating transcript offsets: %w", err)
 	}
 	if _, err := db.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(5)"); err != nil {
@@ -82,7 +139,7 @@ END;`
   table_name TEXT NOT NULL,
   row_id TEXT NOT NULL,
   data TEXT NOT NULL
-)`); err != nil {
+ )`); err != nil {
 		return fmt.Errorf("creating sync updates: %w", err)
 	}
 	if _, err := db.Exec("INSERT OR IGNORE INTO schema_version(version) VALUES(6)"); err != nil {
@@ -93,11 +150,20 @@ END;`
 		return fmt.Errorf("checking actor migration: %w", err)
 	}
 	if n7 == 0 {
-		if _, err := db.Exec("ALTER TABLE ops ADD COLUMN actor TEXT"); err != nil {
-			return fmt.Errorf("adding actor column: %w", err)
-		}
-		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(7)"); err != nil {
-			return fmt.Errorf("recording actor migration: %w", err)
+		if err := migrateVersion(db, 7, func(tx *sql.Tx) error {
+			present, err := hasColumn(tx, "ops", "actor")
+			if err != nil {
+				return err
+			}
+			if present {
+				return nil
+			}
+			if _, err := tx.Exec("ALTER TABLE ops ADD COLUMN actor TEXT"); err != nil {
+				return fmt.Errorf("adding actor column: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	var n8 int
@@ -166,17 +232,26 @@ CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, title TEXT NOT NULL, kin
 		return fmt.Errorf("checking usage migration: %w", err)
 	}
 	if n11 == 0 {
-		for _, stmt := range []string{
-			"ALTER TABLE turns ADD COLUMN tokens_in INTEGER",
-			"ALTER TABLE turns ADD COLUMN tokens_out INTEGER",
-			"ALTER TABLE turns ADD COLUMN cost_usd REAL",
-		} {
-			if _, err := db.Exec(stmt); err != nil {
-				return fmt.Errorf("adding usage columns: %w", err)
+		if err := migrateVersion(db, 11, func(tx *sql.Tx) error {
+			for _, column := range []string{"tokens_in", "tokens_out", "cost_usd"} {
+				present, err := hasColumn(tx, "turns", column)
+				if err != nil {
+					return err
+				}
+				if present {
+					continue
+				}
+				kind := "INTEGER"
+				if column == "cost_usd" {
+					kind = "REAL"
+				}
+				if _, err := tx.Exec("ALTER TABLE turns ADD COLUMN " + column + " " + kind); err != nil {
+					return fmt.Errorf("adding usage columns: %w", err)
+				}
 			}
-		}
-		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(11)"); err != nil {
-			return fmt.Errorf("recording usage migration: %w", err)
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	var n12 int
@@ -200,14 +275,22 @@ CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
 		return fmt.Errorf("checking causal migration: %w", err)
 	}
 	if n13 == 0 {
-		if _, err := db.Exec("ALTER TABLE ops ADD COLUMN parent_op_id TEXT REFERENCES ops(id)"); err != nil {
-			return fmt.Errorf("adding parent_op_id: %w", err)
-		}
-		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS ops_parent ON ops(parent_op_id)"); err != nil {
-			return fmt.Errorf("indexing parent ops: %w", err)
-		}
-		if _, err := db.Exec("INSERT INTO schema_version(version) VALUES(13)"); err != nil {
-			return fmt.Errorf("recording causal migration: %w", err)
+		if err := migrateVersion(db, 13, func(tx *sql.Tx) error {
+			present, err := hasColumn(tx, "ops", "parent_op_id")
+			if err != nil {
+				return err
+			}
+			if !present {
+				if _, err := tx.Exec("ALTER TABLE ops ADD COLUMN parent_op_id TEXT REFERENCES ops(id)"); err != nil {
+					return fmt.Errorf("adding parent_op_id: %w", err)
+				}
+			}
+			if _, err := tx.Exec("CREATE INDEX IF NOT EXISTS ops_parent ON ops(parent_op_id)"); err != nil {
+				return fmt.Errorf("indexing parent ops: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS context_snapshots (

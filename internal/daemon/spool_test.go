@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -659,6 +660,105 @@ func TestSocketBatchRetainsFailedSuffix(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Kind != event.TurnContext || got[1].Kind != event.TurnEnd {
 		t.Fatalf("incorrect retry suffix: %+v", got)
+	}
+}
+
+func TestOverflowMarkerClearedOnlyAfterBacklogDrained(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		fail       bool
+		wantMarker bool
+	}{
+		{"drained", false, false},
+		{"failed", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			marker := filepath.Join(dir, spoolOverflowMarker)
+			pending := filepath.Join(dir, "spool-pending")
+			if err := os.MkdirAll(pending, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(marker, nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(pending, "1.ready"), []byte(`{"kind":"turn_start","at":1}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			err := ingestSpoolChecked(dir, func(event.Event) error {
+				if tc.fail {
+					return errors.New("temporary failure")
+				}
+				return nil
+			})
+			if tc.fail && err == nil {
+				t.Fatal("processing failure was ignored")
+			}
+			if !tc.fail && err != nil {
+				t.Fatal(err)
+			}
+			_, statErr := os.Stat(marker)
+			if got := statErr == nil; got != tc.wantMarker {
+				t.Fatalf("overflow marker present = %v, want %v", got, tc.wantMarker)
+			}
+			if _, err := os.Stat(filepath.Join(pending, "1.ready")); tc.fail && err != nil {
+				t.Fatalf("failed frame was not retained: %v", err)
+			}
+		})
+	}
+}
+
+func TestOverflowPrunesStaleAndExcessFrames(t *testing.T) {
+	dir := t.TempDir()
+	pending := filepath.Join(dir, "spool-pending")
+	if err := os.MkdirAll(pending, 0700); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * spoolRetention)
+	for i := 0; i < 3; i++ {
+		name := filepath.Join(pending, fmt.Sprintf("old-%d.ready.invalid", i))
+		if err := os.WriteFile(name, []byte("bad"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(name, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < maxQuarantinedFrames+5; i++ {
+		name := filepath.Join(pending, fmt.Sprintf("fresh-%d.ready.invalid", i))
+		if err := os.WriteFile(name, []byte("bad"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(pending, "inflight.tmp"), []byte("partial"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ingestSpool(dir, func(event.Event) { t.Error("unexpected event") }); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invalid, tmp int
+	for _, entry := range entries {
+		switch {
+		case strings.HasSuffix(entry.Name(), ".invalid"):
+			invalid++
+		case strings.HasSuffix(entry.Name(), ".tmp"):
+			tmp++
+		}
+	}
+	if invalid != maxQuarantinedFrames {
+		t.Fatalf("quarantined frames = %d, want %d", invalid, maxQuarantinedFrames)
+	}
+	if tmp != 1 {
+		t.Fatalf("fresh incomplete frame was pruned: %d", tmp)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "old-") {
+			t.Fatalf("stale frame survived pruning: %s", entry.Name())
+		}
 	}
 }
 

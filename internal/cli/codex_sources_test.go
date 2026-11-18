@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -95,6 +96,56 @@ func TestFailedHookLeavesTranscriptFallback(t *testing.T) {
 	}
 	if err := s.transcript(ev); err != nil || count != 1 {
 		t.Fatalf("transcript fallback: %d %v", count, err)
+	}
+}
+
+func TestCodexHookedStatePruning(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		prepare       func(*codexSources)
+		wantProcessed bool
+	}{
+		{"active session suppresses fallback", func(*codexSources) {}, false},
+		{"session end clears state", func(s *codexSources) {
+			if err := s.hook(event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.SessionEnd}); err != nil {
+				t.Error(err)
+			}
+		}, true},
+		{"expired session clears state", func(s *codexSources) {
+			s.hookedAt["s"] = time.Now().Add(-2 * hookedTTL)
+		}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			processed := 0
+			s := &codexSources{process: func(event.Event) error { processed++; return nil }}
+			if err := s.hook(event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.TurnStart}); err != nil {
+				t.Fatal(err)
+			}
+			tc.prepare(s)
+			processed = 0
+			if err := s.transcript(event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.TurnStart}); err != nil {
+				t.Fatal(err)
+			}
+			if got := processed > 0; got != tc.wantProcessed {
+				t.Fatalf("transcript processed = %t, want %t", got, tc.wantProcessed)
+			}
+		})
+	}
+}
+
+func TestCodexHookedMapDoesNotGrowAcrossSessions(t *testing.T) {
+	s := &codexSources{process: func(event.Event) error { return nil }}
+	for i := 0; i < 100; i++ {
+		session := strconv.Itoa(i)
+		if err := s.hook(event.Event{Agent: "codex", AgentSessionID: session, Kind: event.TurnStart}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.hook(event.Event{Agent: "codex", AgentSessionID: session, Kind: event.SessionEnd}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(s.hooked) != 0 || len(s.hookedAt) != 0 {
+		t.Fatalf("dedup state retained: hooked=%d at=%d", len(s.hooked), len(s.hookedAt))
 	}
 }
 
