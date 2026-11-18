@@ -349,9 +349,23 @@ func (e *Engine) toolEdit(ev event.Event) error {
 	return nil
 }
 
+const (
+	// Tool calls and read paths used to be rewritten in full on every event,
+	// which was unbounded and quadratic in a long turn. Keep a bounded array
+	// with an explicit overflow marker instead.
+	maxTurnToolCalls = 200
+	maxTurnFilesRead = 200
+)
+
+const (
+	filesOverflowPrefix = "⟨overflow:"
+	filesOverflowSuffix = " files omitted⟩"
+)
+
 type toolCallSummary struct {
-	Name string `json:"name"`
-	Path string `json:"path,omitempty"`
+	Name      string `json:"name"`
+	Path      string `json:"path,omitempty"`
+	Truncated *int   `json:"truncated,omitempty"`
 }
 
 func (e *Engine) appendToolCall(turnID, name, path string) error {
@@ -365,7 +379,16 @@ func (e *Engine) appendToolCall(turnID, name, path string) error {
 			return fmt.Errorf("parsing turn tool calls: %w", err)
 		}
 	}
-	calls = append(calls, toolCallSummary{Name: e.Redactor.Text(name), Path: path})
+	if dropped := droppedToolCalls(calls); dropped >= 0 {
+		// Keep counting the calls that no longer fit without growing the array.
+		dropped++
+		calls[len(calls)-1].Truncated = &dropped
+	} else if len(calls) >= maxTurnToolCalls {
+		dropped := 1
+		calls = append(calls, toolCallSummary{Truncated: &dropped})
+	} else {
+		calls = append(calls, toolCallSummary{Name: e.Redactor.Text(name), Path: path})
+	}
 	b, err := json.Marshal(calls)
 	if err != nil {
 		return fmt.Errorf("encoding turn tool calls: %w", err)
@@ -374,6 +397,13 @@ func (e *Engine) appendToolCall(turnID, name, path string) error {
 		return fmt.Errorf("saving turn tool calls: %w", err)
 	}
 	return nil
+}
+
+func droppedToolCalls(calls []toolCallSummary) int {
+	if len(calls) == 0 || calls[len(calls)-1].Truncated == nil {
+		return -1
+	}
+	return *calls[len(calls)-1].Truncated
 }
 
 func (e *Engine) fileRead(ev event.Event) error {
@@ -388,28 +418,33 @@ func (e *Engine) fileRead(ev event.Event) error {
 	if err := e.DB.QueryRow("SELECT COALESCE(files_read,'') FROM turns WHERE id=?", tid).Scan(&current); err != nil {
 		return fmt.Errorf("reading turn read paths: %w", err)
 	}
-	var files []string
+	var stored []string
 	if current != "" {
-		if err := json.Unmarshal([]byte(current), &files); err != nil {
+		if err := json.Unmarshal([]byte(current), &stored); err != nil {
 			return fmt.Errorf("parsing turn read paths: %w", err)
 		}
 	}
+	files, overflow := splitFilesOverflow(stored)
 	seen := make(map[string]bool, len(files))
 	for _, path := range files {
 		seen[path] = true
 	}
 	for _, path := range ev.Paths {
 		rel, err := repo.RelativePath(e.Root, path)
-		if err != nil || manifest.Excluded(rel) {
+		if err != nil || manifest.Excluded(rel) || seen[rel] {
 			continue
 		}
-		seen[rel] = true
-	}
-	files = files[:0]
-	for path := range seen {
-		files = append(files, path)
+		if len(files)+overflow < maxTurnFilesRead {
+			seen[rel] = true
+			files = append(files, rel)
+		} else {
+			overflow++
+		}
 	}
 	sort.Strings(files)
+	if overflow > 0 {
+		files = append(files, fmt.Sprintf("%s%d%s", filesOverflowPrefix, overflow, filesOverflowSuffix))
+	}
 	b, err := json.Marshal(files)
 	if err != nil {
 		return fmt.Errorf("encoding turn read paths: %w", err)
@@ -418,6 +453,21 @@ func (e *Engine) fileRead(ev event.Event) error {
 		return fmt.Errorf("saving turn read paths: %w", err)
 	}
 	return nil
+}
+
+func splitFilesOverflow(stored []string) (files []string, overflow int) {
+	for _, path := range stored {
+		if !strings.HasPrefix(path, filesOverflowPrefix) || !strings.HasSuffix(path, filesOverflowSuffix) {
+			files = append(files, path)
+			continue
+		}
+		inner := strings.TrimSuffix(strings.TrimPrefix(path, filesOverflowPrefix), filesOverflowSuffix)
+		var n int
+		if _, err := fmt.Sscanf(inner, "%d", &n); err == nil && n > 0 {
+			overflow = n
+		}
+	}
+	return files, overflow
 }
 
 func (e *Engine) turnContext(ev event.Event) error {
@@ -556,7 +606,14 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		return fmt.Errorf("checking full-scan marker: %w", forceErr)
 	}
 	full := unknown || seq%50 == 0 || forceErr == nil
-	m, err := e.recordChanges(dirty, full)
+	// Ops, the turn update and the keyframe must commit together. Otherwise a
+	// later failure leaves ops without a keyframe and replay duplicates them.
+	tx, err := e.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning keyframe transaction: %w", err)
+	}
+	defer tx.Rollback()
+	m, err := e.recordChanges(dirty, full, tx)
 	if err != nil {
 		return err
 	}
@@ -568,11 +625,6 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	if err != nil {
 		return err
 	}
-	tx, err := e.DB.Begin()
-	if err != nil {
-		return fmt.Errorf("beginning keyframe transaction: %w", err)
-	}
-	defer tx.Rollback()
 	attributed, err := tx.Query(`UPDATE ops SET turn_id=?,session_id=? WHERE turn_id IS NULL
 		AND source='watcher' AND at>=? AND at<=? RETURNING id`, tid, sessionID, startedAt, ev.At)
 	if err != nil {
@@ -638,6 +690,7 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing keyframe: %w", err)
 	}
+	e.current = m
 	if forceErr == nil {
 		if err := os.Remove(forcePath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("clearing full-scan marker: %w", err)
@@ -756,7 +809,7 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 	if err != nil {
 		return safetySeq, nil, err
 	}
-	if _, err := e.recordManifest(target); err != nil {
+	if _, err := e.recordManifest(target, nil); err != nil {
 		return safetySeq, changed, err
 	}
 	// Make the restored tree the latest keyframe so later turns, commits, and
