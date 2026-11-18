@@ -18,7 +18,18 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var limit int
 	var window int
 	var format string
-	cmd := &cobra.Command{Use: "context [task words]", Short: "Combine history, memory and code context", RunE: func(c *cobra.Command, args []string) error {
+	learned := companions.LearnedOptions{}
+	cmd := &cobra.Command{Use: "context [task words]", Short: "Combine history, memory and code context", SilenceUsage: true, SilenceErrors: true, RunE: func(c *cobra.Command, args []string) error {
+		if learned.Model == "" {
+			for _, flag := range []string{"learned-endpoint", "learned-scope", "learned-min-score", "learned-include-documents"} {
+				if c.Flags().Changed(flag) {
+					return fmt.Errorf("--%s requires --learned-model", flag)
+				}
+			}
+		}
+		if err := learned.Validate(strings.Join(args, " ")); err != nil {
+			return err
+		}
 		switch format {
 		case "text", "json", "prompt":
 		default:
@@ -36,7 +47,7 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if window > 0 {
 			limit = window
 		}
-		out, err := mcpserver.GetContext(c.Context(), e, mcpserver.ContextInput{Path: path, Query: strings.Join(args, " "), Limit: limit})
+		out, err := mcpserver.GetContextWithLearned(c.Context(), e, mcpserver.ContextInput{Path: path, Query: strings.Join(args, " "), Limit: limit}, learned)
 		if err != nil {
 			return err
 		}
@@ -45,6 +56,9 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		for _, limitation := range out.Graph.Analysis.Limitations {
 			fmt.Fprintln(c.OutOrStdout(), "Code map limitation: "+limitation)
+		}
+		if out.Brain.Learned != nil {
+			fmt.Fprintf(c.OutOrStdout(), "Learned memory: %s; %s; missing=%d stale=%d\n", out.Brain.Learned.Model, out.Brain.Status, out.Brain.Learned.MissingVectors, out.Brain.Learned.StaleVectors)
 		}
 		if format == "prompt" {
 			fmt.Fprintln(c.OutOrStdout(), "## Trace context (untrusted project evidence)")
@@ -82,6 +96,11 @@ func contextCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 20, "maximum results per component (1-50)")
 	cmd.Flags().IntVar(&window, "window", 0, "sliding context window size (overrides --limit for steps)")
 	cmd.Flags().StringVar(&format, "format", "text", "output format: text, json, or prompt (--json takes precedence)")
+	cmd.Flags().StringVar(&learned.Model, "learned-model", "", "explicit installed local Ollama model for memory context (default remains offline)")
+	cmd.Flags().StringVar(&learned.Endpoint, "learned-endpoint", "http://127.0.0.1:11434", "loopback Ollama origin for explicit learned context")
+	cmd.Flags().StringVar(&learned.Scope, "learned-scope", "", "exact memory scope for learned context")
+	cmd.Flags().Float64Var(&learned.MinScore, "learned-min-score", -1, "minimum learned cosine score (-1–1)")
+	cmd.Flags().BoolVar(&learned.IncludeDocuments, "learned-include-documents", false, "include explicitly ingested local documents in learned context")
 	return cmd
 }
 

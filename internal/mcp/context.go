@@ -15,7 +15,16 @@ import (
 // GetContext is shared by the CLI and MCP. Lookup never refreshes indexes,
 // creates companion databases, or invokes an extraction agent.
 func GetContext(ctx context.Context, e *engine.Engine, in ContextInput) (ContextOutput, error) {
+	return GetContextWithLearned(ctx, e, in, companions.LearnedOptions{})
+}
+
+// GetContextWithLearned is used only by explicitly configured CLI lookups. The
+// MCP tool, background snapshots and handoffs continue using offline defaults.
+func GetContextWithLearned(ctx context.Context, e *engine.Engine, in ContextInput, options companions.LearnedOptions) (ContextOutput, error) {
 	out := ContextOutput{Steps: []Step{}}
+	if err := options.Validate(in.Query); err != nil {
+		return out, err
+	}
 	if len(in.Query) > 4096 || len(in.Path) > 4096 {
 		return out, fmt.Errorf("context path or query exceeds 4096 bytes")
 	}
@@ -66,7 +75,13 @@ func GetContext(ctx context.Context, e *engine.Engine, in ContextInput) (Context
 	if query == "" {
 		query = filepath.Base(in.Path)
 	}
-	out.Brain, out.Graph = companions.Lookup(ctx, e.Root, in.Path, query, capLimit(in.Limit))
+	if options.Model != "" {
+		query = e.Redactor.Text(query)
+	}
+	out.Brain, out.Graph = companions.LookupWithLearned(ctx, e.Root, in.Path, query, capLimit(in.Limit), options)
+	if options.Model != "" && out.Brain.Status != "ready" && out.Brain.Status != "needs_embeddings" && out.Brain.Status != "missing_index" && out.Brain.Status != "needs_refresh" {
+		return ContextOutput{}, fmt.Errorf("explicit learned context failed (%s); no offline fallback was used", out.Brain.Status)
+	}
 	// Imported history is already redacted. Apply the same boundary to manual
 	// memories and source signatures before returning them to a coding agent.
 	redact := e.Redactor.Text

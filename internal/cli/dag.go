@@ -20,11 +20,11 @@ func dagCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer e.Close()
 		type node struct {
-			ID       string `json:"id"`
-			Path     string `json:"path"`
-			Kind     string `json:"kind"`
-			Source   string `json:"source"`
-			Parent   string `json:"parent,omitempty"`
+			ID       string   `json:"id"`
+			Path     string   `json:"path"`
+			Kind     string   `json:"kind"`
+			Source   string   `json:"source"`
+			Parent   string   `json:"parent,omitempty"`
 			Children []string `json:"children,omitempty"`
 		}
 		rows, err := e.DB.Query("SELECT id,path,kind,source,COALESCE(parent_op_id,'') FROM ops ORDER BY at ASC")

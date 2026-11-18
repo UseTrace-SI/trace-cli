@@ -12,19 +12,19 @@ import (
 )
 
 type statsReport struct {
-	Root           string            `json:"root"`
-	Sessions       int64             `json:"sessions"`
-	Turns          int64             `json:"turns"`
-	Keyframes      int64             `json:"keyframes"`
-	Ops            int64             `json:"ops"`
-	Messages       int64             `json:"messages"`
-	Commits        int64             `json:"commits"`
-	Agents         map[string]int64  `json:"agents"`
-	OldestStep     int64             `json:"oldest_step,omitempty"`
-	NewestStep     int64             `json:"newest_step,omitempty"`
-	StorageBytes   int64             `json:"storage_bytes"`
-	TokensIn       int64             `json:"tokens_in"`
-	TokensOut      int64             `json:"tokens_out"`
+	Root         string           `json:"root"`
+	Sessions     int64            `json:"sessions"`
+	Turns        int64            `json:"turns"`
+	Keyframes    int64            `json:"keyframes"`
+	Ops          int64            `json:"ops"`
+	Messages     int64            `json:"messages"`
+	Commits      int64            `json:"commits"`
+	Agents       map[string]int64 `json:"agents"`
+	OldestStep   int64            `json:"oldest_step,omitempty"`
+	NewestStep   int64            `json:"newest_step,omitempty"`
+	StorageBytes int64            `json:"storage_bytes"`
+	TokensIn     int64            `json:"tokens_in"`
+	TokensOut    int64            `json:"tokens_out"`
 }
 
 func statsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {

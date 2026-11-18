@@ -21,9 +21,9 @@ func expertsCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer e.Close()
 		type expert struct {
-			Agent   string `json:"agent"`
-			Ops     int64  `json:"ops"`
-			Files   int64  `json:"files"`
+			Agent string `json:"agent"`
+			Ops   int64  `json:"ops"`
+			Files int64  `json:"files"`
 		}
 		q := `SELECT COALESCE(s.agent,''), COUNT(*), COUNT(DISTINCT o.path) FROM ops o LEFT JOIN turns t ON t.id=o.turn_id LEFT JOIN sessions s ON s.id=t.session_id WHERE o.path<>''`
 		var args []any

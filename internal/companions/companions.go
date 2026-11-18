@@ -31,13 +31,15 @@ type Report struct {
 }
 
 type Memory struct {
-	ID        string `json:"id"`
-	Scope     string `json:"scope"`
-	Content   string `json:"content"`
-	Source    string `json:"source"`
-	SessionID string `json:"session_id,omitempty"`
-	TurnID    string `json:"turn_id,omitempty"`
-	CreatedAt int64  `json:"created_at"`
+	ID               string   `json:"id"`
+	Scope            string   `json:"scope"`
+	Content          string   `json:"content"`
+	Source           string   `json:"source"`
+	SessionID        string   `json:"session_id,omitempty"`
+	TurnID           string   `json:"turn_id,omitempty"`
+	CreatedAt        int64    `json:"created_at"`
+	Score            *float64 `json:"score,omitempty"`
+	ContentTruncated bool     `json:"content_truncated,omitempty"`
 }
 
 type Symbol struct {
@@ -61,9 +63,11 @@ type Relation struct {
 }
 
 type MemoryContext struct {
-	Protocol int      `json:"protocol"`
-	Status   string   `json:"status"`
-	Memories []Memory `json:"memories"`
+	Protocol  int          `json:"protocol"`
+	Status    string       `json:"status"`
+	Memories  []Memory     `json:"memories"`
+	Retrieval string       `json:"retrieval,omitempty"`
+	Learned   *LearnedInfo `json:"learned,omitempty"`
 }
 
 type CodeContext struct {
@@ -157,7 +161,7 @@ func run(ctx context.Context, root, program string, timeout time.Duration, reply
 	if json.Unmarshal(stdout.buf.Bytes(), &header) != nil || header.Protocol != protocol {
 		return State{Status: "unsupported_protocol"}
 	}
-	if header.Status != "ready" && header.Status != "missing_index" && header.Status != "needs_refresh" {
+	if header.Status != "ready" && header.Status != "missing_index" && header.Status != "needs_refresh" && header.Status != "needs_embeddings" {
 		return State{Status: "invalid_response"}
 	}
 	if reply != nil && json.Unmarshal(stdout.buf.Bytes(), reply) != nil {
@@ -190,8 +194,16 @@ func AutoEnabled(root string) bool {
 }
 
 func Lookup(ctx context.Context, root, path, query string, limit int) (MemoryContext, CodeContext) {
+	return LookupWithLearned(ctx, root, path, query, limit, LearnedOptions{})
+}
+
+func LookupWithLearned(ctx context.Context, root, path, query string, limit int, options LearnedOptions) (MemoryContext, CodeContext) {
 	brain := MemoryContext{Protocol: protocol, Memories: []Memory{}}
 	code := CodeContext{Protocol: protocol, Symbols: []Symbol{}, Relations: []Relation{}}
+	if err := options.Validate(query); err != nil {
+		brain.Status, code.Status = "invalid_configuration", "invalid_configuration"
+		return brain, code
+	}
 	var err error
 	root, err = canonicalRoot(root)
 	if err != nil {
@@ -201,10 +213,31 @@ func Lookup(ctx context.Context, root, path, query string, limit int) (MemoryCon
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
-	brain.Status = run(ctx, root, "trace-brain", 2*time.Second, &brain, "--db", DBPath(root, "brain"), "context", "--trace-db", filepath.Join(root, ".trace", "trace.db"), "--query", query, "--limit", strconv.Itoa(limit)).Status
+	brainArgs := []string{"--db", DBPath(root, "brain"), "context", "--trace-db", filepath.Join(root, ".trace", "trace.db"), "--query", query, "--limit", strconv.Itoa(limit)}
+	brainTimeout := 2 * time.Second
+	if options.Model != "" {
+		brainTimeout = 61 * time.Second
+		brainArgs = append(brainArgs, "--learned-model", options.Model, "--learned-endpoint", options.origin(), "--learned-min-score", strconv.FormatFloat(options.MinScore, 'g', -1, 64))
+		if options.Scope != "" {
+			brainArgs = append(brainArgs, "--learned-scope", options.Scope)
+		}
+		if options.IncludeDocuments {
+			brainArgs = append(brainArgs, "--learned-include-documents")
+		}
+	}
+	brain.Status = run(ctx, root, "trace-brain", brainTimeout, &brain, brainArgs...).Status
 	code.Status = run(ctx, root, "trace-graph", 2*time.Second, &code, "--db", DBPath(root, "graph"), "--repo", root, "context", "--path", path, "--query", query, "--limit", strconv.Itoa(limit)).Status
 	// Bound even a misbehaving executable that claims the supported protocol.
 	if len(brain.Memories) > limit {
+		brain.Status = "invalid_response"
+	}
+	if options.Model != "" {
+		if brain.Status == "ready" || brain.Status == "needs_embeddings" || brain.Status == "missing_index" || brain.Status == "needs_refresh" {
+			if !options.validReply(brain) {
+				brain.Status = "invalid_response"
+			}
+		}
+	} else if brain.Retrieval != "" || brain.Learned != nil || brain.Status == "needs_embeddings" {
 		brain.Status = "invalid_response"
 	}
 	if len(code.Analysis.Limitations) > 8 || len(code.Symbols) > limit || len(code.Relations) > 50 || (code.Status == "ready" && code.Repo != root) {
@@ -212,6 +245,10 @@ func Lookup(ctx context.Context, root, path, query string, limit int) (MemoryCon
 	}
 	if brain.Status != "ready" {
 		brain.Memories = []Memory{}
+	}
+	if brain.Status != "ready" && brain.Status != "needs_embeddings" && brain.Status != "missing_index" && brain.Status != "needs_refresh" {
+		brain.Retrieval = ""
+		brain.Learned = nil
 	}
 	if code.Status != "ready" {
 		code.Symbols, code.Relations = []Symbol{}, []Relation{}
