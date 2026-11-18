@@ -67,6 +67,85 @@ func TestInstallUninstall(t *testing.T) {
 	}
 }
 
+func TestAtomicWrite(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		initial     []byte
+		mode        os.FileMode
+		wantMode    os.FileMode
+		wantErr     bool
+		targetIsDir bool
+	}{
+		{"new file", nil, 0, 0600, false, false},
+		{"existing private file", []byte("old"), 0600, 0600, false, false},
+		{"preserves shared config mode", []byte("old"), 0644, 0644, false, false},
+		{"failed replace leaves target intact", nil, 0, 0, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "settings.json")
+			if tc.targetIsDir {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else if tc.initial != nil {
+				if err := os.WriteFile(path, tc.initial, tc.mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := atomicWrite(path, []byte("new content"))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("atomicWrite error = %v, wantErr %t", err, tc.wantErr)
+			}
+			if !tc.wantErr {
+				data, err := os.ReadFile(path)
+				if err != nil || string(data) != "new content" {
+					t.Fatalf("content = %q, %v", data, err)
+				}
+				info, err := os.Stat(path)
+				if err != nil || info.Mode().Perm() != tc.wantMode {
+					t.Fatalf("mode = %v, want %v (%v)", info, tc.wantMode, err)
+				}
+			} else {
+				info, err := os.Stat(path)
+				if err != nil || !info.IsDir() {
+					t.Fatalf("target was changed by a failed write: %v, %v", info, err)
+				}
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), ".trace-hook-") {
+					t.Fatalf("temporary file was not cleaned up: %s", entry.Name())
+				}
+			}
+		})
+	}
+}
+
+func TestInstallPreservesConfigMode(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(root, ".gemini", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("{\n  \"unrelated\": true\n}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(root, "gemini", ".gemini/settings.json", []string{"SessionStart"}, true); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(p)
+	if err != nil || info.Mode().Perm() != 0644 {
+		t.Fatalf("install changed config mode: %v, %v", info, err)
+	}
+}
+
 func TestRejectsUnexpectedHookConfiguration(t *testing.T) {
 	for _, original := range []string{`{"hooks":"custom"}`, `{"hooks":{"Stop":{"custom":true}}}`} {
 		t.Run(original, func(t *testing.T) {
