@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -39,8 +40,21 @@ func TestDaemonIdentityAndStartTime(t *testing.T) {
 	if err != nil || string(b) != strconv.Itoa(os.Getpid()) {
 		t.Fatalf("pid identity = %q, %v", b, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, daemonStartTime)); err != nil {
-		t.Fatalf("start time was not recorded: %v", err)
+	// The marker must be present and match the platform's process identity
+	// whenever a start-time source is available (Linux /proc, macOS ps).
+	start, available := processStartTime(os.Getpid())
+	marker := filepath.Join(dir, daemonStartTime)
+	if available {
+		recorded, err := os.ReadFile(marker)
+		if err != nil {
+			t.Fatalf("start time was not recorded: %v", err)
+		}
+		got, err := strconv.ParseUint(strings.TrimSpace(string(recorded)), 10, 64)
+		if err != nil || got != start {
+			t.Fatalf("recorded start time = %q, want %d: %v", recorded, start, err)
+		}
+	} else if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("start time was recorded without a source: %v", err)
 	}
 	RemoveDaemonIdentity(dir)
 	for _, name := range []string{daemonPIDName, daemonStartTime} {
