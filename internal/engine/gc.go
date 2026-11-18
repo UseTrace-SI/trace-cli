@@ -15,6 +15,7 @@ import (
 type GCResult struct {
 	RemovedKeyframes int  `json:"removed_keyframes"`
 	RemovedBlobs     int  `json:"removed_blobs"`
+	RemovedSessions  int  `json:"removed_sessions"`
 	DryRun           bool `json:"dry_run"`
 }
 
@@ -24,18 +25,19 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 	}
 	result := GCResult{DryRun: dryRun}
 	cutoff := time.Now().AddDate(0, 0, -keepDays).UnixMilli()
-	rows, err := e.DB.Query(`SELECT k.id,COALESCE(k.turn_id,'') FROM keyframes k
+	rows, err := e.DB.Query(`SELECT k.id,COALESCE(k.turn_id,''),COALESCE(t.session_id,'') FROM keyframes k
+		LEFT JOIN turns t ON t.id=k.turn_id
 		WHERE k.seq!=0 AND k.created_at<? AND NOT EXISTS(SELECT 1 FROM commits c WHERE c.keyframe_id=k.id)
  AND NOT EXISTS(SELECT 1 FROM comments c WHERE c.turn_id=k.turn_id)
  AND NOT EXISTS(SELECT 1 FROM trails t WHERE k.seq BETWEEN min(t.base_step,t.head_step) AND max(t.base_step,t.head_step))`, cutoff)
 	if err != nil {
 		return result, fmt.Errorf("finding old keyframes: %w", err)
 	}
-	type victim struct{ id, turnID string }
+	type victim struct{ id, turnID, sessionID string }
 	var victims []victim
 	for rows.Next() {
 		var v victim
-		if err := rows.Scan(&v.id, &v.turnID); err != nil {
+		if err := rows.Scan(&v.id, &v.turnID, &v.sessionID); err != nil {
 			rows.Close()
 			return result, err
 		}
@@ -75,7 +77,11 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 		return result, err
 	}
 	defer tx.Rollback()
+	removedSessions := map[string]bool{}
 	for _, v := range victims {
+		if v.sessionID != "" {
+			removedSessions[v.sessionID] = true
+		}
 		if v.turnID != "" {
 			if _, err := tx.Exec("UPDATE ops SET parent_op_id=NULL WHERE parent_op_id IN (SELECT id FROM ops WHERE turn_id=?)", v.turnID); err != nil {
 				return result, err
@@ -100,6 +106,27 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 			if _, err := tx.Exec("DELETE FROM turns WHERE id=?", v.turnID); err != nil {
 				return result, err
 			}
+		}
+	}
+	// A session whose last turn was collected is no longer useful. Drop its
+	// sync updates and offsets too, so they cannot accumulate forever.
+	for sessionID := range removedSessions {
+		if _, err := tx.Exec("DELETE FROM sync_updates WHERE table_name='sessions' AND row_id=?", sessionID); err != nil {
+			return result, fmt.Errorf("removing obsolete session updates: %w", err)
+		}
+		if _, err := tx.Exec("DELETE FROM transcript_offsets WHERE session_id=?", sessionID); err != nil {
+			return result, fmt.Errorf("removing obsolete transcript offsets: %w", err)
+		}
+		res, err := tx.Exec("DELETE FROM sessions WHERE id=? AND NOT EXISTS(SELECT 1 FROM turns WHERE session_id=sessions.id)", sessionID)
+		if err != nil {
+			return result, fmt.Errorf("removing empty session: %w", err)
+		}
+		deleted, err := res.RowsAffected()
+		if err != nil {
+			return result, err
+		}
+		if deleted > 0 {
+			result.RemovedSessions++
 		}
 	}
 	if err := tx.Commit(); err != nil {
