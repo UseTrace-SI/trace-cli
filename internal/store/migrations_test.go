@@ -18,7 +18,7 @@ func countColumn(t *testing.T, db *sql.DB, table, column string) int {
 
 func TestPartialAlterMigrationIsReplayedIdempotently(t *testing.T) {
 	for _, tc := range []struct {
-		version      int
+		version       int
 		table, column string
 	}{
 		{4, "ops", "detail"},
@@ -58,7 +58,7 @@ func TestPartialAlterMigrationIsReplayedIdempotently(t *testing.T) {
 
 func TestAlterMigrationRollsBackWithoutVersionInsert(t *testing.T) {
 	for _, tc := range []struct {
-		version      int
+		version       int
 		table, column string
 		undo          []string
 	}{
