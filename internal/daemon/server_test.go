@@ -77,17 +77,9 @@ func TestServeQuarantinesUndecodableSocketFrame(t *testing.T) {
 	go func() {
 		done <- ServeCheckedWithLogger(ctx, dir, logger, func(event.Event) error { return nil })
 	}()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("stopping daemon: %v", err)
-			}
-		case <-time.After(2 * time.Second):
-			t.Error("daemon did not stop")
-		}
-	})
+	// The platform-unavailable branch below consumes `done` itself, so register
+	// the shutdown assertion only after socket readiness is established. That
+	// keeps a clean t.Skip from reporting a second read of the same channel.
 	sock := filepath.Join(dir, "sock")
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
 		if _, err := os.Stat(sock); err == nil {
@@ -100,6 +92,17 @@ func TestServeQuarantinesUndecodableSocketFrame(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("stopping daemon: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("daemon did not stop")
+		}
+	})
 	conn, err := net.Dial("unix", sock)
 	if err != nil {
 		t.Fatal(err)
@@ -122,5 +125,40 @@ func TestServeQuarantinesUndecodableSocketFrame(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), secret) {
 		t.Fatalf("secret leaked into daemon log: %q", logs.String())
+	}
+}
+
+// TestServeFallbackShutdownWithLogger covers the path taken when Unix socket
+// binding is denied: the daemon must still start, ingest from the spool, and
+// stop cleanly with exactly one consumer of its result channel.
+func TestServeFallbackShutdownWithLogger(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), strings.Repeat("x", 120))
+	logs := &syncBuffer{}
+	logger := slog.New(slog.NewTextHandler(logs, nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeCheckedWithLogger(ctx, dir, logger, func(event.Event) error { return nil })
+	}()
+	ready := filepath.Join(dir, "spool.ready")
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, err := os.Stat(ready); err != nil {
+		cancel()
+		<-done
+		t.Fatalf("spool fallback did not become ready: %v", err)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("stopping daemon: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("daemon did not stop in spool fallback mode")
 	}
 }
