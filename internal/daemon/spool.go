@@ -8,11 +8,22 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+)
+
+const (
+	spoolOverflowMarker = "spool-overflow"
+	spoolOverflowLock   = "spool-overflow.lock"
+	// Older quarantined/incomplete frames are dropped after this long, and at
+	// most this many quarantined frames are kept, so a long-lived overflow mode
+	// cannot accumulate files without bound.
+	spoolRetention       = 24 * time.Hour
+	maxQuarantinedFrames = 32
 )
 
 func appendSpool(dir string, ev event.Event) error {
@@ -27,7 +38,7 @@ func appendSpoolFrame(dir string, b []byte) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating spool directory: %w", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "spool-overflow")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, spoolOverflowMarker)); err == nil {
 		return appendOverflow(dir, b)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking spool overflow mode: %w", err)
@@ -46,7 +57,7 @@ func appendSpoolFrame(dir string, b []byte) error {
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	// Once overflow is active, later fallback writes use the same queue so
 	// they cannot overtake already completed overflow writes.
-	if _, err := os.Stat(filepath.Join(dir, "spool-overflow")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, spoolOverflowMarker)); err == nil {
 		return appendOverflow(dir, b)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking spool overflow mode: %w", err)
@@ -57,10 +68,34 @@ func appendSpoolFrame(dir string, b []byte) error {
 	return nil
 }
 
+// overflowLock guards the transition into and out of overflow mode. The
+// daemon holds it only while clearing a drained marker; hooks take it briefly
+// when they switch to overflow. This keeps a concurrent hook from switching
+// back to overflow between the daemon's final drain and marker removal.
+func overflowLock(dir string) (*os.File, error) {
+	f, err := os.OpenFile(filepath.Join(dir, spoolOverflowLock), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening spool overflow lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("locking spool overflow: %w", err)
+	}
+	return f, nil
+}
+
 // appendOverflow publishes a complete, redacted frame by atomic rename. It
 // never waits for the shared spool lock; partial files are never consumed.
 func appendOverflow(dir string, b []byte) error {
-	marker, err := os.OpenFile(filepath.Join(dir, "spool-overflow"), os.O_CREATE|os.O_WRONLY, 0600)
+	lock, err := overflowLock(dir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		_ = lock.Close()
+	}()
+	marker, err := os.OpenFile(filepath.Join(dir, spoolOverflowMarker), os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("enabling spool overflow: %w", err)
 	}
@@ -117,11 +152,20 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 	if err := f.Truncate(0); err != nil {
 		return fmt.Errorf("truncating spool: %w", err)
 	}
+	// Drain the overflow backlog while still holding the spool lock, so no
+	// writer can fall back to the main spool before the queue is empty (which
+	// would let a later write overtake an earlier overflow frame).
+	if err := ingestOverflow(dir, consume); err != nil {
+		return err
+	}
+	if err := clearOverflowMarker(dir); err != nil {
+		return err
+	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
 		return fmt.Errorf("unlocking spool: %w", err)
 	}
 	locked = false
-	return ingestOverflow(dir, consume)
+	return nil
 }
 
 // readSpoolFrames bounds memory per line and skips damaged or oversized lines,
@@ -163,7 +207,100 @@ func readSpoolFrames(r io.Reader, consume func(event.Event) error) error {
 	}
 }
 
+// clearOverflowMarker returns the spool to normal append mode once the backlog
+// is drained. It runs while the daemon holds the spool lock, and takes the
+// overflow lock so a hook cannot re-enter overflow mode during the transition.
+func clearOverflowMarker(dir string) error {
+	marker := filepath.Join(dir, spoolOverflowMarker)
+	if _, err := os.Stat(marker); os.IsNotExist(err) {
+		return nil
+	}
+	lock, err := overflowLock(dir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		_ = lock.Close()
+	}()
+	// Recheck under the lock; another writer may have cleared it already.
+	if _, err := os.Stat(marker); os.IsNotExist(err) {
+		return nil
+	}
+	pending := filepath.Join(dir, "spool-pending")
+	entries, err := os.ReadDir(pending)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("listing pending spool: %w", err)
+	}
+	for _, entry := range entries {
+		// A ready frame has not been consumed yet; a tmp frame is still being
+		// written. Keep overflow mode until neither is present.
+		if strings.HasSuffix(entry.Name(), ".ready") || strings.HasSuffix(entry.Name(), ".tmp") {
+			return nil
+		}
+	}
+	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("clearing spool overflow marker: %w", err)
+	}
+	return nil
+}
+
+// pruneOverflowFrames bounds the number and age of quarantined and incomplete
+// frames under spool-pending, while leaving freshly written tmp files alone.
+func pruneOverflowFrames(dir string) error {
+	pending := filepath.Join(dir, "spool-pending")
+	entries, err := os.ReadDir(pending)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("listing pending spool: %w", err)
+	}
+	type quarantined struct {
+		path string
+		when time.Time
+	}
+	var invalid []quarantined
+	now := time.Now()
+	for _, entry := range entries {
+		name := entry.Name()
+		isInvalid := strings.HasSuffix(name, ".invalid")
+		if !isInvalid && !strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspecting pending spool frame: %w", err)
+		}
+		path := filepath.Join(pending, name)
+		if now.Sub(info.ModTime()) > spoolRetention {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("pruning pending spool frame: %w", err)
+			}
+			continue
+		}
+		if isInvalid {
+			invalid = append(invalid, quarantined{path: path, when: info.ModTime()})
+		}
+	}
+	if len(invalid) > maxQuarantinedFrames {
+		sort.Slice(invalid, func(i, j int) bool { return invalid[i].when.Before(invalid[j].when) })
+		for _, old := range invalid[:len(invalid)-maxQuarantinedFrames] {
+			if err := os.Remove(old.path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("pruning quarantined spool frame: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 func ingestOverflow(dir string, consume func(event.Event) error) error {
+	if err := pruneOverflowFrames(dir); err != nil {
+		return err
+	}
 	pending := filepath.Join(dir, "spool-pending")
 	entries, err := os.ReadDir(pending)
 	if os.IsNotExist(err) {

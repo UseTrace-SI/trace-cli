@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -15,6 +16,9 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/id"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
+	"github.com/UseTrace-SI/trace-cli/internal/textutil"
 )
 
 func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
@@ -23,6 +27,15 @@ func Serve(ctx context.Context, dir string, consume func(event.Event)) error {
 
 // ServeChecked retains spooled frames when the processing callback fails.
 func ServeChecked(ctx context.Context, dir string, consume func(event.Event) error) error {
+	return ServeCheckedWithLogger(ctx, dir, slog.Default(), consume)
+}
+
+// ServeCheckedWithLogger retains spooled frames when the processing callback
+// fails and reports undecodable frames through the supplied logger.
+func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger, consume func(event.Event) error) error {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating daemon directory: %w", err)
 	}
@@ -91,12 +104,24 @@ func ServeChecked(ctx context.Context, dir string, consume func(event.Event) err
 		s := bufio.NewScanner(conn)
 		s.Buffer(make([]byte, 4096), 4<<20)
 		for s.Scan() {
-			if events, err := decodeFrame(s.Bytes()); err == nil {
-				if err := delivery.socketBatch(events); err != nil {
-					acceptErr = fmt.Errorf("delivering socket event: %w", err)
-					break
+			raw := s.Bytes()
+			events, err := decodeFrame(raw)
+			if err != nil {
+				// Never silently discard a frame the sender believed it sent.
+				// Keep a redacted copy for inspection and log a redacted hint.
+				if qerr := quarantineFrame(dir, raw); qerr != nil {
+					logger.Error("quarantining invalid socket frame", "error", qerr)
 				}
+				logger.Warn("discarding invalid socket frame", "reason", err, "preview", redactPreview(raw))
+				continue
 			}
+			if err := delivery.socketBatch(events); err != nil {
+				acceptErr = fmt.Errorf("delivering socket event: %w", err)
+				break
+			}
+		}
+		if err := s.Err(); err != nil {
+			logger.Warn("reading socket frames stopped", "error", err)
 		}
 		conn.Close()
 		if acceptErr != nil {
@@ -216,4 +241,27 @@ func pollSpool(ctx context.Context, drain func() error) error {
 			}
 		}
 	}
+}
+
+// quarantineFrame preserves an undecodable frame for local inspection. The
+// bytes are redacted first so quarantining never becomes a way to persist a
+// secret that hook-side redaction failed to remove.
+func quarantineFrame(dir string, raw []byte) error {
+	qdir := filepath.Join(dir, "quarantine")
+	if err := os.MkdirAll(qdir, 0700); err != nil {
+		return fmt.Errorf("creating quarantine directory: %w", err)
+	}
+	name, err := id.New()
+	if err != nil {
+		return fmt.Errorf("naming quarantined frame: %w", err)
+	}
+	data := (redact.Redactor{}).Text(string(raw))
+	if err := os.WriteFile(filepath.Join(qdir, name+".frame"), []byte(data), 0600); err != nil {
+		return fmt.Errorf("writing quarantined frame: %w", err)
+	}
+	return nil
+}
+
+func redactPreview(raw []byte) string {
+	return textutil.Truncate((redact.Redactor{}).Text(string(raw)), 160)
 }

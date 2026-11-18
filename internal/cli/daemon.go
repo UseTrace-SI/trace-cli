@@ -226,7 +226,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				}
 			}()
 		}
-		err = daemon.ServeChecked(ctx, dir, func(ev event.Event) error {
+		err = daemon.ServeCheckedWithLogger(ctx, dir, logger, func(ev event.Event) error {
 			err := codexEvents.hook(ev)
 			if err != nil {
 				logger.Error("processing event", "kind", ev.Kind, "error", err)
