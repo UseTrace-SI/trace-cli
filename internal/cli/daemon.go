@@ -98,18 +98,14 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("creating trace directory: %w", err)
 		}
-		lock, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
+		lock, acquired, err := daemon.TryAcquireDaemonLock(dir)
 		if err != nil {
-			return fmt.Errorf("opening daemon lock: %w", err)
+			return err
 		}
-		defer lock.Close()
-		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			if err == syscall.EWOULDBLOCK || err == syscall.EAGAIN {
-				return nil
-			}
-			return fmt.Errorf("locking daemon: %w", err)
+		if !acquired {
+			return nil
 		}
-		defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		defer daemon.ReleaseDaemonLock(lock)
 		logfile, err := openDaemonLog(filepath.Join(dir, "daemon.log"))
 		if err != nil {
 			return fmt.Errorf("opening daemon log: %w", err)
@@ -180,11 +176,10 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		codexEvents := &codexSources{process: process}
-		pidPath := filepath.Join(dir, "daemon.pid")
-		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
-			return fmt.Errorf("writing pid file: %w", err)
+		if err := daemon.WriteDaemonIdentity(dir); err != nil {
+			return err
 		}
-		defer os.Remove(pidPath)
+		defer daemon.RemoveDaemonIdentity(dir)
 		personalReady := filepath.Join(dir, "personal-sync.ready")
 		if err := os.WriteFile(personalReady, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 			return fmt.Errorf("marking personal sync support: %w", err)
