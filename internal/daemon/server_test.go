@@ -8,11 +8,30 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
+
+// syncBuffer lets the test read log output while the server goroutine writes it.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (w *syncBuffer) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *syncBuffer) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
+}
 
 func TestQuarantineFrameRedactsBeforeWriting(t *testing.T) {
 	secret := "ghp_abcdefghijklmnopqrstuvwxyz012345"
@@ -51,8 +70,8 @@ func TestQuarantineFrameRedactsBeforeWriting(t *testing.T) {
 
 func TestServeQuarantinesUndecodableSocketFrame(t *testing.T) {
 	dir := t.TempDir()
-	var logs bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	logs := &syncBuffer{}
+	logger := slog.New(slog.NewTextHandler(logs, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
