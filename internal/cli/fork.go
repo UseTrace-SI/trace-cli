@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
@@ -94,6 +95,18 @@ func forkCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return fmt.Errorf("creating worktree: %s: %w", out, err)
 		}
+		// Any failure after this point would otherwise leave an orphaned
+		// worktree registered in the source repository. Keep it only once the
+		// fork has been fully prepared.
+		keepWorktree := false
+		defer func() {
+			if keepWorktree {
+				return
+			}
+			if out, err := exec.Command("git", "-C", root, "worktree", "remove", "--force", forkRoot).CombinedOutput(); err != nil {
+				fmt.Fprintf(os.Stderr, "trace: removing failed fork worktree: %s: %v\n", strings.TrimSpace(string(out)), err)
+			}
+		}()
 		if _, err := restore.Apply(target, forkRoot, nil, e.Blobs); err != nil {
 			return err
 		}
@@ -124,6 +137,7 @@ func forkCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return err
 			}
 		}
+		keepWorktree = true
 		if noLaunch {
 			return nil
 		}

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const CheckpointBranch = "trace/checkpoints/v1"
@@ -33,12 +34,39 @@ func DisableGitNative(root string) error {
 	return err
 }
 
+// checkpointLock serializes checkpoints, including ones started by a different
+// process. Git worktree creation and the branch checkout are not safe to run
+// concurrently against the same repository.
+func checkpointLock(root string) (func(), error) {
+	dir := filepath.Join(root, ".trace")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("creating trace directory: %w", err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "checkpoint.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening checkpoint lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("locking checkpoints: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
+}
+
 // Checkpoint commits the current .trace state to the hidden branch
 // trace/checkpoints/v1 without touching the user's working branch.
 func Checkpoint(root string) error {
 	if !GitNativeEnabled(root) {
 		return nil
 	}
+	release, err := checkpointLock(root)
+	if err != nil {
+		return err
+	}
+	defer release()
 	// Ensure branch exists.
 	branchExists := exec.Command("git", "-C", root, "rev-parse", "--verify", CheckpointBranch)
 	if err := branchExists.Run(); err != nil {
@@ -104,7 +132,9 @@ func copyDir(src, dst string, skip map[string]bool) error {
 			return nil
 		}
 		parts := strings.Split(filepath.ToSlash(rel), "/")
-		if skip[parts[0]] || skip[info.Name()] {
+		// The live database (and its WAL/SHM sidecars) must never be copied by
+		// a plain file read: a concurrent write can make the copy inconsistent.
+		if skip[parts[0]] || skip[info.Name()] || strings.HasPrefix(info.Name(), "trace.db") {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}

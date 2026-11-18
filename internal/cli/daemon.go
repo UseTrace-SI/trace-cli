@@ -131,6 +131,22 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		ctx, cancel := context.WithCancel(ctx)
 		defer stop()
 		defer cancel()
+		// A single worker serializes checkpoints and logs their errors; one
+		// pending request is enough, so a turn cannot spawn an unbounded number
+		// of goroutines each copying the trace directory.
+		checkpointReq := make(chan struct{}, 1)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-checkpointReq:
+					if err := gitx.Checkpoint(root); err != nil {
+						logger.Error("git checkpoint", "error", err)
+					}
+				}
+			}
+		}()
 		companionWorker := companions.StartDelayed(ctx, func(ctx context.Context) {
 			if userstate.Disabled() || !companions.AutoEnabled(root) {
 				return
@@ -155,7 +171,10 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if err == nil && (ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd) {
 				companionWorker.Notify()
 				if gitx.GitNativeEnabled(root) {
-					go func() { _ = gitx.Checkpoint(root) }()
+					select {
+					case checkpointReq <- struct{}{}:
+					default:
+					}
 				}
 			}
 			return err
