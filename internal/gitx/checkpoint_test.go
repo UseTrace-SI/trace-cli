@@ -81,3 +81,37 @@ func TestCheckpointExcludesLiveDatabaseAndSerializes(t *testing.T) {
 		t.Fatalf("second checkpoint: %v", err)
 	}
 }
+
+// Checkpoint reads .trace files with os.ReadFile, which follows symlinks. A
+// symlink placed under .trace must never copy outside content into the hidden
+// checkpoint branch (which is visible in git history).
+func TestCopyDirSkipsSymlinks(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	outsideDir := t.TempDir()
+	secret := "PRIVATE-KEY-DO-NOT-COMMIT"
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte(secret), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("kept"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outsideDir, "secret.txt"), filepath.Join(src, "linked.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(src, "linked-dir")); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyDir(src, dst, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dst, "keep.txt"))
+	if err != nil || string(data) != "kept" {
+		t.Fatalf("regular file was not copied: %q, %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "linked.txt")); err == nil {
+		t.Fatalf("symlink target was copied into checkpoint: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "linked-dir", "secret.txt")); err == nil {
+		t.Fatal("symlinked directory target was copied into checkpoint")
+	}
+}
