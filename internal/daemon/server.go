@@ -10,7 +10,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -258,6 +260,59 @@ func quarantineFrame(dir string, raw []byte) error {
 	data := (redact.Redactor{}).Text(string(raw))
 	if err := os.WriteFile(filepath.Join(qdir, name+".frame"), []byte(data), 0600); err != nil {
 		return fmt.Errorf("writing quarantined frame: %w", err)
+	}
+	// Socket quarantine needs the same bounds as spool quarantine: a stream of
+	// malformed frames must not fill the disk (which would also break spooling).
+	if err := pruneQuarantine(dir); err != nil {
+		return fmt.Errorf("pruning quarantined frames: %w", err)
+	}
+	return nil
+}
+
+// pruneQuarantine caps both the age and the number of quarantined socket
+// frames. Fresh frames are kept newest-first so recent evidence survives.
+func pruneQuarantine(dir string) error {
+	qdir := filepath.Join(dir, "quarantine")
+	entries, err := os.ReadDir(qdir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("listing quarantined frames: %w", err)
+	}
+	type frame struct {
+		path string
+		when time.Time
+	}
+	var fresh []frame
+	now := time.Now()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".frame") {
+			continue
+		}
+		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspecting quarantined frame: %w", err)
+		}
+		path := filepath.Join(qdir, entry.Name())
+		if now.Sub(info.ModTime()) > spoolRetention {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("removing old quarantined frame: %w", err)
+			}
+			continue
+		}
+		fresh = append(fresh, frame{path: path, when: info.ModTime()})
+	}
+	if len(fresh) > maxQuarantinedFrames {
+		sort.Slice(fresh, func(i, j int) bool { return fresh[i].when.Before(fresh[j].when) })
+		for _, old := range fresh[:len(fresh)-maxQuarantinedFrames] {
+			if err := os.Remove(old.path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("removing excess quarantined frame: %w", err)
+			}
+		}
 	}
 	return nil
 }
