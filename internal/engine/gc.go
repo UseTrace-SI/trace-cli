@@ -20,6 +20,8 @@ type GCResult struct {
 }
 
 func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if keepDays < 0 {
 		return GCResult{}, fmt.Errorf("keep-days must be nonnegative")
 	}

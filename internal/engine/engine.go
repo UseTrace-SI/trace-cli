@@ -70,6 +70,8 @@ func Open(root string) (*Engine, error) {
 func (e *Engine) Close() error { return e.DB.Close() }
 
 func (e *Engine) Baseline() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	var n int
 	if err := e.DB.QueryRow("SELECT COUNT(*) FROM keyframes WHERE seq=0").Scan(&n); err != nil {
 		return fmt.Errorf("checking baseline: %w", err)
@@ -758,6 +760,8 @@ func (e *Engine) ManifestAt(seq int64) (manifest.Manifest, error) {
 }
 
 func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	target, err := e.ManifestAt(seq)
 	if err != nil {
 		return 0, nil, err
