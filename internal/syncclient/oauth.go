@@ -37,6 +37,11 @@ type OAuth struct {
 	App    bool
 }
 
+// maxOAuthResponseBytes bounds JSON response bodies from GitHub and the Trace
+// authentication service so a hostile or misbehaving endpoint cannot make the
+// client buffer an unbounded response before decoding it.
+const maxOAuthResponseBytes = 65536
+
 func (o OAuth) client() *http.Client {
 	if o.Client != nil {
 		return o.Client
@@ -66,7 +71,7 @@ func (o OAuth) form(ctx context.Context, path string, values url.Values, output 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GitHub OAuth returned %s", resp.Status)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(output); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxOAuthResponseBytes)).Decode(output); err != nil {
 		return fmt.Errorf("decoding GitHub OAuth response: %w", err)
 	}
 	return nil
@@ -156,7 +161,7 @@ func (o OAuth) platformTokenRequest(ctx context.Context, target string, input ma
 		return Credentials{}, fmt.Errorf("trace authentication service returned %s", resp.Status)
 	}
 	var credentials Credentials
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&credentials); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxOAuthResponseBytes)).Decode(&credentials); err != nil {
 		return Credentials{}, fmt.Errorf("decoding Trace authentication response: %w", err)
 	}
 	if credentials.AccessToken == "" || credentials.RefreshToken == "" || credentials.ExpiresAt <= 0 || credentials.RefreshExpiresAt <= 0 {
