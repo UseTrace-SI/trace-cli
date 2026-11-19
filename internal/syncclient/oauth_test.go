@@ -100,6 +100,38 @@ func TestDeviceFlow(t *testing.T) {
 	}
 }
 
+// GitHub OAuth responses must be size-capped before JSON decoding, like the
+// platform token responses, so a hostile or broken endpoint cannot make the
+// client buffer an unbounded body.
+func TestFormResponseSizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{
+			name: "small response decodes",
+			body: `{"device_code":"device","user_code":"ABCD","verification_uri":"https://github.com/login/device","expires_in":10}`,
+		},
+		{
+			name:    "oversized response is rejected",
+			body:    `{"device_code":"` + strings.Repeat("d", 70000) + `"}`,
+			wantErr: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := OAuth{Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return response(tc.body), nil
+			})}}
+			var out DeviceCode
+			err := o.form(context.Background(), "/login/device/code", url.Values{"client_id": {"id"}}, &out)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("form error = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestGitHubAppDeviceScopeAndRefresh(t *testing.T) {
 	o := OAuth{App: true, Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		body, err := io.ReadAll(r.Body)

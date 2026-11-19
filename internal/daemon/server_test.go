@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -160,5 +161,54 @@ func TestServeFallbackShutdownWithLogger(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("daemon did not stop in spool fallback mode")
+	}
+}
+
+// Quarantined socket frames must be bounded just like quarantined spool
+// frames: an invalid-frame storm must not grow the directory without limit.
+func TestQuarantineFrameIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	qdir := filepath.Join(dir, "quarantine")
+	if err := os.MkdirAll(qdir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-spoolRetention - time.Hour)
+	// Three stale frames and (maxQuarantinedFrames-1) fresh frames. The next
+	// quarantine pushes the directory over budget, so pruning must remove the
+	// stale frames plus the oldest fresh one and leave exactly the budget.
+	for i := 0; i < maxQuarantinedFrames+2; i++ {
+		path := filepath.Join(qdir, fmt.Sprintf("frame-%03d.frame", i))
+		if err := os.WriteFile(path, []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		when := time.Now()
+		if i < 3 {
+			when = stale
+		}
+		if err := os.Chtimes(path, when, when); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := quarantineFrame(dir, []byte(`{invalid`)); err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(qdir, "*.frame"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != maxQuarantinedFrames {
+		t.Fatalf("quarantined frames = %d, want %d", len(files), maxQuarantinedFrames)
+	}
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if time.Since(info.ModTime()) > spoolRetention {
+			t.Fatalf("stale quarantined frame survived pruning: %s", path)
+		}
+		if base := filepath.Base(path); base == "frame-000.frame" || base == "frame-001.frame" || base == "frame-002.frame" {
+			t.Fatalf("stale quarantined frame survived pruning: %s", path)
+		}
 	}
 }

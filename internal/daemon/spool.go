@@ -144,7 +144,7 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 			_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		}
 	}()
-	if err := readSpoolFrames(f, consume); err != nil {
+	if err := readSpoolFrames(f, func(b []byte) error { return quarantineFrame(dir, b) }, consume); err != nil {
 		return fmt.Errorf("reading spool: %w", err)
 	}
 	// Keep the original frames until their callbacks finish. If processing is
@@ -168,9 +168,10 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 	return nil
 }
 
-// readSpoolFrames bounds memory per line and skips damaged or oversized lines,
-// allowing later valid events to be recovered instead of stopping the daemon.
-func readSpoolFrames(r io.Reader, consume func(event.Event) error) error {
+// readSpoolFrames bounds memory per line and quarantines damaged or oversized
+// lines before skipping them, allowing later valid events to be recovered
+// instead of silently discarding a frame the sender believed it sent.
+func readSpoolFrames(r io.Reader, quarantine func([]byte) error, consume func(event.Event) error) error {
 	const maxFrame = 4 << 20
 	reader := bufio.NewReaderSize(r, 4096)
 	var line []byte
@@ -180,19 +181,25 @@ func readSpoolFrames(r io.Reader, consume func(event.Event) error) error {
 		if !oversized {
 			if len(line)+len(part) > maxFrame {
 				oversized = true
-				line = nil
+				// Keep the bounded prefix accumulated so far as evidence.
 			} else {
 				line = append(line, part...)
 			}
 		}
 		if err == nil || err == io.EOF {
-			if !oversized && len(line) != 0 {
+			if oversized {
+				if qerr := quarantine(line); qerr != nil {
+					return fmt.Errorf("quarantining oversized spool frame: %w", qerr)
+				}
+			} else if len(line) != 0 {
 				if events, decodeErr := decodeFrame(line); decodeErr == nil {
 					for _, ev := range events {
 						if err := consume(ev); err != nil {
 							return fmt.Errorf("processing spooled event: %w", err)
 						}
 					}
+				} else if qerr := quarantine(line); qerr != nil {
+					return fmt.Errorf("quarantining damaged spool frame: %w", qerr)
 				}
 			}
 			line = nil

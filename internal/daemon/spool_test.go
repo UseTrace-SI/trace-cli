@@ -273,6 +273,49 @@ func TestSpoolSkipsDamagedAndOversizedLines(t *testing.T) {
 	}
 }
 
+// Damaged and oversized lines in the main spool must be quarantined just like
+// socket and overflow frames, instead of being silently discarded.
+func TestSpoolQuarantinesDamagedAndOversizedLines(t *testing.T) {
+	dir := t.TempDir()
+	content := `{invalid` + "\n" + strings.Repeat("x", (4<<20)+1) + "\n" + `{"kind":"turn_end","at":3}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "spool.jsonl"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var got []event.Event
+	if err := ingestSpool(dir, func(ev event.Event) { got = append(got, ev) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].At != 3 {
+		t.Fatalf("recovered events = %+v", got)
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "quarantine", "*.frame"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("quarantined frames = %d, want 2 (one damaged, one oversized)", len(files))
+	}
+	var sawDamaged, sawOversized bool
+	for _, p := range files {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(string(b), "{invalid") {
+			sawDamaged = true
+		}
+		if strings.HasPrefix(string(b), "xxxx") {
+			sawOversized = true
+		}
+	}
+	if !sawDamaged || !sawOversized {
+		t.Fatalf("quarantined frames missing evidence: damaged=%v oversized=%v", sawDamaged, sawOversized)
+	}
+	if err := ingestSpool(dir, func(event.Event) { t.Error("event replayed") }); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOverflowQuarantinesBadFramesAndContinues(t *testing.T) {
 	dir := t.TempDir()
 	pending := filepath.Join(dir, "spool-pending")

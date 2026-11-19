@@ -11,6 +11,54 @@ type mcpConfig struct {
 	Servers map[string]json.RawMessage `json:"mcpServers"`
 }
 
+// atomicWriteMCP replaces path via a synced temporary file and rename, so an
+// interrupted write cannot truncate a user's .mcp.json. If path is a symlink,
+// the resolved target is replaced instead so the symlink itself is preserved.
+// An existing file's permissions are kept; new files are private (0600).
+func atomicWriteMCP(path string, data []byte) error {
+	target := path
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return fmt.Errorf("resolving symlink %s: %w", path, err)
+		}
+		target = resolved
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("checking %s: %w", path, err)
+	}
+	mode := os.FileMode(0600)
+	if info, err := os.Stat(target); err == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking mode of %s: %w", target, err)
+	}
+	file, err := os.CreateTemp(filepath.Dir(target), ".trace-mcp-")
+	if err != nil {
+		return fmt.Errorf("creating temporary file for %s: %w", target, err)
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return fmt.Errorf("writing temporary %s: %w", target, err)
+	}
+	if err := file.Chmod(mode); err != nil {
+		file.Close()
+		return fmt.Errorf("setting mode on %s: %w", target, err)
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("syncing temporary %s: %w", target, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("closing temporary %s: %w", target, err)
+	}
+	if err := os.Rename(temporary, target); err != nil {
+		return fmt.Errorf("replacing %s: %w", target, err)
+	}
+	return nil
+}
+
 func installMCP(root string) error {
 	p := filepath.Join(root, ".mcp.json")
 	b, err := os.ReadFile(p)
@@ -61,7 +109,7 @@ func installMCP(root string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(p, append(b, '\n'), 0600); err != nil {
+	if err := atomicWriteMCP(p, append(b, '\n')); err != nil {
 		return fmt.Errorf("writing MCP config: %w", err)
 	}
 	return os.WriteFile(filepath.Join(root, ".trace", "mcp-server-name"), []byte(name), 0600)
@@ -108,5 +156,5 @@ func uninstallMCP(root string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, append(b, '\n'), 0600)
+	return atomicWriteMCP(p, append(b, '\n'))
 }

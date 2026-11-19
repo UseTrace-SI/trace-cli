@@ -131,6 +131,15 @@ func copyDir(src, dst string, skip map[string]bool) error {
 		if rel == "." {
 			return nil
 		}
+		// Walk uses Lstat, so a symlink is never followed here. Reading it with
+		// os.ReadFile would copy the target's bytes (possibly outside .trace)
+		// into the checkpoint commit, leaking files that redaction never saw.
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return nil
+		}
 		parts := strings.Split(filepath.ToSlash(rel), "/")
 		// The live database (and its WAL/SHM sidecars) must never be copied by
 		// a plain file read: a concurrent write can make the copy inconsistent.
