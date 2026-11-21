@@ -107,6 +107,36 @@ func listRepoFiles(root string) ([]string, error) {
 	return files, nil
 }
 
+// symlinkedParent reports whether a directory between root and rel is a
+// symbolic link, the rule restore.safePath applies. Git keeps listing an index
+// entry after its directory is replaced by a link, and reading through the
+// link would capture a file from outside the repository. checked caches the
+// answer for each directory.
+func symlinkedParent(root, rel string, checked map[string]bool) (bool, error) {
+	for i := 0; i < len(rel); i++ {
+		if rel[i] != '/' {
+			continue
+		}
+		dir := rel[:i]
+		linked, ok := checked[dir]
+		if !ok {
+			info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(dir)))
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			linked = info.Mode()&os.ModeSymlink != 0
+			checked[dir] = linked
+		}
+		if linked {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 	paths, err := listRepoFiles(root)
 	if err != nil {
@@ -118,8 +148,16 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 	}
 	var total int64
 	m := Manifest{}
+	checked := map[string]bool{}
 	for _, rel := range paths {
 		if excluded(rel) || policy.excluded(rel) || (ig != nil && ig.Ignored(rel, false)) {
+			continue
+		}
+		linked, err := symlinkedParent(root, rel, checked)
+		if err != nil {
+			return nil, fmt.Errorf("statting %s: %w", rel, err)
+		}
+		if linked {
 			continue
 		}
 		p := filepath.Join(root, filepath.FromSlash(rel))

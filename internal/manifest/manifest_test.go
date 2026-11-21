@@ -82,6 +82,62 @@ func TestSecretPath(t *testing.T) {
 	}
 }
 
+// Git keeps listing an index entry after its directory is replaced by a
+// symlink. Scan must not read through the link (a link outside the repository
+// would capture a foreign file); restore refuses such paths for the same reason.
+func TestScanSkipsPathsBelowSymlinkedDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target func(root string) string
+	}{
+		{"link outside the repository", func(string) string { return t.TempDir() }},
+		{"link inside the repository", func(root string) string { return filepath.Join(root, "real") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+				t.Fatalf("git init: %s: %v", out, err)
+			}
+			for _, name := range []string{"cfg/credentials", "real/notes.txt", "app.go"} {
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, name), []byte("placeholder\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Staging is enough: git ls-files --cached keeps the stale entry.
+			if out, err := exec.Command("git", "-C", root, "add", ".").CombinedOutput(); err != nil {
+				t.Fatalf("git add: %s: %v", out, err)
+			}
+			target := tc.target(root)
+			if err := os.WriteFile(filepath.Join(target, "credentials"), []byte("aws_secret_access_key=LINKED\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(filepath.Join(root, "cfg")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, filepath.Join(root, "cfg")); err != nil {
+				t.Fatal(err)
+			}
+			bs, err := blob.Open(filepath.Join(t.TempDir(), "objects"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := Scan(root, nil, bs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry, ok := got["cfg/credentials"]; ok {
+				t.Fatalf("captured cfg/credentials through a symlinked directory (blob %s)", entry.Hash)
+			}
+			if got["app.go"].Hash == "" || got["real/notes.txt"].Hash == "" {
+				t.Fatalf("lost an ordinary file: %v", got)
+			}
+		})
+	}
+}
+
 // Every OpenSSH key type and key/certificate files in any letter case must
 // stay out of snapshots, without catching ordinary source files.
 func TestSecretPathMatchesKeyFilesInAnyCase(t *testing.T) {
