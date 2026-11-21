@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -213,6 +214,39 @@ func TestOAuthRequestsDoNotFollowRedirects(t *testing.T) {
 			})
 		}
 		origin.Close()
+	}
+}
+
+// The Trace authentication service supplies tokens only. Pro key material in
+// its response would let the server choose the key that seals Pro history.
+func TestPlatformTokenResponseSuppliesOnlyTokens(t *testing.T) {
+	later := time.Now().Add(time.Hour).UnixMilli()
+	serverKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "token", "refresh_token": "refresh", "expires_at": later, "refresh_expires_at": later,
+			"pro_sync_key": serverKey, "pro_sync_salt": serverKey, "connection_id": "server-chosen", "scope": "account",
+		})
+	}))
+	defer platform.Close()
+	ctx := context.Background()
+	want := Credentials{AccessToken: "token", RefreshToken: "refresh", ExpiresAt: later, RefreshExpiresAt: later}
+	for _, tc := range []struct {
+		name string
+		call func() (Credentials, error)
+	}{
+		{"code exchange", func() (Credentials, error) {
+			return OAuth{}.ExchangeWithPlatform(ctx, platform.URL, BrowserCode{RedirectURI: "http://127.0.0.1:1/oauth/callback", Verifier: "verifier"}, "code")
+		}},
+		{"refresh", func() (Credentials, error) {
+			return OAuth{}.RefreshWithPlatform(ctx, platform.URL, Credentials{RefreshToken: "refresh", RefreshExpiresAt: later})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := tc.call(); err != nil || got != want {
+				t.Fatalf("got %+v, %v; want only token fields", got, err)
+			}
+		})
 	}
 }
 

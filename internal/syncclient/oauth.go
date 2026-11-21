@@ -164,10 +164,12 @@ func (o OAuth) platformTokenRequest(ctx context.Context, target string, input ma
 	if resp.StatusCode != http.StatusOK {
 		return Credentials{}, fmt.Errorf("trace authentication service returned %s", resp.Status)
 	}
-	var credentials Credentials
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxOAuthResponseBytes)).Decode(&credentials); err != nil {
+	var response Credentials
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxOAuthResponseBytes)).Decode(&response); err != nil {
 		return Credentials{}, fmt.Errorf("decoding Trace authentication response: %w", err)
 	}
+	// The service supplies tokens only, never Pro key material or a connection identity.
+	credentials := Credentials{AccessToken: response.AccessToken, RefreshToken: response.RefreshToken, ExpiresAt: response.ExpiresAt, RefreshExpiresAt: response.RefreshExpiresAt}
 	if credentials.AccessToken == "" || credentials.RefreshToken == "" || credentials.ExpiresAt <= 0 || credentials.RefreshExpiresAt <= 0 {
 		return Credentials{}, errors.New("trace authentication service returned incomplete credentials")
 	}
