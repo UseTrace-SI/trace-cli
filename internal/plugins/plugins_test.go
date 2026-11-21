@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,53 @@ func TestSignedOfflineInstallUpdatesDowngradesAndPrunesOnlyOwnedReleases(t *test
 	}
 	if count, err := manager.Prune("example"); err != nil || count != 2 {
 		t.Fatalf("inactive cleanup: %d %v", count, err)
+	}
+}
+func TestReinstallingTheActiveVersionKeepsThePreviousRelease(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		versions []string // installed in order; the last reinstalls the active version
+		rotate   bool     // pin a replacement publisher key and re-sign before the last install
+		retained []string // versions pruning must keep: the active and the previous one
+	}{
+		{name: "only release", versions: []string{"1.0.0", "1.0.0"}, retained: []string{"1.0.0"}},
+		{name: "after update", versions: []string{"1.0.0", "2.0.0", "2.0.0"}, retained: []string{"1.0.0", "2.0.0"}},
+		{name: "after downgrade", versions: []string{"1.0.0", "2.0.0", "1.0.0", "1.0.0"}, retained: []string{"1.0.0", "2.0.0"}},
+		{name: "after key rotation", versions: []string{"1.0.0", "2.0.0", "2.0.0"}, rotate: true, retained: []string{"1.0.0", "2.0.0"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager, _, key := testManager(t)
+			for index, version := range test.versions {
+				if test.rotate && index == len(test.versions)-1 {
+					public, private, err := ed25519.GenerateKey(rand.Reader)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := manager.Trust("publisher", public, true); err != nil {
+						t.Fatal(err)
+					}
+					key = private
+				}
+				if _, err := manager.Install(signedBundle(t, key, "publisher", version, "#!/bin/sh\necho "+version+"\n"), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := manager.Prune("example"); err != nil {
+				t.Fatal(err)
+			}
+			entries, err := os.ReadDir(filepath.Join(manager.Root, "releases", "example"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			retained := []string{}
+			for _, entry := range entries {
+				version, _, _ := strings.Cut(entry.Name(), "-")
+				retained = append(retained, version)
+			}
+			if !slices.Equal(retained, test.retained) {
+				t.Fatalf("prune retained %v, want the active and previous versions %v", retained, test.retained)
+			}
+		})
 	}
 }
 func TestTamperingWrongPublishersAndKeyRevocationFailClosed(t *testing.T) {

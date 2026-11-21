@@ -534,7 +534,9 @@ func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, err
 		return receipt, err
 	}
 	active := filepath.Join(manager.Root, "active", manifest.Name+".json")
-	if previous.Manifest.Name != "" {
+	// Reinstalling the active version (identical signed bytes, possibly re-signed
+	// under a replacement key) must keep the rollback release that prune retains.
+	if previous.Manifest.Name != "" && previous.Manifest.Version != manifest.Version {
 		old, _ := json.Marshal(previous)
 		if err := atomicFile(filepath.Join(manager.Root, "active", manifest.Name+".previous.json"), old, 0600); err != nil {
 			return receipt, err
