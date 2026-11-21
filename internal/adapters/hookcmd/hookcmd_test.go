@@ -69,6 +69,10 @@ func TestIsTraceHook(t *testing.T) {
 		{"absolute", "/usr/local/bin/trace hook agy Stop", "agy", true},
 		{"quoted absolute", "'/Users/a b/trace' hook agy Stop", "agy", true},
 		{"quoted apostrophe", `'/tmp/it'\''s/trace' hook agy Stop`, "agy", true},
+		// Project configs are repository content; a lone quote before the
+		// hook arguments must be rejected, not sliced as a quoted path.
+		{"lone quote prefix", "' hook agy Stop", "agy", false},
+		{"empty quoted prefix", "'' hook agy Stop", "agy", false},
 		{"other executable", "/usr/bin/other hook agy Stop", "agy", false},
 		{"quoted other executable", "'/usr/bin/other' hook agy Stop", "agy", false},
 		{"shell compound", "/bin/echo hi; trace hook agy Stop", "agy", false},

@@ -84,6 +84,14 @@ func parseHookArgs(args []string) (repoPath, agent, hookEvent string, ok, handle
 }
 
 func runHook(repoPath, agent, hookEvent string) {
+	// Registered first so it runs last: after an unexpected panic the deferred
+	// agent responses below still print and the hook exits 0, not with the
+	// status 2 that agents treat as a blocking hook failure.
+	defer func() {
+		if recover() != nil {
+			fmt.Fprintln(os.Stderr, "trace hook: internal error")
+		}
+	}()
 	cursorGlobal := agent == "cursor-global"
 	geminiGlobal := agent == "gemini-global"
 	qwenGlobal := agent == "qwen-global"

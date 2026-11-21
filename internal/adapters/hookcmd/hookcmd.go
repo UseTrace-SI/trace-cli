@@ -54,7 +54,8 @@ func IsTraceHook(command, agent string) bool {
 		return true
 	}
 	path := prefix
-	if strings.HasPrefix(prefix, "'") && strings.HasSuffix(prefix, "'") {
+	// A lone quote both starts and ends the prefix; it is not a quoted path.
+	if len(prefix) >= 2 && strings.HasPrefix(prefix, "'") && strings.HasSuffix(prefix, "'") {
 		parts := strings.Split(prefix[1:len(prefix)-1], `'\''`)
 		for _, part := range parts {
 			if strings.Contains(part, "'") {
