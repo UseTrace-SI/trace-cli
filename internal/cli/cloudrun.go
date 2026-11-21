@@ -276,12 +276,19 @@ func cloudRunCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return fmt.Errorf("at most 32 command arguments are supported")
 		}
 		length := 0
-		for _, arg := range args {
+		for i, arg := range args {
 			if len(arg) > 4096 || strings.ContainsRune(arg, 0) {
 				return fmt.Errorf("invalid command argument")
 			}
 			if (redact.Redactor{}).Text(arg) != arg {
 				return fmt.Errorf("credentials cannot be included in job command arguments")
+			}
+			// "--token VALUE" must be refused like "--token=VALUE": alone,
+			// neither argument has the context that identifies a credential.
+			if i+1 < len(args) && strings.HasPrefix(arg, "-") && !strings.Contains(arg, "=") {
+				if pair := arg + "=" + args[i+1]; (redact.Redactor{}).Text(pair) != pair {
+					return fmt.Errorf("credentials cannot be included in job command arguments")
+				}
 			}
 			length += len(arg)
 		}
