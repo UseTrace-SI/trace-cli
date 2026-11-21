@@ -76,11 +76,11 @@ func Checkpoint(root string) error {
 			return err
 		}
 		defer os.RemoveAll(tmp)
-		if out, err := exec.Command("git", "-C", root, "worktree", "add", "--orphan", "-b", CheckpointBranch, tmp).CombinedOutput(); err != nil {
+		if out, err := checkpointGit(root, "worktree", "add", "--orphan", "-b", CheckpointBranch, tmp).CombinedOutput(); err != nil {
 			return fmt.Errorf("creating checkpoint branch: %s: %w", strings.TrimSpace(string(out)), err)
 		}
 		// empty commit
-		if out, err := exec.Command("git", "-C", tmp, "commit", "--allow-empty", "-m", "trace: initial checkpoint").CombinedOutput(); err != nil {
+		if out, err := checkpointGit(tmp, "commit", "--no-verify", "--allow-empty", "-m", "trace: initial checkpoint").CombinedOutput(); err != nil {
 			exec.Command("git", "-C", root, "worktree", "remove", "--force", tmp).Run()
 			return fmt.Errorf("initial commit: %s: %w", strings.TrimSpace(string(out)), err)
 		}
@@ -92,7 +92,7 @@ func Checkpoint(root string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	if out, err := exec.Command("git", "-C", root, "worktree", "add", tmp, CheckpointBranch).CombinedOutput(); err != nil {
+	if out, err := checkpointGit(root, "worktree", "add", tmp, CheckpointBranch).CombinedOutput(); err != nil {
 		return fmt.Errorf("worktree add: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	defer exec.Command("git", "-C", root, "worktree", "remove", "--force", tmp).Run()
@@ -113,10 +113,18 @@ func Checkpoint(root string) error {
 	if len(strings.TrimSpace(string(status))) == 0 {
 		return nil
 	}
-	if out, err := exec.Command("git", "-C", tmp, "commit", "-m", "trace: checkpoint").CombinedOutput(); err != nil {
+	if out, err := checkpointGit(tmp, "commit", "--no-verify", "-m", "trace: checkpoint").CombinedOutput(); err != nil {
 		return fmt.Errorf("commit: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+// checkpointGit runs git for the hidden checkpoint branch with the project's
+// hooks and commit signing disabled: a failing hook must not stop checkpoints,
+// a post-commit hook must not act on (or push) Trace's branch, and signing
+// must not prompt from the daemon.
+func checkpointGit(dir string, args ...string) *exec.Cmd {
+	return exec.Command("git", append([]string{"-C", dir, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"}, args...)...)
 }
 
 func copyDir(src, dst string, skip map[string]bool) error {
