@@ -29,9 +29,21 @@ read-only sandbox. A per-reviewer timeout terminates the owned process group.
 Offline subprocess regressions pass; live provider review acceptance is pending.
 
 `trace why` maps current lines back through recorded file states, including
-line shifts and gaps between captures. Unmatched lines report an uncertain origin
-instead of inheriting an agent attribution. This does not yet qualify attribution
-across every Git rewrite or formatting workflow.
+line shifts and gaps between captures, and follows committed lines through Git
+rewrites: amend, rebase (including interactive squash, fixup and reordering),
+cherry-pick and `git merge --squash`. `trace init` installs `post-commit` and
+`post-rewrite` blocks, merged into existing hooks; attribution and rewrite
+sources are stored in `.trace/` and in the commit rows that bundles and sync
+carry, never as Git notes, trailers or branches. Reformatted lines (gofmt- or
+prettier-style whitespace, quotes, semicolons, trailing commas and wrapping)
+still match, with `normalized` confidence. `trace why --json` reports
+`confidence` and the `rewrite_chain`; `trace blame FILE` summarizes every line.
+Unmatched lines report an uncertain origin instead of inheriting an agent
+attribution. Offline tests cover these rewrites, formatter runs and recovery by
+bundle import into a fresh clone. Merges rewritten by a hosting service, and
+commits made without Trace's Git hooks, are explained only from recorded edits,
+identical patches and distinctive content; that path is not yet verified against
+a live hosting service.
 
 The development CLI also supports `trace cloud-run --project PROJECT_ID
 --include example.js -- node example.js`, plus `cloud-run status JOB_ID` and
@@ -212,7 +224,7 @@ before the previous memory index changes.
 
 Local chunk reads now close synchronously, including partial reads and errors. Sync protocol 2 transfers large files as bounded chunks in Team and Pro modes; upgrade the companion platform alongside the CLI. See [sync upgrade notes](docs/sync.md#protocol-2-upgrade) for repository identity changes and legacy hosted history.
 
-The CLI records Claude Code, Codex, Cursor Agent, Antigravity CLI (`agy`), OpenCode, Windsurf Cascade, Gemini CLI, Copilot CLI, Qwen Code, Factory Droid, Pi, Oh My Pi, Grok Build, Goose, Amp, Kilo, and Kiro turns, stores compressed keyframes, and supports log, show, rewind, status, why, fork, resume, garbage collection, read-only MCP history tools, and Agent Trace export. The daemon stays resident until stopped, recovers automatically from the next agent session, and rotates its log. Rewind handles files changing into directories and back, removes empty directories created by earlier restores, preserves ignored files, and records the restored tree as the latest keyframe. It captures available assistant text, tool names, and read paths from agent hooks or transcripts. Optional Tree-sitter builds classify structural edits. An opt-in [Pro/Team sync client](docs/sync.md) uploads history in Worker-sized batches, appends corrections for completed turns and sessions, and can recover it into a fresh Git checkout through the separate Trace app. `trace login --auto-sync` opts a repository into background upload of existing and new history; without it, sync stays local until `trace sync` is run manually. `trace sync disable-auto` turns background upload off. `make test-sync` checks the client. Recent additions: `trace diff <a> <b>` compares any two keyframes, `trace messages` lists the conversation per turn, `trace worktree gc` cleans up Trace-created worktrees, `trace init --if-needed` is safe for scripts/agents, ops record per-edit actor attribution, and `trace doctor` self-diagnoses setup issues. The local CLI also offers keyword search across turns and messages with edited-path filters, recent-work dispatch, local activity reports, individual agent management, a timeline TUI, and diagnostics. See [quickstart](docs/quickstart.md), [CLI reference](docs/cli.md), and [privacy](docs/privacy.md).
+The CLI records Claude Code, Codex, Cursor Agent, Antigravity CLI (`agy`), OpenCode, Windsurf Cascade, Gemini CLI, Copilot CLI, Qwen Code, Factory Droid, Pi, Oh My Pi, Grok Build, Goose, Amp, Kilo, and Kiro turns, stores compressed keyframes, and supports log, show, rewind, status, why, blame, fork, resume, garbage collection, read-only MCP history tools, and Agent Trace export. The daemon stays resident until stopped, recovers automatically from the next agent session, and rotates its log. Rewind handles files changing into directories and back, removes empty directories created by earlier restores, preserves ignored files, and records the restored tree as the latest keyframe. It captures available assistant text, tool names, and read paths from agent hooks or transcripts. Optional Tree-sitter builds classify structural edits. An opt-in [Pro/Team sync client](docs/sync.md) uploads history in Worker-sized batches, appends corrections for completed turns and sessions, and can recover it into a fresh Git checkout through the separate Trace app. `trace login --auto-sync` opts a repository into background upload of existing and new history; without it, sync stays local until `trace sync` is run manually. `trace sync disable-auto` turns background upload off. `make test-sync` checks the client. Recent additions: `trace diff <a> <b>` compares any two keyframes, `trace messages` lists the conversation per turn, `trace worktree gc` cleans up Trace-created worktrees, `trace init --if-needed` is safe for scripts/agents, ops record per-edit actor attribution, and `trace doctor` self-diagnoses setup issues. The local CLI also offers keyword search across turns and messages with edited-path filters, recent-work dispatch, local activity reports, individual agent management, a timeline TUI, and diagnostics. See [quickstart](docs/quickstart.md), [CLI reference](docs/cli.md), and [privacy](docs/privacy.md).
 
 ## Install
 

@@ -30,6 +30,8 @@ Trace does not read `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.aws/`, or `.ssh/`. F
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
 
+Commit rows record, for each commit the Git hooks report, its patch ID, the commits it rewrote and the origin (step, agent, time and line ranges) of the lines it introduced in non-excluded files. They store no file contents or commit messages; Trace reads a squash commit's message only to find the commit IDs Git lists there.
+
 ## Preview and project exclusions
 
 `trace connect --preview --json` and `trace sync --dry-run --json` run locally,
