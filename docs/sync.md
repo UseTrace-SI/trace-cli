@@ -58,7 +58,7 @@ Older versions saved this login under the repository name alone. Trace no longer
 
 ## Encryption modes
 
-For Pro, supply a passphrase of at least 12 characters during login. Trace saves the derived key in the OS credential store for background use; the passphrase itself is not saved:
+For Pro, supply a passphrase of at least 12 characters during login. Trace saves the derived key, with the salt it was derived from, in the OS credential store for background use; the passphrase itself is not saved:
 
 ```sh
 export TRACE_SYNC_PASSPHRASE='a long passphrase kept outside the repo'
@@ -66,6 +66,8 @@ trace login --auto-sync
 ```
 
 Trace derives a 256-bit key with scrypt using a random 32-byte salt in `.trace/sync-salt`. Rows and blobs are encrypted with XChaCha20-Poly1305 before upload. The key and passphrase are never uploaded. Losing the passphrase prevents Pro recovery. Team mode uses HTTPS and sends plaintext to the server for its server-side encryption and repository access control.
+
+Background sync uses the saved key only with the `.trace/sync-salt` it was derived from. Checkouts of one repository on one server share a saved login, so an automatic Pro login from another checkout replaces the key. The earlier checkout then stops uploading and reports `run trace login again`, rather than uploading rows that could not be recovered; log in there again with `TRACE_SYNC_PASSPHRASE` set, or set it for `trace sync`.
 
 ## Recover history
 

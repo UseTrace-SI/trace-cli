@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -125,7 +126,7 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 		if err != nil {
 			return "", err
 		}
-		updated.ProSyncKey = credentials.ProSyncKey
+		updated.ProSyncKey, updated.ProSyncSalt = credentials.ProSyncKey, credentials.ProSyncSalt
 		if err := syncclient.SaveCredentials(cfg.CredentialKey(), updated); err != nil {
 			return "", err
 		}
@@ -136,7 +137,7 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 
 // saveGitHubLogin saves a legacy Pro/Team login for one Trace server and
 // repository. Automatic Pro sync also saves the key derived from
-// TRACE_SYNC_PASSPHRASE for background use.
+// TRACE_SYNC_PASSPHRASE for background use, with the salt it was derived with.
 func saveGitHubLogin(traceDir string, cfg syncclient.Config, credentials syncclient.Credentials) error {
 	if cfg.AutoSync && cfg.Mode == "pro" {
 		cipher, err := syncclient.LoadCipher(traceDir, os.Getenv("TRACE_SYNC_PASSPHRASE"))
@@ -144,6 +145,7 @@ func saveGitHubLogin(traceDir string, cfg syncclient.Config, credentials synccli
 			return err
 		}
 		credentials.ProSyncKey = cipher.KeyForCredentialStore()
+		credentials.ProSyncSalt = base64.StdEncoding.EncodeToString(cipher.Salt)
 	}
 	return syncclient.SaveCredentials(cfg.CredentialKey(), credentials)
 }
@@ -159,6 +161,11 @@ func configuredCipher(traceDir string, cfg syncclient.Config) (*syncclient.Ciphe
 	salt, err := os.ReadFile(filepath.Join(traceDir, "sync-salt"))
 	if err != nil {
 		return nil, fmt.Errorf("reading Pro sync salt: %w", err)
+	}
+	// A login from another checkout replaces the saved key. Rows sealed with it
+	// but labelled with this checkout's salt could never be recovered.
+	if credentials.ProSyncKey != "" && credentials.ProSyncSalt != base64.StdEncoding.EncodeToString(salt) {
+		return nil, errors.New("saved Pro sync key was not derived with this checkout's sync salt; run trace login again with TRACE_SYNC_PASSPHRASE set")
 	}
 	return syncclient.FromKey(credentials.ProSyncKey, salt)
 }
@@ -305,6 +312,7 @@ func autoSyncLoop(ctx context.Context, root string, e *engine.Engine, logger *sl
 		if cfg.Mode == "pro" {
 			client.Cipher, err = configuredCipher(client.TraceDir, cfg)
 			if err != nil {
+				_ = syncclient.RecordAttempt(client.TraceDir, cfg, err)
 				logger.Warn("automatic Pro sync unavailable", "error", err)
 				reset(retryDelay)
 				retryDelay = min(retryDelay*2, retryMax)
