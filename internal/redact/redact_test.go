@@ -77,6 +77,79 @@ func TestShortHighEntropyKeyValuesRedacted(t *testing.T) {
 	}
 }
 
+// The value after any assignment or comparison operator must be masked whole.
+// Matching only the operator's second character used to leave the real value
+// in place, and that marker then suppressed the entropy fallback for it.
+func TestAssignmentAndComparisonValuesRedacted(t *testing.T) {
+	const hex = "3f9a8c2e71d64b0f9e5a2c7d18b4e6f0"
+	env := func(value string) string { return marker("env", value) }
+	for _, tc := range []struct{ name, input, want string }{
+		{"go short variable declaration", `token := "` + hex + `"`, `token := "` + env(hex) + `"`},
+		{"camelCase name", `apiKey := "9Qm2Lx7Rt4Vb8Nc1Zp6Hs3Wd5Kf0Jg2Y"`, `apiKey := "` + env("9Qm2Lx7Rt4Vb8Nc1Zp6Hs3Wd5Kf0Jg2Y") + `"`},
+		{"hash rocket", `:password => "Summer2024!"`, `:password => "` + env("Summer2024!") + `"`},
+		{"equality", `if token == "` + hex + `" {`, `if token == "` + env(hex) + `" {`},
+		{"strict inequality", `if (secret !== 'Summer2024!') {`, `if (secret !== '` + env("Summer2024!") + `') {`},
+		{"quoted name in prose", `log in with {"username": "admin", "password": "Summer2024!"}`, `log in with {"username": "admin", "password": "` + env("Summer2024!") + `"}`},
+		{"quoted value with spaces", `DB_PASSWORD="correct horse battery staple"`, `DB_PASSWORD="` + env("correct horse battery staple") + `"`},
+		{"single-quoted name and value", `{'api_key': 'open sesame'}`, `{'api_key': '` + env("open sesame") + `'}`},
+		{"assignment inside a string literal", `exec("API_TOKEN=abc123")`, `exec("API_TOKEN=` + env("abc123") + `")`},
+		{"empty comparison is unchanged", `if token != "" {`, `if token != "" {`},
+		{"comparison with an identifier is unchanged", `if token != nil {`, `if token != nil {`},
+		{"arrow function is unchanged", `keys.map(key => key.id)`, `keys.map(key => key.id)`},
+		{"quoted name with null is unchanged", `{"password": null}`, `{"password": null}`},
+		{"quoted name with a number is unchanged", `"max_tokens": 4096`, `"max_tokens": 4096`},
+		{"quoted name with a list is unchanged", `"keywords": ["redact", "trace"]`, `"keywords": ["redact", "trace"]`},
+		{"quoted name not ending in a secret word is unchanged", `{"token_type": "bearer"}`, `{"token_type": "bearer"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			redactor := Redactor{}
+			got := redactor.Text(tc.input)
+			if got != tc.want {
+				t.Fatalf("Text(%q) = %q; want %q", tc.input, got, tc.want)
+			}
+			if twice := redactor.Text(got); twice != got {
+				t.Fatalf("redaction changed on a second pass: %q -> %q", got, twice)
+			}
+		})
+	}
+}
+
+func TestHeaderURLAndSlackCredentialsRedacted(t *testing.T) {
+	const hex = "3f9a8c2e71d64b0f9e5a2c7d18b4e6f0"
+	for _, tc := range []struct {
+		name, input, secret string
+		wantRedacted        bool
+	}{
+		{"bearer header", `curl -H "Authorization: Bearer ` + hex + `" https://example.com/v1/items`, hex, true},
+		{"basic header", `Authorization: Basic YWRtaW46aHVudGVyMmh1bnRlcjI=`, "YWRtaW46aHVudGVyMmh1bnRlcjI=", true},
+		{"header set in code", `req.Header.Set("Authorization", "Bearer ` + hex + `")`, hex, true},
+		{"header in JSON", `{"authorization": "Bearer ` + hex + `"}`, hex, true},
+		{"URL with an empty username", `REDIS_URL=redis://:p4ssw0rdXYZ@redis-12345.example.com:12345`, "p4ssw0rdXYZ", true},
+		{"Slack refresh token", "xox" + `e-1-My0xLTE2NzY4NzE2NDA3NzYtNDk1NjI2ODcyNzA2`, "My0xLTE2NzY4NzE2NDA3NzYtNDk1NjI2ODcyNzA2", true},
+		{"prose about a bearer", "the bearer of bad news", "", false},
+		{"header placeholder", `Send an Authorization: Bearer token header, or "Authorization: Bearer $TOKEN".`, "", false},
+		{"header scheme in prose", "The Authorization: Bearer authentication flow is in RFC 6750.", "", false},
+		{"URL with a port", "http://localhost:8080/path and http://[::1]:8080/", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			redactor := Redactor{}
+			got := redactor.Text(tc.input)
+			if !tc.wantRedacted {
+				if got != tc.input {
+					t.Fatalf("false positive: %q -> %q", tc.input, got)
+				}
+				return
+			}
+			if strings.Contains(got, tc.secret) || !strings.Contains(got, "⟨redacted:") {
+				t.Fatalf("secret was not redacted: %q", got)
+			}
+			if twice := redactor.Text(got); twice != got {
+				t.Fatalf("redaction changed on a second pass: %q -> %q", got, twice)
+			}
+		})
+	}
+}
+
 func TestLargeUnrelatedTextIsUnchanged(t *testing.T) {
 	value := strings.Repeat("x", 1<<20)
 	if got := (Redactor{}).Text(value); got != value {

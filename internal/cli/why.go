@@ -1,34 +1,45 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
-	"github.com/UseTrace-SI/trace-cli/internal/textutil"
-	"github.com/UseTrace-SI/trace-cli/internal/why"
 	"github.com/spf13/cobra"
 )
 
 type whyResult struct {
-	Step         int64        `json:"step,omitempty"`
-	Agent        string       `json:"agent"`
-	Time         int64        `json:"time"`
-	Prompt       string       `json:"prompt,omitempty"`
-	Reasoning    string       `json:"reasoning,omitempty"`
-	Commit       string       `json:"commit,omitempty"`
-	Symbol       string       `json:"symbol,omitempty"`
-	Message      string       `json:"message,omitempty"`
-	Messages     []whyMessage `json:"messages,omitempty"`
-	MoreMessages bool         `json:"more_messages,omitempty"`
+	Step      int64  `json:"step,omitempty"`
+	Agent     string `json:"agent"`
+	Time      int64  `json:"time"`
+	Prompt    string `json:"prompt,omitempty"`
+	Reasoning string `json:"reasoning,omitempty"`
+	// Commit is the commit that currently contains the line; OriginCommit
+	// is where it was first committed when Git rewrites moved it since.
+	Commit       string `json:"commit,omitempty"`
+	OriginCommit string `json:"origin_commit,omitempty"`
+	Symbol       string `json:"symbol,omitempty"`
+	Message      string `json:"message,omitempty"`
+	// Confidence is exact, normalized (matched ignoring formatting),
+	// inferred (matched by content to another commit) or uncertain.
+	Confidence   string                `json:"confidence"`
+	RewriteChain []attribution.Rewrite `json:"rewrite_chain,omitempty"`
+	Messages     []whyMessage          `json:"messages,omitempty"`
+	MoreMessages bool                  `json:"more_messages,omitempty"`
+}
+
+func newWhyResult(origin attribution.Origin) whyResult {
+	return whyResult{Step: origin.Step, Agent: origin.Agent, Time: origin.Time, Prompt: origin.Prompt,
+		Reasoning: origin.Reasoning, Commit: origin.Commit, OriginCommit: origin.OriginCommit, Symbol: origin.Symbol,
+		Message: origin.Message, Confidence: string(origin.Confidence), RewriteChain: origin.Rewrites}
 }
 
 type whyMessage struct {
@@ -69,144 +80,13 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
-		rows, err := e.DB.Query(`SELECT before_hash,after_hash,COALESCE(turn_id,''),at,COALESCE(detail,''),COALESCE(start_line,0),COALESCE(end_line,0) FROM ops
-			WHERE path=? AND (before_hash IS NOT NULL OR after_hash IS NOT NULL) ORDER BY at DESC,id DESC`, file)
+		origins, err := attribution.ExplainCommitted(e.DB, e.Blobs, root, file, string(current), line, all)
 		if err != nil {
-			return fmt.Errorf("querying file history: %w", err)
-		}
-		type change struct {
-			before, after, turnID, detail string
-			at                            int64
-			start, end                    int
-		}
-		var changes []change
-		for rows.Next() {
-			var ch change
-			if err := rows.Scan(&ch.before, &ch.after, &ch.turnID, &ch.at, &ch.detail, &ch.start, &ch.end); err != nil {
-				rows.Close()
-				return err
-			}
-			changes = append(changes, ch)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
 			return err
 		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		var results []whyResult
-		uncertain := false
-		uncertaintyMessage := "origin uncertain after a large edit"
-		// The working file may have changed since the latest capture, including
-		// during a Git rewrite. Align it with each recorded state before using
-		// stored line ranges; never attribute an uncaptured line to an agent.
-		recordedText := string(current)
-		type cachedText struct {
-			text      string
-			truncated bool
-		}
-		textCache := map[string]cachedText{"": {}}
-		loadText := func(hash string) (cachedText, error) {
-			if value, ok := textCache[hash]; ok {
-				return value, nil
-			}
-			text, truncated, err := blobTextLimited(e.Blobs, blob.Hash(hash))
-			if err != nil {
-				return cachedText{}, err
-			}
-			value := cachedText{text: text, truncated: truncated}
-			if len(textCache) >= 64 {
-				textCache = map[string]cachedText{"": {}}
-			}
-			textCache[hash] = value
-			return value, nil
-		}
-		for i := 0; i < len(changes); {
-			ch := changes[i]
-			j := i + 1
-			for j < len(changes) && changes[j].before == ch.before && changes[j].after == ch.after && changes[j].turnID == ch.turnID {
-				j++
-			}
-			group := changes[i:j]
-			i = j
-			oldText, err := loadText(ch.before)
-			if err != nil {
-				return err
-			}
-			newText, err := loadText(ch.after)
-			if err != nil {
-				return err
-			}
-			if oldText.truncated || newText.truncated {
-				uncertain = true
-				break
-			}
-			if recordedText != newText.text {
-				mapped, touched := why.MapLine(newText.text, recordedText, line)
-				if touched || mapped < 1 {
-					uncertain = true
-					uncertaintyMessage = "origin uncertain: line cannot be matched to the recorded history"
-					break
-				}
-				line = mapped
-			}
-			recordedText = oldText.text
-			laterInFile := true
-			for _, candidate := range group {
-				if candidate.start == 0 || candidate.start <= line {
-					laterInFile = false
-					break
-				}
-			}
-			if laterInFile {
-				continue
-			}
-			turnID, at := ch.turnID, ch.at
-			oldLine, touched := why.MapLine(oldText.text, newText.text, line)
-			if oldLine < 0 {
-				uncertain = true
-				break
-			}
-			if touched {
-				symbol := ""
-				for _, candidate := range group {
-					if candidate.detail != "" && line >= candidate.start && line <= candidate.end {
-						symbol = candidate.detail
-						break
-					}
-				}
-				r := whyResult{Time: at, Symbol: symbol}
-				if turnID == "" {
-					r.Agent = "human"
-					r.Message = "edited by you"
-				} else {
-					err = e.DB.QueryRow(`SELECT COALESCE(k.seq,0),s.agent,COALESCE(t.prompt,''),COALESCE(t.reasoning,''),COALESCE(c.sha,'')
-						FROM turns t JOIN sessions s ON s.id=t.session_id LEFT JOIN keyframes k ON k.turn_id=t.id
-						LEFT JOIN commits c ON c.keyframe_id=k.id WHERE t.id=?`, turnID).Scan(&r.Step, &r.Agent, &r.Prompt, &r.Reasoning, &r.Commit)
-					if err == sql.ErrNoRows {
-						r.Message = "turn has no keyframe yet"
-					} else if err != nil {
-						return err
-					}
-					if len(r.Reasoning) > 400 {
-						r.Reasoning = textutil.Truncate(r.Reasoning, 400)
-					}
-				}
-				results = append(results, r)
-				if !all {
-					break
-				}
-			}
-			line = oldLine
-			if line < 1 {
-				break
-			}
-		}
-		if uncertain {
-			results = append(results, whyResult{Agent: "unknown", Message: uncertaintyMessage})
-		} else if len(results) == 0 {
-			results = append(results, whyResult{Agent: "baseline", Message: "present at baseline"})
+		results := make([]whyResult, 0, len(origins))
+		for _, origin := range origins {
+			results = append(results, newWhyResult(origin))
 		}
 		if messages {
 			for i := range results {
@@ -228,6 +108,9 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				if _, err := fmt.Fprintf(c.OutOrStdout(), "Symbol: %s\n", r.Symbol); err != nil {
 					return err
 				}
+			}
+			if err := printProvenance(c.OutOrStdout(), r); err != nil {
+				return err
 			}
 			if r.Step > 0 {
 				if _, err := fmt.Fprintf(c.OutOrStdout(), "Step %d: %s — %s\n", r.Step, r.Agent, r.Prompt); err != nil {
@@ -278,4 +161,35 @@ func whyMessages(e *engine.Engine, step int64) ([]whyMessage, bool, error) {
 		return messages[:20], true, nil
 	}
 	return messages, false, nil
+}
+
+// printProvenance reports where a committed line has been since it was
+// written: its commit, the rewrites that carried it there and how closely it
+// matched.
+func printProvenance(out io.Writer, r whyResult) error {
+	if r.Commit != "" {
+		line := "Commit: " + shortSHA(r.Commit)
+		if len(r.RewriteChain) > 0 {
+			chain := shortSHA(r.RewriteChain[0].From)
+			for _, rewrite := range r.RewriteChain {
+				chain += " -> " + shortSHA(rewrite.To) + " (" + rewrite.Kind + ")"
+			}
+			line += ", rewritten " + chain
+		}
+		if _, err := fmt.Fprintln(out, line); err != nil {
+			return err
+		}
+	}
+	if r.Confidence != "" && r.Confidence != string(attribution.Exact) && r.Confidence != string(attribution.Uncertain) {
+		_, err := fmt.Fprintf(out, "Confidence: %s\n", r.Confidence)
+		return err
+	}
+	return nil
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }

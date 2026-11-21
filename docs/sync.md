@@ -52,11 +52,13 @@ Trace discovers the repository and public sign-in settings from `https://usetrac
 
 For custom setups, `--remote owner/repo`, `--endpoint`, `--client-id`, `--github-app`, `--device-auth`, and `--auto-sync` are available. `TRACE_SYNC_URL` and `TRACE_GITHUB_CLIENT_ID` can also supply the endpoint and client ID. Browser login uses authorization code with PKCE; enable device flow on the server's GitHub App for remote/headless login. The app must have access to the repository.
 
-`trace login` shows a GitHub verification code and stores the resulting access and refresh credentials in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). The `.trace/login.json` file contains the endpoint, repository, mode, public client ID, GitHub App mode, and automatic-sync choice. Tokens and the optional Pro encryption key are never written to Trace's database. GitHub App mode requests `offline_access` and renews expiring user tokens before sync and recovery. For an existing OAuth App, omit `--github-app`; that mode still requests `read:user` and `repo` scopes.
+`trace login` shows a GitHub verification code and stores the resulting access and refresh credentials in the operating system credential store (Keychain on macOS, Secret Service through `secret-tool` on Linux). They are saved for that Trace server and repository and are sent only to that server. The `.trace/login.json` file contains the endpoint, repository, mode, public client ID, GitHub App mode, and automatic-sync choice. Tokens and the optional Pro encryption key are never written to Trace's database. GitHub App mode requests `offline_access` and renews expiring user tokens before sync and recovery. For an existing OAuth App, omit `--github-app`; that mode still requests `read:user` and `repo` scopes.
+
+Older versions saved this login under the repository name alone. Trace no longer uses such an entry: it does not record which server it was issued for, and `.trace/login.json` can arrive with a cloned repository. After upgrading, run `trace login` again for each server and repository; until then, sync stops with an error asking you to do so.
 
 ## Encryption modes
 
-For Pro, supply a passphrase of at least 12 characters during login. Trace saves the derived key in the OS credential store for background use; the passphrase itself is not saved:
+For Pro, supply a passphrase of at least 12 characters during login. Trace saves the derived key, with the salt it was derived from, in the OS credential store for background use; the passphrase itself is not saved:
 
 ```sh
 export TRACE_SYNC_PASSPHRASE='a long passphrase kept outside the repo'
@@ -64,6 +66,8 @@ trace login --auto-sync
 ```
 
 Trace derives a 256-bit key with scrypt using a random 32-byte salt in `.trace/sync-salt`. Rows and blobs are encrypted with XChaCha20-Poly1305 before upload. The key and passphrase are never uploaded. Losing the passphrase prevents Pro recovery. Team mode uses HTTPS and sends plaintext to the server for its server-side encryption and repository access control.
+
+Background sync uses the saved key only with the `.trace/sync-salt` it was derived from. Checkouts of one repository on one server share a saved login, so an automatic Pro login from another checkout replaces the key. The earlier checkout then stops uploading and reports `run trace login again`, rather than uploading rows that could not be recovered; log in there again with `TRACE_SYNC_PASSPHRASE` set, or set it for `trace sync`.
 
 ## Recover history
 

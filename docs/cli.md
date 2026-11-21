@@ -156,7 +156,8 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace log` | List keyframes |
 | `trace show STEP` | Show a turn and file diff |
 | `trace rewind STEP [--files GLOB] [--dry-run]` | Restore a snapshot with an undo step |
-| `trace why FILE:LINE [--all] [--messages]` | Find the change responsible for a line and optionally show its conversation |
+| `trace why FILE:LINE [--all] [--messages]` | Find the change responsible for a line, across Git rewrites, and optionally show its conversation |
+| `trace blame FILE` | Show the origin, commit, confidence and rewrites of every line |
 | `trace fork STEP [--agent NAME] [--name SUFFIX] [--no-launch]` | Create a worktree at a step |
 | `trace resume STEP [--agent NAME] [--no-launch]` | Rewind and continue with an agent |
 | `trace status` | Show daemon, session, and storage status |
@@ -185,6 +186,8 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 
 Agent names for `init` and `agent add` include `claude-code`, `codex`, `cursor`, `agy`, `opencode`, `windsurf`, `gemini`, `copilot`, `qwen`, `factory`, `pi`, `omp`, `grok`, `goose`, `amp`, `openclaude`, `openhands`, `kilo`, and `kiro`. OpenHands project integration requires an existing `.openhands/hooks.json`. Re-run `trace init` or use `trace agent add` to enable another adapter in the same repository. `trace agent remove` removes only the named adapter; `trace uninstall` removes all integrations. Copilot project hooks use `.github/hooks/usetrace.json`; refresh older installations. Kilo project plugins request a full edit scan at session idle and use bounded asynchronous event delivery; queued events can be lost on exit or overflow. Refresh with `trace agent add kilo`. Kilo CLI plugin loading and turn capture remain unverified. Grok project hooks require folder trust. Amp uses a project plugin and may require plugin activation. Goose uses a project plugin. Pi and Oh My Pi use project TypeScript extensions under `.pi/extensions/trace/` and `.omp/extensions/trace/`. Factory Droid uses `.factory/hooks.json`, or existing hooks in `.factory/settings.json`. Qwen uses project hooks in `.qwen/settings.json`; it records a turn when the hook supplies `submitted_prompt`. Windsurf uses Cascade hooks in `.devin/hooks.json` (or an existing `.windsurf/hooks.json`), preserving other hooks. Its response hook records the assistant summary and closes the turn.
 
+`trace init` also merges `post-commit` and `post-rewrite` blocks into the repository's Git hooks so commits, amends and rebases are linked to steps. An existing shell hook keeps its name and contents; the block is inserted after its first line and removed by `trace uninstall`. Other existing hooks are renamed with a `.pre-trace` suffix and run first; `post-rewrite` hooks still receive their input. When `core.hooksPath` points inside the working tree (tracked team hooks, or a manager such as husky), Trace leaves those files unchanged and prints the lines to add yourself (`git_hook_setup` in `--json` output).
+
 `trace search` checks recorded prompts, reasoning, and messages by default. Each word must match; use `|` within a word for alternatives, as in `trace search deadlock\|panic sqlite`. `--scope turns` searches prompts and reasoning; `--scope messages` searches conversation messages. `--edited-path 'src/**'` filters turns by paths recorded in their edits and can be used without search words. Search is case-insensitive. The MCP `search_history` tool accepts the same `query`, `scope`, and `edited_path` inputs. `trace dispatch` formats recorded prompts and reasoning without generating new text. `trace clean` preserves baseline and commit-linked keyframes.
 
 After `trace why path/to/file.go:12` or `trace search`, run `trace messages --step N` with the reported step to read that turn's recorded conversation.
@@ -197,6 +200,8 @@ In `trace tui`, select a step and press Enter to read its details. Press `d` for
 
 `trace why` follows unchanged lines across inserts and deletes. If a very large edit leaves a line's origin ambiguous, it reports `origin uncertain after a large edit` instead of guessing at a step.
 
+Committed lines are followed through `git blame` and the rewrites Trace recorded, so amend, rebase (including interactive squash, fixup and reordering), cherry-pick and `git merge --squash` keep the original step. `--json` reports `commit` (the commit that now contains the line), `origin_commit` (where it was first committed, when different), `rewrite_chain` (each rewrite's `from`, `to` and `kind`, oldest first; kinds are `amend`, `rebase`, `squash`, `cherry-pick`, `merge-squash`, `patch-id` and `inferred`) and `confidence`: `exact`, `normalized` (matched only after ignoring formatting such as gofmt or prettier output), `inferred` (matched by content to a squashed commit that named no sources) or `uncertain`. `--all` also lists formatting-only edits passed on the way to the origin. `trace blame FILE` reports the same fields for every line, plus a count per origin; text output marks rewritten commits with `*`. Both refuse secret and excluded paths. Rewrite tracking needs the Git hooks that `trace init` installs; commits made without them are explained from recorded edits and identical patches only.
+
 ## Safe restore workflow
 
 ```sh
@@ -206,7 +211,7 @@ trace rewind 2 --dry-run
 trace rewind 2
 ```
 
-A real rewind saves a safety keyframe first and prints the command to undo it. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
+A real rewind saves a safety keyframe first and prints the command to undo it, also when the restore then fails (`--json` output includes `safety_step` and `error`). Rewind and `--dry-run` refuse to replace an ignored or `.traceignore`d file, a symlink or another path the safety keyframe cannot capture; move it aside or limit the restore with `--files`. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
 
 ## Automation
 

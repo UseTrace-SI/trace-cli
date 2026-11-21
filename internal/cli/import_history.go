@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -72,6 +73,88 @@ func importDatabase(ctx context.Context, root, source string) (importReport, err
 	return mergeHistory(ctx, root, source)
 }
 
+// stepColumns maps each imported column holding a step number to the table
+// whose seq numbers that step. Every exported history starts at step 0, as
+// does the baseline of an initialized checkout, and turn and keyframe steps
+// are unique, so an import renumbers rows whose step is taken and rewrites
+// the columns referring to those steps. A table must follow the tables whose
+// steps it refers to in store.HistoryTables.
+var stepColumns = map[string]map[string]string{
+	"turns":             {"seq": "turns"},
+	"keyframes":         {"seq": "keyframes"},
+	"trails":            {"base_step": "keyframes", "head_step": "keyframes"},
+	"context_snapshots": {"source_step": "keyframes"},
+}
+
+// stepRemap records how an import renumbered the steps of each table.
+type stepRemap struct {
+	tx      *sql.Tx
+	steps   map[string]map[int64]int64 // imported step -> destination step
+	shifted map[string]bool            // an earlier row of the table moved
+}
+
+// apply rewrites the step columns of an imported row in place; rows of a
+// table numbered by seq must arrive in step order. A row already present
+// keeps its destination step, so importing it again compares it as the same
+// row. A new row keeps its own step while that is free and no earlier row of
+// its table moved; otherwise it is appended after the latest step, keeping
+// the source order. Other step columns follow the renumbering of the table
+// they refer to; a step that table does not have is kept.
+func (r stepRemap) apply(ctx context.Context, table, key string, cols []string, values []any) error {
+	for i, col := range cols {
+		owner, ok := stepColumns[table][col]
+		if !ok {
+			continue
+		}
+		step, valid := values[i].(int64)
+		if col != "seq" {
+			if moved, found := r.steps[owner][step]; valid && found {
+				values[i] = moved
+			}
+			continue
+		}
+		if !valid {
+			return fmt.Errorf("source %s has an invalid step", table)
+		}
+		var id any
+		if k := slices.Index(cols, key); k >= 0 {
+			id = values[k]
+		}
+		moved, err := r.destinationStep(ctx, table, key, id, step)
+		if err != nil {
+			return fmt.Errorf("assigning imported %s step: %w", table, err)
+		}
+		if r.steps[table] == nil {
+			r.steps[table] = map[int64]int64{}
+		}
+		r.steps[table][step] = moved
+		r.shifted[table] = r.shifted[table] || moved != step
+		values[i] = moved
+	}
+	return nil
+}
+
+func (r stepRemap) destinationStep(ctx context.Context, table, key string, id any, step int64) (int64, error) {
+	var existing int64
+	err := r.tx.QueryRowContext(ctx, "SELECT seq FROM "+table+" WHERE "+key+"=?", id).Scan(&existing)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	var taken bool
+	if err := r.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+table+" WHERE seq=?)", step).Scan(&taken); err != nil {
+		return 0, err
+	}
+	if !taken && !r.shifted[table] {
+		return step, nil
+	}
+	var next int64
+	err = r.tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(seq),-1)+1 FROM "+table).Scan(&next)
+	return next, err
+}
+
 // mergeHistory validates the source before writes, reserves the destination
 // writer and commits all rows together. Source blobs are immutable and verified
 // before publication; a failed merge may leave only harmless unreferenced blobs.
@@ -92,7 +175,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		return report, fmt.Errorf("source history failed integrity validation")
 	}
 	available := map[string][]string{}
-	for _, table := range store.HistoryTables {
+	for _, table := range store.ImportTables() {
 		rows, err := read.QueryContext(ctx, "PRAGMA table_info("+table+")")
 		if err != nil {
 			return report, err
@@ -130,7 +213,8 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 	if _, err = write.ExecContext(ctx, "PRAGMA defer_foreign_keys=ON"); err != nil {
 		return report, err
 	}
-	for _, table := range store.HistoryTables {
+	remap := stepRemap{tx: write, steps: map[string]map[int64]int64{}, shifted: map[string]bool{}}
+	for _, table := range store.ImportTables() {
 		if len(available[table]) == 0 {
 			continue
 		}
@@ -157,7 +241,11 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		if oversized != 0 {
 			return report, fmt.Errorf("source %s contains a row exceeding 16 MiB", table)
 		}
-		rows, err := read.QueryContext(ctx, "SELECT "+strings.Join(cols, ",")+" FROM "+table)
+		order := ""
+		if stepColumns[table]["seq"] == table && slices.Contains(cols, "seq") {
+			order = " ORDER BY seq"
+		}
+		rows, err := read.QueryContext(ctx, "SELECT "+strings.Join(cols, ",")+" FROM "+table+order)
 		if err != nil {
 			return report, fmt.Errorf("reading %s: %w", table, err)
 		}
@@ -211,6 +299,10 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 						}
 					}
 				}
+			}
+			if err := remap.apply(ctx, table, key, cols, values); err != nil {
+				rows.Close()
+				return report, err
 			}
 			result, err := write.ExecContext(ctx, query, values...)
 			if err != nil {
@@ -301,7 +393,7 @@ func historyHashes(db interface {
 			return nil, err
 		}
 		for path, entry := range m {
-			if manifest.Excluded(path) || filepath.IsAbs(path) || path != filepath.ToSlash(filepath.Clean(path)) || path == ".." || strings.HasPrefix(path, "../") {
+			if !manifest.Portable(path) {
 				return nil, fmt.Errorf("unsafe path in imported history")
 			}
 			set[entry.Hash] = true

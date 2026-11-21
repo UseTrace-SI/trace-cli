@@ -560,3 +560,13 @@ func (s *Store) Has(h Hash) bool {
 	_, err = os.Stat(p)
 	return err == nil
 }
+
+// HasChunk reports whether chunk h of a chunked blob is stored.
+func (s *Store) HasChunk(h Hash) bool {
+	p, err := s.chunkPath(h)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(p)
+	return err == nil
+}

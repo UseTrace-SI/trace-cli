@@ -57,22 +57,41 @@ func batchReady(dir string) bool {
 }
 
 func markerMatches(dir, name string) bool {
-	marker, err := os.ReadFile(filepath.Join(dir, name))
+	marker, err := readStateFile(filepath.Join(dir, name))
 	if err != nil || len(marker) == 0 {
 		return false
 	}
-	pid, err := os.ReadFile(filepath.Join(dir, "daemon.pid"))
+	pid, err := readStateFile(filepath.Join(dir, "daemon.pid"))
 	return err == nil && string(pid) == string(marker)
 }
 
+// dialDaemon connects only to a socket at .trace/sock itself. A symlink
+// planted there could hand events to a process listening elsewhere.
+func dialDaemon(dir string, timeout time.Duration) (net.Conn, error) {
+	sock := filepath.Join(dir, "sock")
+	info, err := os.Lstat(sock)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return nil, fmt.Errorf("%s is not a socket", sock)
+	}
+	return net.DialTimeout("unix", sock, timeout)
+}
+
 func sendFrame(dir string, b []byte) error {
+	// A symlinked .trace could route events to another repository's daemon
+	// or write them elsewhere; one Lstat keeps the hook path cheap.
+	if err := checkStateDir(dir); err != nil {
+		return fmt.Errorf("checking trace directory: %w", err)
+	}
 	// New daemons poll the spool. Persist before reporting successful delivery,
 	// so a daemon process crash cannot lose an event accepted into a socket.
 	// Legacy daemons retain their socket protocol until they are restarted.
 	if markerMatches(dir, "durable.ready") {
 		return appendSpoolFrame(dir, b)
 	}
-	conn, err := net.DialTimeout("unix", filepath.Join(dir, "sock"), 5*time.Millisecond)
+	conn, err := dialDaemon(dir, 5*time.Millisecond)
 	if err == nil {
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Millisecond))
 		_, err = conn.Write(b)

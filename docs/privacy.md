@@ -18,7 +18,7 @@ Revoking a device does not delete uploaded history.
 
 ## Text redaction
 
-Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys, tokens, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
+Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys, tokens, HTTP `Authorization` header credentials, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
 
 For Claude Code and Antigravity CLI, the daemon reads newly appended assistant transcript records after a turn ends and redacts text before storing it. Tool call records keep names and safe repository paths; they do not store raw tool inputs or tool results.
 
@@ -26,9 +26,11 @@ Codex assistant output and reasoning summaries, Cursor Agent CLI response and th
 
 ## File exclusions and removal
 
-Trace does not read `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.aws/`, or `.ssh/`. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
+Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, or `.ssh/`; these names match in any letter case. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
+
+Commit rows record, for each commit the Git hooks report, its patch ID, the commits it rewrote and the origin (step, agent, time and line ranges) of the lines it introduced in non-excluded files. They store no file contents or commit messages; Trace reads a squash commit's message only to find the commit IDs Git lists there.
 
 ## Preview and project exclusions
 

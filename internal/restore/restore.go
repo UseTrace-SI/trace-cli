@@ -67,6 +67,31 @@ func removeDirectoryTree(root string) error {
 	return nil
 }
 
+// checkObjects confirms that every object, and every chunk of a chunked
+// object, the restore will read is stored. It runs before anything is removed,
+// so a missing object (an interrupted GC, a partial import) fails the restore
+// with the tree unchanged.
+func checkObjects(target manifest.Manifest, changed []string, bs *blob.Store) error {
+	checked := map[blob.Hash]bool{}
+	for _, rel := range changed {
+		entry, exists := target[rel]
+		if !exists || checked[entry.Hash] {
+			continue
+		}
+		checked[entry.Hash] = true
+		chunks, err := bs.Chunks(entry.Hash)
+		if err != nil {
+			return fmt.Errorf("loading %s: %w", rel, err)
+		}
+		for _, chunk := range chunks {
+			if !bs.HasChunk(chunk) {
+				return fmt.Errorf("loading %s: missing chunk %s", rel, chunk)
+			}
+		}
+	}
+	return nil
+}
+
 func Apply(target manifest.Manifest, root string, ig manifest.Ignorer, bs *blob.Store) ([]string, error) {
 	current, err := manifest.Scan(root, ig, bs)
 	if err != nil {
@@ -82,6 +107,9 @@ func ApplyPlanned(target manifest.Manifest, root string, changed []string, bs *b
 		if _, err := safePath(root, rel); err != nil {
 			return nil, err
 		}
+	}
+	if err := checkObjects(target, changed, bs); err != nil {
+		return nil, err
 	}
 	created, err := loadCreatedDirs(root)
 	if err != nil {

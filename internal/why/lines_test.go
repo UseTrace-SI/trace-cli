@@ -169,3 +169,86 @@ func TestMapLineReportsAmbiguousLargeDiff(t *testing.T) {
 		t.Fatalf("new line = %d,%t; want 0,true", oldLine, touched)
 	}
 }
+
+func TestMapLinesMatchesFormattingOnlyChanges(t *testing.T) {
+	for _, tc := range []struct {
+		name, old, new string
+		want           []Match
+	}{
+		{"gofmt indentation", "func f() {\n    x := 1\n    return x\n}\n", "func f() {\n\tx := 1\n\treturn x\n}\n",
+			[]Match{{1, false}, {2, true}, {3, true}, {4, false}}},
+		{"operator spacing", "a\nx:=b+c\nz\n", "a\nx := b + c\nz\n", []Match{{1, false}, {2, true}, {3, false}}},
+		{"quotes and semicolons", "const a = 'x'\nconst b = 2\n", "const a = \"x\";\nconst b = 2;\n", []Match{{1, true}, {2, true}}},
+		{"escaped quotes", "say('don\\'t')\n", "say(\"don't\")\n", []Match{{1, true}}},
+		{"wrapped call with trailing comma", "x\nfoo(alpha, beta)\ny\n", "x\nfoo(\n  alpha,\n  beta,\n)\ny\n",
+			[]Match{{1, false}, {2, true}, {2, true}, {2, true}, {2, true}, {3, false}}},
+		{"unwrapped call", "foo(\n  alpha,\n  beta,\n)\n", "foo(alpha, beta)\n", []Match{{1, true}}},
+		{"semantic change while reindenting", "f() {\n    return x\n}\n", "f() {\n\treturn y\n}\n", []Match{{1, false}, {0, false}, {3, false}}},
+		{"argument removed while wrapping", "foo(alpha, beta, gamma)\n", "foo(\n  alpha,\n  beta,\n)\n", []Match{{0, false}, {0, false}, {0, false}, {0, false}}},
+		{"string content changed", "s = 'abc'\n", "s = \"abd\"\n", []Match{{0, false}}},
+		{"blank line inserted", "a\nb\n", "a\n  \nb\n", []Match{{1, false}, {0, false}, {2, false}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MapLines(tc.old, tc.new)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("MapLines = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// The exact tier of MapLines must agree with MapLine; normalization may only
+// add matches for lines MapLine reports as changed.
+func TestMapLinesExactTierAgreesWithMapLine(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	for sequence := 0; sequence < 40; sequence++ {
+		old := make([]string, 30)
+		for i := range old {
+			old[i] = fmt.Sprintf("value_%d = call(arg%d)", i%7, i%5)
+			if rng.Intn(4) == 0 {
+				old[i] = "}"
+			}
+		}
+		updated := slices.Clone(old)
+		for edit := 0; edit < 8; edit++ {
+			at := rng.Intn(len(updated))
+			switch rng.Intn(4) {
+			case 0:
+				updated = slices.Insert(updated, at, fmt.Sprintf("inserted_%d()", edit))
+			case 1:
+				updated = slices.Delete(updated, at, at+1)
+			case 2:
+				updated[at] = "  " + strings.ReplaceAll(updated[at], " ", "")
+			case 3:
+				updated[at] = fmt.Sprintf("changed_%d", edit)
+			}
+		}
+		oldText, newText := strings.Join(old, "\n")+"\n", strings.Join(updated, "\n")+"\n"
+		got := MapLines(oldText, newText)
+		for line := range updated {
+			want, touched := MapLine(oldText, newText, line+1)
+			match := got[line]
+			if !match.Normalized && (match.Line != want || (match.Line == 0) != touched) {
+				t.Fatalf("sequence %d line %d: MapLines %v, MapLine %d,%t", sequence, line+1, match, want, touched)
+			}
+			if match.Normalized && !touched {
+				t.Fatalf("sequence %d line %d: normalized match for an exact line %d", sequence, line+1, want)
+			}
+		}
+	}
+}
+
+func TestMapLinesReportsAmbiguousLargeDiff(t *testing.T) {
+	old := strings.Repeat("}\n", 3000)
+	updated := make([]string, 3000)
+	for i := range updated {
+		updated[i] = "}"
+		if i%2 == 0 {
+			updated[i] = fmt.Sprintf("new-%d", i)
+		}
+	}
+	got := MapLines(old, strings.Join(updated, "\n")+"\n")
+	if got[1499].Line != -1 || got[1498].Line != 0 {
+		t.Fatalf("large ambiguous diff = %v, %v", got[1499], got[1498])
+	}
+}

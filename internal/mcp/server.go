@@ -4,18 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"math"
-	"strings"
 
-	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/historysearch"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
 	"github.com/UseTrace-SI/trace-cli/internal/textutil"
-	"github.com/UseTrace-SI/trace-cli/internal/why"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -61,10 +58,12 @@ type WhyInput struct {
 	Line int    `json:"line"`
 }
 type WhyOutput struct {
-	Step    int64  `json:"step,omitempty"`
-	Agent   string `json:"agent"`
-	Prompt  string `json:"prompt,omitempty"`
-	Message string `json:"message,omitempty"`
+	Step       int64  `json:"step,omitempty"`
+	Agent      string `json:"agent"`
+	Prompt     string `json:"prompt,omitempty"`
+	Message    string `json:"message,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Confidence string `json:"confidence,omitempty"`
 }
 type SearchInput struct {
 	Query      string `json:"query,omitempty"`
@@ -166,62 +165,17 @@ func New(e *engine.Engine) *mcp.Server {
 		if in.Line < 1 {
 			return nil, WhyOutput{}, fmt.Errorf("line must be positive")
 		}
-		rows, err := e.DB.Query(`SELECT COALESCE(o.before_hash,''),COALESCE(o.after_hash,''),COALESCE(o.turn_id,'') FROM ops o
-			WHERE o.path=? AND (o.before_hash IS NOT NULL OR o.after_hash IS NOT NULL) ORDER BY o.at DESC,o.id DESC`, in.Path)
+		file, err := attribution.ResolvePath(e.Root, in.Path)
 		if err != nil {
 			return nil, WhyOutput{}, err
 		}
-		type change struct{ before, after, tid string }
-		var changes []change
-		for rows.Next() {
-			var ch change
-			if err := rows.Scan(&ch.before, &ch.after, &ch.tid); err != nil {
-				rows.Close()
-				return nil, WhyOutput{}, err
-			}
-			changes = append(changes, ch)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
+		origins, err := attribution.ExplainFile(e.DB, e.Blobs, e.Root, file, in.Line, false)
+		if err != nil {
 			return nil, WhyOutput{}, err
 		}
-		if err := rows.Close(); err != nil {
-			return nil, WhyOutput{}, err
-		}
-		line := in.Line
-		for i := 0; i < len(changes); {
-			ch := changes[i]
-			i++
-			for i < len(changes) && changes[i].before == ch.before && changes[i].after == ch.after && changes[i].tid == ch.tid {
-				i++
-			}
-			before, after, tid := ch.before, ch.after, ch.tid
-			oldText, oldLarge, err := readBlob(e, blob.Hash(before))
-			if err != nil {
-				return nil, WhyOutput{}, err
-			}
-			newText, newLarge, err := readBlob(e, blob.Hash(after))
-			if err != nil {
-				return nil, WhyOutput{}, err
-			}
-			if oldLarge || newLarge {
-				return nil, WhyOutput{Agent: "unknown", Message: "origin uncertain after a large edit"}, nil
-			}
-			oldLine, touched := why.MapLine(oldText, newText, line)
-			if oldLine < 0 {
-				return nil, WhyOutput{Agent: "unknown", Message: "origin uncertain after a large edit"}, nil
-			}
-			if touched {
-				if tid == "" {
-					return nil, WhyOutput{Agent: "human", Message: "edited by you"}, nil
-				}
-				var out WhyOutput
-				err := e.DB.QueryRow(`SELECT k.seq,s.agent,COALESCE(t.prompt,'') FROM turns t JOIN sessions s ON s.id=t.session_id JOIN keyframes k ON k.turn_id=t.id WHERE t.id=?`, tid).Scan(&out.Step, &out.Agent, &out.Prompt)
-				return nil, out, err
-			}
-			line = oldLine
-		}
-		return nil, WhyOutput{Agent: "baseline", Message: "present at baseline"}, nil
+		origin := origins[0]
+		return nil, WhyOutput{Step: origin.Step, Agent: origin.Agent, Prompt: origin.Prompt, Message: origin.Message,
+			Commit: origin.Commit, Confidence: string(origin.Confidence)}, nil
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "search_history", Description: "Search turn text, messages, and edited paths"}, func(_ context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 		hits, err := historysearch.Search(e.DB.DB, historysearch.Options{
@@ -312,23 +266,4 @@ func New(e *engine.Engine) *mcp.Server {
 		return nil, out, rows.Err()
 	})
 	return s
-}
-
-func readBlob(e *engine.Engine, h blob.Hash) (string, bool, error) {
-	if h == "" {
-		return "", false, nil
-	}
-	r, err := e.Blobs.Get(h)
-	if err != nil {
-		return "", false, err
-	}
-	defer r.Close()
-	b, err := io.ReadAll(io.LimitReader(r, (1<<20)+1))
-	if err != nil {
-		return "", false, err
-	}
-	if len(b) > 1<<20 {
-		return "", true, nil
-	}
-	return strings.ToValidUTF8(string(b), ""), false, nil
 }

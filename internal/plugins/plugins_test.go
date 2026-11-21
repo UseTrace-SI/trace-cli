@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,118 @@ func TestSignedOfflineInstallUpdatesDowngradesAndPrunesOnlyOwnedReleases(t *test
 	}
 	if count, err := manager.Prune("example"); err != nil || count != 2 {
 		t.Fatalf("inactive cleanup: %d %v", count, err)
+	}
+}
+func TestReinstallingTheActiveVersionKeepsThePreviousRelease(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		versions []string // installed in order; the last reinstalls the active version
+		rotate   bool     // pin a replacement publisher key and re-sign before the last install
+		retained []string // versions pruning must keep: the active and the previous one
+	}{
+		{name: "only release", versions: []string{"1.0.0", "1.0.0"}, retained: []string{"1.0.0"}},
+		{name: "after update", versions: []string{"1.0.0", "2.0.0", "2.0.0"}, retained: []string{"1.0.0", "2.0.0"}},
+		{name: "after downgrade", versions: []string{"1.0.0", "2.0.0", "1.0.0", "1.0.0"}, retained: []string{"1.0.0", "2.0.0"}},
+		{name: "after key rotation", versions: []string{"1.0.0", "2.0.0", "2.0.0"}, rotate: true, retained: []string{"1.0.0", "2.0.0"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager, _, key := testManager(t)
+			for index, version := range test.versions {
+				if test.rotate && index == len(test.versions)-1 {
+					public, private, err := ed25519.GenerateKey(rand.Reader)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := manager.Trust("publisher", public, true); err != nil {
+						t.Fatal(err)
+					}
+					key = private
+				}
+				if _, err := manager.Install(signedBundle(t, key, "publisher", version, "#!/bin/sh\necho "+version+"\n"), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := manager.Prune("example"); err != nil {
+				t.Fatal(err)
+			}
+			entries, err := os.ReadDir(filepath.Join(manager.Root, "releases", "example"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			retained := []string{}
+			for _, entry := range entries {
+				version, _, _ := strings.Cut(entry.Name(), "-")
+				retained = append(retained, version)
+			}
+			if !slices.Equal(retained, test.retained) {
+				t.Fatalf("prune retained %v, want the active and previous versions %v", retained, test.retained)
+			}
+		})
+	}
+}
+func TestRetainedVersionsCannotBeRepublishedWithDifferentBytes(t *testing.T) {
+	original := func(version string) string { return "#!/bin/sh\necho " + version + "\n" }
+	for _, test := range []struct {
+		name     string
+		setup    []string // versions installed with their original bytes, or remove, prune, rotate
+		version  string   // version installed last
+		differs  string   // "executable" or "manifest" bytes differ from the original; "" is identical
+		accepted bool
+	}{
+		{name: "different executable after removal", setup: []string{"1.0.0", "remove"}, version: "1.0.0", differs: "executable"},
+		{name: "different executable on downgrade", setup: []string{"1.0.0", "2.0.0"}, version: "1.0.0", differs: "executable"},
+		{name: "different executable on update", setup: []string{"1.0.0", "2.0.0", "1.0.0"}, version: "2.0.0", differs: "executable"},
+		{name: "different manifest under a replacement key", setup: []string{"1.0.0", "2.0.0", "rotate"}, version: "1.0.0", differs: "manifest"},
+		{name: "identical bytes after removal", setup: []string{"1.0.0", "remove"}, version: "1.0.0", accepted: true},
+		{name: "identical bytes under a replacement key", setup: []string{"1.0.0", "2.0.0", "rotate"}, version: "1.0.0", accepted: true},
+		{name: "different executable after pruning", setup: []string{"1.0.0", "remove", "prune"}, version: "1.0.0", differs: "executable", accepted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager, _, key := testManager(t)
+			for _, operation := range test.setup {
+				var err error
+				switch operation {
+				case "remove":
+					err = manager.Remove("example")
+				case "prune":
+					_, err = manager.Prune("example")
+				case "rotate":
+					var public ed25519.PublicKey
+					if public, key, err = ed25519.GenerateKey(rand.Reader); err == nil {
+						_, err = manager.Trust("publisher", public, true)
+					}
+				default:
+					_, err = manager.Install(signedBundle(t, key, "publisher", operation, original(operation)), true)
+				}
+				if err != nil {
+					t.Fatal(operation, err)
+				}
+			}
+			body := original(test.version)
+			if test.differs == "executable" {
+				body += "echo changed\n"
+			}
+			bundle := signedBundle(t, key, "publisher", test.version, body)
+			if test.differs == "manifest" {
+				raw, err := os.ReadFile(filepath.Join(bundle, "manifest.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw = append(raw, '\n') // same fields and executable, different signed bytes
+				for name, data := range map[string][]byte{"manifest.json": raw, "manifest.sig": []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(key, raw)))} {
+					if err := os.WriteFile(filepath.Join(bundle, name), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			_, err := manager.Install(bundle, true)
+			if test.accepted && err != nil {
+				t.Fatal(err)
+			}
+			if !test.accepted && (err == nil || !strings.Contains(err.Error(), "different signed bytes")) {
+				t.Fatalf("version %s republished with different %s bytes: %v", test.version, test.differs, err)
+			}
+		})
 	}
 }
 func TestTamperingWrongPublishersAndKeyRevocationFailClosed(t *testing.T) {
@@ -206,6 +319,36 @@ func TestManifestAmbiguitySymlinksAndUnexpectedFilesAreRejected(t *testing.T) {
 	}
 	if data, err := os.ReadFile(unexpected); err != nil || string(data) != "preserve" {
 		t.Fatal("unrelated file was removed")
+	}
+}
+func TestManifestCaseVariantDuplicateFieldsAreRejected(t *testing.T) {
+	_, _, key := testManager(t)
+	raw, err := os.ReadFile(filepath.Join(signedBundle(t, key, "publisher", "1.0.0", "plugin bytes"), "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// encoding/json matches field names case-insensitively, so each variant
+	// below would silently replace the signed version or format.
+	for _, test := range []struct {
+		name, old, new string
+		accepted       bool
+	}{
+		{name: "capitalized after", old: `"version":"1.0.0"`, new: `"version":"1.0.0","Version":"9.9.9"`},
+		{name: "capitalized before", old: `"version":"1.0.0"`, new: `"Version":"9.9.9","version":"1.0.0"`},
+		{name: "upper case", old: `"format":1`, new: `"format":1,"FORMAT":1`},
+		{name: "escaped", old: `"version":"1.0.0"`, new: `"version":"1.0.0","Version":"9.9.9"`},
+		{name: "unicode folding", old: `"version":"1.0.0"`, new: `"version":"1.0.0","verſion":"9.9.9"`},
+		{name: "single case variant", old: `"version":"1.0.0"`, new: `"Version":"1.0.0"`, accepted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manifest, err := parseManifest([]byte(strings.Replace(string(raw), test.old, test.new, 1)))
+			if test.accepted && (err != nil || manifest.Version != "1.0.0") {
+				t.Fatalf("case variant field rejected: %+v %v", manifest, err)
+			}
+			if !test.accepted && err == nil {
+				t.Fatalf("case variant duplicate field accepted; decoded version %q", manifest.Version)
+			}
+		})
 	}
 }
 func TestTrustInputAcceptsPublicPEMAndRejectsPrivateKeyMaterial(t *testing.T) {

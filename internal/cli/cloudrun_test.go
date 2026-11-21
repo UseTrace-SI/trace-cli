@@ -52,6 +52,50 @@ func TestCloudRunDryRunIsExplicitAndDoesNotNeedCredentials(t *testing.T) {
 	}
 }
 
+// A credential passed as "--token VALUE" must be refused like "--token=VALUE".
+// --dry-run runs the same argument validation as a real submission.
+func TestCloudRunRejectsCredentialArguments(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%s %v", out, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.js"), []byte("console.log(1)"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	const token = "3f9a8c2e71d64b0f9e5a2c7d18b4e6f0"
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		rejected bool
+	}{
+		{"flag with equals", []string{"node", "main.js", "--token=" + token}, true},
+		{"flag and separate value", []string{"node", "main.js", "--token", token}, true},
+		{"hyphenated flag and separate value", []string{"node", "main.js", "--api-key", token}, true},
+		{"single-dash flag and separate value", []string{"node", "main.js", "-password", "Summer2024!"}, true},
+		{"ordinary flag and value", []string{"node", "main.js", "--port", "3000"}, false},
+		{"ordinary flag before the script", []string{"node", "--max-old-space-size=4096", "main.js"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonOutput := true
+			cmd := cloudRunCommand(&root, &jsonOutput)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&bytes.Buffer{})
+			cmd.SetArgs(append([]string{"--project", "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", "--include", "main.js", "--dry-run", "--"}, tc.args...))
+			err := cmd.Execute()
+			if !tc.rejected {
+				if err != nil {
+					t.Fatalf("ordinary command rejected: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "credentials cannot be included") {
+				t.Fatalf("credential accepted into job command: %v: %s", err, &out)
+			}
+		})
+	}
+}
+
 func TestCloudUploadOpensEachComponentWithoutFollowingSymlinks(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "safe"), 0700); err != nil {

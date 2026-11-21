@@ -42,7 +42,9 @@ rejected. Installation verifies before activating and never executes the bundle.
 
 Install a newer signed bundle to update. The publisher cannot change during an
 update, and a version cannot be republished with different signed manifest or
-executable bytes. An explicit `--allow-downgrade` permits an older signed bundle.
+executable bytes while any release of that version is retained, including after
+removal; pruned releases are no longer compared. An explicit `--allow-downgrade`
+permits an older signed bundle.
 `plugin trust --replace` explicitly revokes a different previous publisher key;
 installed plugins then require reinstallation under the new key. Identical
 version/manifest/binary bytes can be re-signed under that newly pinned key.

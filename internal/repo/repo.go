@@ -137,3 +137,35 @@ func resolveExistingParent(path string) (string, error) {
 		parent = next
 	}
 }
+
+// GitDir returns the per-worktree Git directory of a worktree root without
+// launching Git: root/.git itself, or the directory a linked worktree's
+// `.git` file names.
+func GitDir(root string) (string, error) {
+	marker := filepath.Join(root, ".git")
+	info, err := os.Lstat(marker)
+	if err != nil {
+		return "", fmt.Errorf("finding Git directory: %w", err)
+	}
+	if info.IsDir() {
+		return marker, nil
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("invalid Git worktree marker")
+	}
+	f, err := os.Open(marker)
+	if err != nil {
+		return "", fmt.Errorf("opening Git worktree marker: %w", err)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(f, 4097))
+	_ = f.Close()
+	line := strings.TrimSpace(string(data))
+	if readErr != nil || len(data) > 4096 || !strings.HasPrefix(line, "gitdir: ") {
+		return "", fmt.Errorf("invalid Git worktree marker")
+	}
+	dir := strings.TrimSpace(strings.TrimPrefix(line, "gitdir: "))
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(root, dir)
+	}
+	return filepath.Clean(dir), nil
+}

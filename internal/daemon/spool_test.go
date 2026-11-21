@@ -643,8 +643,9 @@ func TestDeliveryRetainsFrameAfterWorkerError(t *testing.T) {
 	go func() { result <- delivery.drain() }()
 	item := <-queue
 	item.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("worker error was ignored")
+	// A processing failure is retried later; it must not stop the daemon.
+	if err := <-result; err != nil {
+		t.Fatalf("processing failure stopped delivery: %v", err)
 	}
 	var replayed []event.Event
 	if err := ingestSpool(dir, func(ev event.Event) { replayed = append(replayed, ev) }); err != nil || len(replayed) != 1 {
@@ -666,8 +667,8 @@ func TestSocketBatchIsSpooledAfterBacklogFailure(t *testing.T) {
 	}()
 	item := <-queue
 	item.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("backlog failure was ignored")
+	if err := <-result; err != nil {
+		t.Fatalf("backlog failure stopped delivery: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "spool.jsonl"))
 	if err != nil || strings.Contains(string(data), secret) {
@@ -694,8 +695,8 @@ func TestSocketBatchRetainsFailedSuffix(t *testing.T) {
 	first.done <- nil
 	second := <-queue
 	second.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("worker failure was ignored")
+	if err := <-result; err != nil {
+		t.Fatalf("worker failure stopped delivery: %v", err)
 	}
 	var got []event.Event
 	if err := ingestSpool(dir, func(ev event.Event) { got = append(got, ev) }); err != nil {
@@ -841,5 +842,74 @@ func TestLongSocketPathFallsBackToSpool(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("spool daemon did not ingest event from a long socket path")
+	}
+}
+
+// An append cut short must not swallow the next complete frame. A write that
+// fails part-way (ENOSPC, or EFBIG as produced here with RLIMIT_FSIZE, which
+// Go reports instead of dying on SIGXFSZ) is rolled back; a fragment left by
+// a hook killed mid-write is kept on its own line and quarantined.
+func TestShortSpoolWriteKeepsNextFrame(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		damage      func(t *testing.T, spool string)
+		quarantined int
+	}{
+		{"failed write", func(t *testing.T, spool string) {
+			info, err := os.Stat(spool)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var old syscall.Rlimit
+			if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &old); err != nil {
+				t.Fatal(err)
+			}
+			limited := old
+			limited.Cur = uint64(info.Size()) + 40
+			if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &limited); err != nil {
+				t.Skipf("cannot lower RLIMIT_FSIZE: %v", err)
+			}
+			err = Send(filepath.Dir(spool), event.Event{Kind: event.TurnContext, Agent: "test", At: 2, Text: strings.Repeat("context ", 50)})
+			if restoreErr := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &old); restoreErr != nil {
+				t.Fatal(restoreErr)
+			}
+			if err == nil {
+				t.Fatal("the limited write did not fail")
+			}
+		}, 0},
+		{"killed writer", func(t *testing.T, spool string) {
+			f, err := os.OpenFile(spool, os.O_WRONLY|os.O_APPEND, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.WriteString(`{"kind":"turn_context","agent":"test","at":2,"text":"cont`); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := Send(dir, event.Event{Kind: event.TurnStart, Agent: "test", At: 1}); err != nil {
+				t.Fatal(err)
+			}
+			tc.damage(t, filepath.Join(dir, "spool.jsonl"))
+			if err := Send(dir, event.Event{Kind: event.TurnEnd, Agent: "test", At: 3}); err != nil {
+				t.Fatal(err)
+			}
+			var got []int64
+			if err := ingestSpool(dir, func(ev event.Event) { got = append(got, ev.At) }); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 2 || got[0] != 1 || got[1] != 3 {
+				t.Fatalf("delivered events %v, want [1 3]: the frame after a short write was lost", got)
+			}
+			files, err := filepath.Glob(filepath.Join(dir, "quarantine", "*.frame"))
+			if err != nil || len(files) != tc.quarantined {
+				t.Fatalf("quarantined frames = %v, %v; want %d", files, err, tc.quarantined)
+			}
+		})
 	}
 }

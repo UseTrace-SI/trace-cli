@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/store"
 )
@@ -451,6 +452,12 @@ func (c *Client) Pull(ctx context.Context, traceDir, passphrase string) (int, in
 			return 0, 0, fmt.Errorf("download is missing blob %s", hash)
 		}
 	}
+	// A later rewind writes these paths; reject unsafe history before it is
+	// published, as bundle import does.
+	if err := checkRecoveredPaths(db.DB, bs); err != nil {
+		db.Close()
+		return 0, 0, err
+	}
 	if err := db.Close(); err != nil {
 		return 0, 0, fmt.Errorf("closing recovery database: %w", err)
 	}
@@ -474,4 +481,35 @@ func (c *Client) Pull(ctx context.Context, traceDir, passphrase string) (int, in
 	}
 	success = true
 	return blobs, rows, nil
+}
+
+func checkRecoveredPaths(db *sql.DB, bs *blob.Store) error {
+	rows, err := db.Query("SELECT DISTINCT manifest_hash FROM keyframes")
+	if err != nil {
+		return fmt.Errorf("reading recovered snapshots: %w", err)
+	}
+	var hashes []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			rows.Close()
+			return err
+		}
+		hashes = append(hashes, h)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	for _, h := range hashes {
+		m, err := manifest.Load(blob.Hash(h), bs)
+		if err != nil {
+			return fmt.Errorf("reading recovered snapshot: %w", err)
+		}
+		for path := range m {
+			if !manifest.Portable(path) {
+				return errors.New("recovered history contains an unsafe path")
+			}
+		}
+	}
+	return nil
 }

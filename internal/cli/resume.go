@@ -31,11 +31,11 @@ func resumeCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		safety, _, err := e.Rewind(step, "", false)
-		if err != nil {
-			return err
+		if err == nil {
+			err = engine.WriteContext(root, context)
 		}
-		if err := engine.WriteContext(root, context); err != nil {
-			return err
+		if err != nil {
+			return rewindFailure(c, *jsonOutput, map[string]any{"step": step, "safety_step": safety, "agent": agent}, safety, err)
 		}
 		if *jsonOutput {
 			if err := json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"step": step, "safety_step": safety, "agent": agent}); err != nil {

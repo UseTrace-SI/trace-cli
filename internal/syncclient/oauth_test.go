@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -168,6 +171,82 @@ func TestGitHubAppDeviceScopeAndRefresh(t *testing.T) {
 	}
 	if updated.AccessToken != "new-token" || updated.RefreshToken != "new-refresh" || updated.ExpiresAt <= time.Now().UnixMilli() {
 		t.Fatalf("refresh result = %+v", updated)
+	}
+}
+
+// Token requests carry refresh tokens, authorization codes and PKCE verifiers
+// in their bodies. A 307 or 308 from the endpoint must not resend them to the
+// Location, which may name another origin or plain HTTP.
+func TestOAuthRequestsDoNotFollowRedirects(t *testing.T) {
+	resent := make(chan string, 16)
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		resent <- r.Method + " " + r.URL.Path + " " + string(body)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	defer elsewhere.Close()
+	ctx := context.Background()
+	previous := Credentials{AccessToken: "old-token", RefreshToken: "refresh-secret", ExpiresAt: 1, RefreshExpiresAt: time.Now().Add(time.Hour).UnixMilli()}
+	flow := BrowserCode{RedirectURI: "http://127.0.0.1:1/oauth/callback", Verifier: "pkce-verifier-secret"}
+	for _, status := range []int{http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, elsewhere.URL+"/collect", status)
+		}))
+		o := OAuth{App: true, Base: origin.URL}
+		for _, tc := range []struct {
+			name string
+			call func() error
+		}{
+			{"platform refresh", func() error { _, err := o.RefreshWithPlatform(ctx, origin.URL, previous); return err }},
+			{"platform code exchange", func() error { _, err := o.ExchangeWithPlatform(ctx, origin.URL, flow, "github-code"); return err }},
+			{"GitHub refresh", func() error { _, err := o.Refresh(ctx, "client-id", previous); return err }},
+			{"GitHub device code", func() error { _, err := o.Start(ctx, "client-id"); return err }},
+		} {
+			t.Run(fmt.Sprintf("%s/%d", tc.name, status), func(t *testing.T) {
+				if err := tc.call(); err == nil {
+					t.Fatal("redirect response accepted as a token response")
+				}
+				select {
+				case request := <-resent:
+					t.Fatalf("request resent after a %d redirect: %s", status, request)
+				default:
+				}
+			})
+		}
+		origin.Close()
+	}
+}
+
+// The Trace authentication service supplies tokens only. Pro key material in
+// its response would let the server choose the key that seals Pro history.
+func TestPlatformTokenResponseSuppliesOnlyTokens(t *testing.T) {
+	later := time.Now().Add(time.Hour).UnixMilli()
+	serverKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "token", "refresh_token": "refresh", "expires_at": later, "refresh_expires_at": later,
+			"pro_sync_key": serverKey, "pro_sync_salt": serverKey, "connection_id": "server-chosen", "scope": "account",
+		})
+	}))
+	defer platform.Close()
+	ctx := context.Background()
+	want := Credentials{AccessToken: "token", RefreshToken: "refresh", ExpiresAt: later, RefreshExpiresAt: later}
+	for _, tc := range []struct {
+		name string
+		call func() (Credentials, error)
+	}{
+		{"code exchange", func() (Credentials, error) {
+			return OAuth{}.ExchangeWithPlatform(ctx, platform.URL, BrowserCode{RedirectURI: "http://127.0.0.1:1/oauth/callback", Verifier: "verifier"}, "code")
+		}},
+		{"refresh", func() (Credentials, error) {
+			return OAuth{}.RefreshWithPlatform(ctx, platform.URL, Credentials{RefreshToken: "refresh", RefreshExpiresAt: later})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := tc.call(); err != nil || got != want {
+				t.Fatalf("got %+v, %v; want only token fields", got, err)
+			}
+		})
 	}
 }
 

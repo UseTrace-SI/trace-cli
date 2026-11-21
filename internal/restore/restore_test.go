@@ -15,7 +15,7 @@ func TestSafePathRejectsUnsafeTargets(t *testing.T) {
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, "link")); err != nil {
 		t.Fatal(err)
 	}
-	for _, rel := range []string{"../escape", ".env.local", ".git/config", "link/child.go"} {
+	for _, rel := range []string{"../escape", ".env.local", ".git/config", "link/child.go", "sub/.git/hooks/pre-commit", ".GIT/config", ".Trace/trace.db"} {
 		if _, err := safePath(root, rel); err == nil {
 			t.Fatalf("accepted unsafe path %q", rel)
 		}

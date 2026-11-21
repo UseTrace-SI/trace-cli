@@ -141,6 +141,9 @@ func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("X\nA\nB\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -166,8 +169,12 @@ func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {
 	if !strings.Contains(string(b), "present at baseline") {
 		t.Fatalf("unchanged line blamed on an edit: %s", b)
 	}
-	largeHash, err := e.Blobs.PutBytes([]byte(strings.Repeat("line\n", 210000)))
+	large := []byte(strings.Repeat("line\n", 210000))
+	largeHash, err := e.Blobs.PutBytes(large)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), large, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,?,?,?,?,?,?)",
@@ -184,5 +191,103 @@ func TestWhyLineGroupsOneEditAcrossOperationRows(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "origin uncertain") {
 		t.Fatalf("large blob attributed to an edit: %s", b)
+	}
+}
+
+// why_line must align the current working file with the recorded history, as
+// `trace why` does. Mapping the requested line number straight into the latest
+// recorded state blamed the agent for a line it never wrote once an uncaptured
+// edit shifted the file.
+func TestWhyLineAlignsWorkingFileWithRecordedHistory(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("inserted\nheader\nagent value\nfooter\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	before, err := e.Blobs.PutBytes([]byte("header\nold value\nfooter\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.Blobs.PutBytes([]byte("header\nagent value\nfooter\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{"INSERT INTO sessions(id,agent,worktree,started_at) VALUES('s','codex',?,1)", []any{root}},
+		{"INSERT INTO turns(id,session_id,seq,prompt,started_at) VALUES('t','s',1,'change the value',1)", nil},
+		{"INSERT INTO keyframes(id,turn_id,seq,manifest_hash,tag,created_at) VALUES('k','t',1,?,'turn',2)", []any{string(after)}},
+		{"INSERT INTO ops(id,turn_id,path,kind,start_line,end_line,before_hash,after_hash,source,at) VALUES('o','t','file.txt','modify',2,2,?,?,'tool',2)", []any{string(before), string(after)}},
+	} {
+		if _, err := e.DB.Exec(statement.query, statement.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := New(e).Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+	defer serverSession.Close()
+	for _, tc := range []struct {
+		name, path string
+		line       int
+		agent      string
+		failure    bool
+	}{
+		{"uncaptured_insertion", "file.txt", 1, "unknown", false},
+		{"shifted_baseline_line", "file.txt", 2, "baseline", false},
+		{"shifted_agent_line", "file.txt", 3, "codex", false},
+		{"absolute_path", filepath.Join(root, "file.txt"), 3, "codex", false},
+		{"line_outside_file", "file.txt", 9, "", true},
+		{"secret_path", ".env", 1, "", true},
+		{"outside_repository", "../file.txt", 1, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "why_line", Arguments: map[string]any{"path": tc.path, "line": tc.line}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.failure {
+				if !result.IsError {
+					t.Fatalf("why_line accepted %s:%d: %+v", tc.path, tc.line, result.StructuredContent)
+				}
+				return
+			}
+			if result.IsError {
+				t.Fatalf("why_line failed: %+v", result.Content)
+			}
+			b, err := json.Marshal(result.StructuredContent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got WhyOutput
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Agent != tc.agent {
+				t.Fatalf("line %d attributed to %q (%s); want %q", tc.line, got.Agent, b, tc.agent)
+			}
+		})
 	}
 }

@@ -31,6 +31,7 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(tuiCommand(&repoPath, &jsonOutput))
 	root.AddCommand(doctorCommand(&repoPath, &jsonOutput))
 	root.AddCommand(whyCommand(&repoPath, &jsonOutput))
+	root.AddCommand(blameCommand(&repoPath, &jsonOutput))
 	root.AddCommand(diffCommand(&repoPath, &jsonOutput))
 	root.AddCommand(messagesCommand(&repoPath, &jsonOutput))
 	root.AddCommand(searchCommand(&repoPath, &jsonOutput))

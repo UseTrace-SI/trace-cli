@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 )
@@ -24,16 +25,48 @@ type Ignorer interface {
 	Ignored(rel string, isDir bool) bool
 }
 
+// excluded reports paths Trace never captures or restores. Restored paths can
+// come from an imported bundle or a recovery server, so Git metadata is
+// protected at every depth (a nested repository's hooks run on its next
+// commit). Names are compared case-insensitively, as case-insensitive file
+// systems (the macOS default) resolve `.GIT` to `.git`.
 func excluded(rel string) bool {
-	for _, dir := range []string{".git", ".trace", ".trace-brain", ".trace-graph"} {
-		if rel == dir || strings.HasPrefix(rel, dir+"/") {
+	folded := foldPath(rel)
+	for _, part := range strings.Split(folded, "/") {
+		if part == ".git" {
 			return true
 		}
 	}
-	return rel == ".mcp.json" || rel == ".claude/settings.local.json" || rel == ".cursor/hooks.json" || rel == ".gemini/settings.json" || rel == ".agents/hooks.json" || SecretPath(rel)
+	for _, dir := range []string{".trace", ".trace-brain", ".trace-graph"} {
+		if folded == dir || strings.HasPrefix(folded, dir+"/") {
+			return true
+		}
+	}
+	return folded == ".mcp.json" || folded == ".claude/settings.local.json" || folded == ".cursor/hooks.json" || folded == ".gemini/settings.json" || folded == ".agents/hooks.json" || SecretPath(rel)
+}
+
+// foldPath lowercases rel and drops the code points HFS+ ignores in names,
+// which would otherwise let `.g‌it` reach `.git`.
+func foldPath(rel string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == 0x200c || r == 0x200d || r == 0x200e || r == 0x200f, r >= 0x202a && r <= 0x202e,
+			r >= 0x206a && r <= 0x206f, r == 0xfeff:
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, rel)
 }
 
 func Excluded(rel string) bool { return excluded(rel) }
+
+// Portable reports whether a snapshot path from another history (an imported
+// bundle or a recovery server) is safe to keep: relative, canonical, inside
+// the repository and not excluded.
+func Portable(rel string) bool {
+	return rel != "" && rel != "." && rel != ".." && !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "../") &&
+		!strings.ContainsAny(rel, "\\\x00") && rel == filepath.ToSlash(filepath.Clean(rel)) && !excluded(rel)
+}
 
 func gitIgnored(root string, paths []string) (map[string]bool, error) {
 	out := map[string]bool{}
@@ -74,6 +107,36 @@ func listRepoFiles(root string) ([]string, error) {
 	return files, nil
 }
 
+// symlinkedParent reports whether a directory between root and rel is a
+// symbolic link, the rule restore.safePath applies. Git keeps listing an index
+// entry after its directory is replaced by a link, and reading through the
+// link would capture a file from outside the repository. checked caches the
+// answer for each directory.
+func symlinkedParent(root, rel string, checked map[string]bool) (bool, error) {
+	for i := 0; i < len(rel); i++ {
+		if rel[i] != '/' {
+			continue
+		}
+		dir := rel[:i]
+		linked, ok := checked[dir]
+		if !ok {
+			info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(dir)))
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			linked = info.Mode()&os.ModeSymlink != 0
+			checked[dir] = linked
+		}
+		if linked {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 	paths, err := listRepoFiles(root)
 	if err != nil {
@@ -85,8 +148,16 @@ func Scan(root string, ig Ignorer, bs *blob.Store) (Manifest, error) {
 	}
 	var total int64
 	m := Manifest{}
+	checked := map[string]bool{}
 	for _, rel := range paths {
 		if excluded(rel) || policy.excluded(rel) || (ig != nil && ig.Ignored(rel, false)) {
+			continue
+		}
+		linked, err := symlinkedParent(root, rel, checked)
+		if err != nil {
+			return nil, fmt.Errorf("statting %s: %w", rel, err)
+		}
+		if linked {
 			continue
 		}
 		p := filepath.Join(root, filepath.FromSlash(rel))

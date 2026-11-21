@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -79,22 +80,24 @@ func parseManifest(data []byte) (Manifest, error) {
 	}
 	// Reject duplicate keys before typed decoding; the signature covers the exact
 	// original bytes, so publishers do not need a custom canonical JSON encoder.
+	// encoding/json matches field names as strings.EqualFold does, so case
+	// variants of one field are duplicates too.
 	tokens := json.NewDecoder(bytes.NewReader(data))
 	first, err := tokens.Token()
 	if err != nil || first != json.Delim('{') {
 		return result, fmt.Errorf("invalid plugin manifest")
 	}
-	seen := map[string]bool{}
+	seen := []string{}
 	for tokens.More() {
 		key, err := tokens.Token()
 		if err != nil {
 			return result, err
 		}
 		name, ok := key.(string)
-		if !ok || seen[name] {
+		if !ok || slices.ContainsFunc(seen, func(prior string) bool { return strings.EqualFold(prior, name) }) {
 			return result, fmt.Errorf("duplicate plugin manifest field")
 		}
-		seen[name] = true
+		seen = append(seen, name)
 		var value json.RawMessage
 		if err := tokens.Decode(&value); err != nil {
 			return result, err
@@ -396,6 +399,39 @@ func (manager Manager) verify(receipt Receipt) (string, error) {
 	return filepath.Join(path, "plugin"), nil
 }
 
+// checkRetainedVersion rejects a release whose version is still retained (active,
+// previous, removed or not yet pruned) with different signed manifest bytes. The
+// manifest commits to the executable digest; the signing key may differ.
+func checkRetainedVersion(parent string, receipt Receipt) error {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		// Versions contain no "-", so this prefix selects exactly one version.
+		if !strings.HasPrefix(entry.Name(), receipt.Manifest.Version+"-") {
+			continue
+		}
+		path := filepath.Join(parent, entry.Name())
+		if err := privateDirectory(path, false); err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		root, err := os.OpenRoot(path)
+		if err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		raw, err := regular(root, "manifest.json", 8192)
+		root.Close()
+		if err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		if digest(raw) != receipt.ManifestSHA256 {
+			return fmt.Errorf("retained plugin version %s cannot be replaced with different signed bytes", receipt.Manifest.Version)
+		}
+	}
+	return nil
+}
+
 func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, error) {
 	var receipt Receipt
 	unlock, err := manager.lock()
@@ -489,6 +525,9 @@ func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, err
 	if err := privateDirectory(parent, true); err != nil {
 		return receipt, err
 	}
+	if err := checkRetainedVersion(parent, receipt); err != nil {
+		return receipt, err
+	}
 	destination := releasePath(manager.Root, receipt)
 	if _, err := os.Lstat(destination); err == nil {
 		if _, err := manager.verify(receipt); err != nil {
@@ -534,7 +573,9 @@ func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, err
 		return receipt, err
 	}
 	active := filepath.Join(manager.Root, "active", manifest.Name+".json")
-	if previous.Manifest.Name != "" {
+	// Reinstalling the active version (identical signed bytes, possibly re-signed
+	// under a replacement key) must keep the rollback release that prune retains.
+	if previous.Manifest.Name != "" && previous.Manifest.Version != manifest.Version {
 		old, _ := json.Marshal(previous)
 		if err := atomicFile(filepath.Join(manager.Root, "active", manifest.Name+".previous.json"), old, 0600); err != nil {
 			return receipt, err

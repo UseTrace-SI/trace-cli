@@ -24,7 +24,8 @@ Commands:
   trace log                 step timeline
   trace show <step>         prompt, reasoning, tools, diff
   trace diff <a> <b>        compare two keyframes
-  trace why <file>:<line>    which step/agent touched a line
+  trace why <file>:<line>    which step/agent touched a line, across Git rewrites
+  trace blame <file>        origin, commit and confidence of every line
   trace search <query>      search turns and messages; --edited-path filters edits
   trace activity            local turn and session overview
   trace messages            conversation per turn

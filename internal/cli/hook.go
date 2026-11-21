@@ -84,6 +84,14 @@ func parseHookArgs(args []string) (repoPath, agent, hookEvent string, ok, handle
 }
 
 func runHook(repoPath, agent, hookEvent string) {
+	// Registered first so it runs last: after an unexpected panic the deferred
+	// agent responses below still print and the hook exits 0, not with the
+	// status 2 that agents treat as a blocking hook failure.
+	defer func() {
+		if recover() != nil {
+			fmt.Fprintln(os.Stderr, "trace hook: internal error")
+		}
+	}()
 	cursorGlobal := agent == "cursor-global"
 	geminiGlobal := agent == "gemini-global"
 	qwenGlobal := agent == "qwen-global"
@@ -521,6 +529,13 @@ func runHook(repoPath, agent, hookEvent string) {
 			return
 		}
 		_ = daemon.SendBatch(filepath.Join(root, ".trace"), events)
+		return
+	}
+	if agent == "git" && (hookEvent == string(event.GitCommit) || hookEvent == string(event.GitRewrite)) {
+		// Each event is its own frame so a long rebase stays within frame limits.
+		for _, ev := range gitHookEvents(hookEvent, b, root) {
+			_ = daemon.Send(filepath.Join(root, ".trace"), ev)
+		}
 		return
 	}
 	ev, err := parseGenericHook(agent, hookEvent, b, root)
