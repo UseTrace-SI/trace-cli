@@ -114,6 +114,42 @@ func TestAssignmentAndComparisonValuesRedacted(t *testing.T) {
 	}
 }
 
+func TestHeaderURLAndSlackCredentialsRedacted(t *testing.T) {
+	const hex = "3f9a8c2e71d64b0f9e5a2c7d18b4e6f0"
+	for _, tc := range []struct {
+		name, input, secret string
+		wantRedacted        bool
+	}{
+		{"bearer header", `curl -H "Authorization: Bearer ` + hex + `" https://example.com/v1/items`, hex, true},
+		{"basic header", `Authorization: Basic YWRtaW46aHVudGVyMmh1bnRlcjI=`, "YWRtaW46aHVudGVyMmh1bnRlcjI=", true},
+		{"header set in code", `req.Header.Set("Authorization", "Bearer ` + hex + `")`, hex, true},
+		{"header in JSON", `{"authorization": "Bearer ` + hex + `"}`, hex, true},
+		{"URL with an empty username", `REDIS_URL=redis://:p4ssw0rdXYZ@redis-12345.example.com:12345`, "p4ssw0rdXYZ", true},
+		{"Slack refresh token", "xox" + `e-1-My0xLTE2NzY4NzE2NDA3NzYtNDk1NjI2ODcyNzA2`, "My0xLTE2NzY4NzE2NDA3NzYtNDk1NjI2ODcyNzA2", true},
+		{"prose about a bearer", "the bearer of bad news", "", false},
+		{"header placeholder", `Send an Authorization: Bearer token header, or "Authorization: Bearer $TOKEN".`, "", false},
+		{"header scheme in prose", "The Authorization: Bearer authentication flow is in RFC 6750.", "", false},
+		{"URL with a port", "http://localhost:8080/path and http://[::1]:8080/", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			redactor := Redactor{}
+			got := redactor.Text(tc.input)
+			if !tc.wantRedacted {
+				if got != tc.input {
+					t.Fatalf("false positive: %q -> %q", tc.input, got)
+				}
+				return
+			}
+			if strings.Contains(got, tc.secret) || !strings.Contains(got, "⟨redacted:") {
+				t.Fatalf("secret was not redacted: %q", got)
+			}
+			if twice := redactor.Text(got); twice != got {
+				t.Fatalf("redaction changed on a second pass: %q -> %q", got, twice)
+			}
+		})
+	}
+}
+
 func TestLargeUnrelatedTextIsUnchanged(t *testing.T) {
 	value := strings.Repeat("x", 1<<20)
 	if got := (Redactor{}).Text(value); got != value {

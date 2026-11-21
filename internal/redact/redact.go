@@ -17,11 +17,16 @@ var patterns = []struct {
 	{"private-key", regexp.MustCompile(`(?s)(-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----)`)},
 	{"aws-key", regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)},
 	{"github-token", regexp.MustCompile(`\b(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}\b`)},
-	{"slack-token", regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}\b`)},
+	{"slack-token", regexp.MustCompile(`\bxox[abeprs]-[A-Za-z0-9-]{10,}\b`)},
 	{"stripe-key", regexp.MustCompile(`\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b`)},
 	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
 	{"api-key", regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`)},
-	{"url-password", regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]+:[^\s@/]+@`)},
+	{"url-password", regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]*:[^\s@/]+@`)},
+	// An HTTP Authorization header value: the scheme and an RFC 6750 token
+	// (Basic credentials are base64, a subset). The credential needs a digit
+	// or 16 characters, so a word after the scheme ("an Authorization: Bearer
+	// token header", "Bearer authentication") is left alone.
+	{"auth-header", regexp.MustCompile(`\b(?:[Aa]uthorization|AUTHORIZATION)["']?\s*(?:=>|[:=,])\s*["']?(?i:bearer|basic|token)[ \t]+(?:[A-Za-z._~+/-]*[0-9][A-Za-z0-9._~+/-]*|[A-Za-z0-9._~+/-]{16,})=*`)},
 }
 
 // Necessary literal fragments cheaply rule out patterns before invoking the
@@ -35,6 +40,7 @@ var patternHints = map[string][]string{
 	"jwt":          {"eyJ"},
 	"api-key":      {"sk-"},
 	"url-password": {"://"},
+	"auth-header":  {"uthorization", "UTHORIZATION"},
 }
 
 // envValue matches a secret-like name, an assignment or comparison operator

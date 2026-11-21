@@ -18,7 +18,7 @@ Revoking a device does not delete uploaded history.
 
 ## Text redaction
 
-Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys, tokens, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
+Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys, tokens, HTTP `Authorization` header credentials, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
 
 For Claude Code and Antigravity CLI, the daemon reads newly appended assistant transcript records after a turn ends and redacts text before storing it. Tool call records keep names and safe repository paths; they do not store raw tool inputs or tool results.
 
