@@ -791,6 +791,11 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 		target = limited
 	}
 	changed := restore.Plan(current, target)
+	// current becomes the safety keyframe; replacing anything it lacks would
+	// make the rewind impossible to undo.
+	if unsaved := uncapturedTargets(e.Root, current, changed); len(unsaved) > 0 {
+		return 0, nil, fmt.Errorf("rewind would replace %s, which the undo step could not restore (ignored, excluded or not a regular file); move it aside or limit the restore with trace rewind --files", strings.Join(unsaved, ", "))
+	}
 	if dryRun || len(changed) == 0 {
 		return 0, changed, nil
 	}
@@ -841,4 +846,39 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 		return safetySeq, changed, fmt.Errorf("marking full scan after rewind: %w", err)
 	}
 	return safetySeq, changed, nil
+}
+
+// uncapturedTargets lists planned paths where the tree holds a file that
+// current does not contain: a Git-ignored or .traceignore'd file, a symlink or
+// another non-regular file. Directories are left to the restore, which only
+// replaces a directory once it is empty. When Lstat fails, nothing reachable
+// is there to replace.
+func uncapturedTargets(root string, current manifest.Manifest, changed []string) []string {
+	var paths []string
+	for _, rel := range changed {
+		if _, captured := current[rel]; captured {
+			continue
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil || info.IsDir() || capturedSpelling(root, current, changed, rel, info) {
+			continue
+		}
+		paths = append(paths, rel)
+	}
+	return paths
+}
+
+// capturedSpelling reports whether info is the file of a planned, captured
+// path that differs from rel only in case. On case-insensitive file systems
+// (the macOS default) the old name of a case-only rename resolves to it.
+func capturedSpelling(root string, current manifest.Manifest, changed []string, rel string, info os.FileInfo) bool {
+	for _, other := range changed {
+		if _, captured := current[other]; !captured || other == rel || !strings.EqualFold(other, rel) {
+			continue
+		}
+		if otherInfo, err := os.Lstat(filepath.Join(root, filepath.FromSlash(other))); err == nil && os.SameFile(info, otherInfo) {
+			return true
+		}
+	}
+	return false
 }

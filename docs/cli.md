@@ -208,7 +208,7 @@ trace rewind 2 --dry-run
 trace rewind 2
 ```
 
-A real rewind saves a safety keyframe first and prints the command to undo it. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
+A real rewind saves a safety keyframe first and prints the command to undo it. Rewind and `--dry-run` refuse to replace an ignored or `.traceignore`d file, a symlink or another path the safety keyframe cannot capture; move it aside or limit the restore with `--files`. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
 
 ## Automation
 
