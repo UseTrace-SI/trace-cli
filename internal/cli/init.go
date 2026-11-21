@@ -274,13 +274,18 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				result["additional_setup"] = qwenEnableNotice
 			}
 			if manualHook != nil {
-				result["git_hook_setup"] = map[string]string{"path": manualHook.Path, "block": manualHook.Block}
+				result["git_hook_setup"] = manualHook.Hooks
 			}
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
 		if manualHook != nil {
-			if _, err := fmt.Fprintf(c.OutOrStdout(), "Git runs hooks from %s inside this repository, so Trace left them unchanged.\nTo link commits to steps, add these lines to %s:\n%s", filepath.Dir(manualHook.Path), manualHook.Path, manualHook.Block); err != nil {
+			if _, err := fmt.Fprintln(c.OutOrStdout(), "Git runs hooks from inside this repository, so Trace left them unchanged."); err != nil {
 				return err
+			}
+			for _, hook := range manualHook.Hooks {
+				if _, err := fmt.Fprintf(c.OutOrStdout(), "To link commits and rewrites to steps, add these lines to %s:\n%s", hook.Path, hook.Block); err != nil {
+					return err
+				}
 			}
 		}
 		if agent == "gemini" {

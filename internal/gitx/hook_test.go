@@ -198,8 +198,8 @@ func TestInstallHookLeavesWorktreeHooksPathUnchanged(t *testing.T) {
 			}
 			err := InstallHook(root)
 			var manual *ManualHookError
-			if !errors.As(err, &manual) || !strings.Contains(manual.Block, begin) {
-				t.Fatalf("InstallHook = %v; want a manual setup notice", err)
+			if !errors.As(err, &manual) || len(manual.Hooks) != 2 || !strings.Contains(manual.Hooks[0].Block, begin) {
+				t.Fatalf("InstallHook = %v; want a manual setup notice for both hooks", err)
 			}
 			for name, body := range tc.files {
 				if b, err := os.ReadFile(filepath.Join(root, name)); err != nil || string(b) != body {
@@ -249,5 +249,89 @@ func TestInstallHookChainsNonShellHook(t *testing.T) {
 	}
 	if b, err := os.ReadFile(p); err != nil || string(b) != original {
 		t.Fatalf("uninstall did not restore the original: %q, %v", b, err)
+	}
+}
+
+// Git passes post-rewrite its rewrite type and "old new" pairs on stdin. The
+// Trace block must leave both intact for the user's own hook.
+func TestInstallHookKeepsPostRewriteInput(t *testing.T) {
+	for _, tc := range []struct {
+		name, hook string
+		needs      string
+	}{
+		{"shell hook", "#!/bin/sh\nprintf '%s\\n' \"$1\" > \"$MARKER\"\ncat >> \"$MARKER\"\n", ""},
+		{"other interpreter", "#!/usr/bin/env python3\nimport os, sys\nopen(os.environ['MARKER'], 'w').write(sys.argv[1] + '\\n' + sys.stdin.read())\n", "python3"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.needs != "" {
+				if _, err := exec.LookPath(tc.needs); err != nil {
+					t.Skipf("%s not installed", tc.needs)
+				}
+			}
+			root := t.TempDir()
+			hookGit(t, root, "init", "-q")
+			if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			p, err := GitPath(root, "hooks/post-rewrite")
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeHookFiles(t, filepath.Dir(p), map[string]string{"post-rewrite": tc.hook})
+			if err := InstallHook(root); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(t.TempDir(), "rewrites")
+			t.Setenv("MARKER", marker)
+			hookGit(t, root, "commit", "-q", "--allow-empty", "-m", "first")
+			before := strings.TrimSpace(hookGit(t, root, "rev-parse", "HEAD"))
+			hookGit(t, root, "commit", "-q", "--amend", "--allow-empty", "-m", "amended")
+			after := strings.TrimSpace(hookGit(t, root, "rev-parse", "HEAD"))
+			b, err := os.ReadFile(marker)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "amend\n" + before + " " + after + "\n"; string(b) != want {
+				t.Fatalf("user hook received %q; want %q", b, want)
+			}
+			if err := UninstallHook(root); err != nil {
+				t.Fatal(err)
+			}
+			if b, err := os.ReadFile(p); err != nil || string(b) != tc.hook {
+				t.Fatalf("uninstall did not restore the user hook: %q, %v", b, err)
+			}
+		})
+	}
+}
+
+func TestInstallHookCreatesBothHooks(t *testing.T) {
+	root := t.TempDir()
+	hookGit(t, root, "init", "-q")
+	if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallHook(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"post-commit", "post-rewrite"} {
+		p, err := GitPath(root, "hooks/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(p)
+		if err != nil || info.Mode().Perm()&0100 == 0 {
+			t.Fatalf("%s hook missing or not executable: %v", name, err)
+		}
+	}
+	hookGit(t, root, "commit", "-q", "--allow-empty", "-m", "first")
+	hookGit(t, root, "commit", "-q", "--amend", "--allow-empty", "-m", "amended")
+	if err := UninstallHook(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"post-commit", "post-rewrite"} {
+		p, _ := GitPath(root, "hooks/"+name)
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s hook left after uninstall: %v", name, err)
+		}
 	}
 }
