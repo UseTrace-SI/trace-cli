@@ -14,7 +14,7 @@ For Claude Code and Antigravity CLI, the daemon reads newly appended assistant r
 
 ## Restore and integrations
 
-Rewind scans the current tree, saves a safety keyframe, then restores the requested manifest using temporary files and atomic renames. The safety step can restore the state that existed before the rewind. The scan skips ignored and `.traceignore`d files, symlinks and other non-regular files, so a rewind that would replace one of them is refused before anything is saved or written; move the path aside or limit the restore with `--files`.
+Rewind scans the current tree, saves a safety keyframe, then restores the requested manifest using temporary files and atomic renames, after checking that every object it needs is stored. The safety step can restore the state that existed before the rewind. The scan skips ignored and `.traceignore`d files, symlinks and other non-regular files, so a rewind that would replace one of them is refused before anything is saved or written; move the path aside or limit the restore with `--files`.
 
 `trace mcp` exposes read-only history tools over standard input/output. It is registered in `.mcp.json` by `trace init` without replacing unrelated server entries.
 

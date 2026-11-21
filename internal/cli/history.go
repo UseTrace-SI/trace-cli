@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -269,10 +270,10 @@ func rewindCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer e.Close()
 		safety, changed, err := e.Rewind(seq, glob, dryRun)
-		if err != nil {
-			return err
-		}
 		result := map[string]any{"step": seq, "safety_step": safety, "changed": changed, "dry_run": dryRun}
+		if err != nil {
+			return rewindFailure(c, *jsonOutput, result, safety, err)
+		}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
@@ -289,6 +290,23 @@ func rewindCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().StringVar(&glob, "files", "", "restore only paths matching glob")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show changes without writing")
 	return cmd
+}
+
+// rewindFailure reports err from a rewind. Once a safety keyframe is saved
+// the tree may be partly restored, so the error and the --json result name
+// the step that undoes the rewind.
+func rewindFailure(c *cobra.Command, jsonOutput bool, result map[string]any, safety int64, err error) error {
+	if safety == 0 {
+		return err
+	}
+	err = fmt.Errorf("%w (the tree may be partly restored; undo with: trace rewind %d)", err, safety)
+	if jsonOutput {
+		result["error"] = err.Error()
+		if encodeErr := json.NewEncoder(c.OutOrStdout()).Encode(result); encodeErr != nil {
+			return errors.Join(err, encodeErr)
+		}
+	}
+	return err
 }
 
 func statusCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
