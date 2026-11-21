@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,12 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
-	"github.com/UseTrace-SI/trace-cli/internal/textutil"
-	"github.com/UseTrace-SI/trace-cli/internal/why"
 	"github.com/spf13/cobra"
 )
 
@@ -69,144 +66,14 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
-		rows, err := e.DB.Query(`SELECT before_hash,after_hash,COALESCE(turn_id,''),at,COALESCE(detail,''),COALESCE(start_line,0),COALESCE(end_line,0) FROM ops
-			WHERE path=? AND (before_hash IS NOT NULL OR after_hash IS NOT NULL) ORDER BY at DESC,id DESC`, file)
+		origins, err := attribution.Explain(e.DB, e.Blobs, file, string(current), line, all)
 		if err != nil {
-			return fmt.Errorf("querying file history: %w", err)
-		}
-		type change struct {
-			before, after, turnID, detail string
-			at                            int64
-			start, end                    int
-		}
-		var changes []change
-		for rows.Next() {
-			var ch change
-			if err := rows.Scan(&ch.before, &ch.after, &ch.turnID, &ch.at, &ch.detail, &ch.start, &ch.end); err != nil {
-				rows.Close()
-				return err
-			}
-			changes = append(changes, ch)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
 			return err
 		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		var results []whyResult
-		uncertain := false
-		uncertaintyMessage := "origin uncertain after a large edit"
-		// The working file may have changed since the latest capture, including
-		// during a Git rewrite. Align it with each recorded state before using
-		// stored line ranges; never attribute an uncaptured line to an agent.
-		recordedText := string(current)
-		type cachedText struct {
-			text      string
-			truncated bool
-		}
-		textCache := map[string]cachedText{"": {}}
-		loadText := func(hash string) (cachedText, error) {
-			if value, ok := textCache[hash]; ok {
-				return value, nil
-			}
-			text, truncated, err := blobTextLimited(e.Blobs, blob.Hash(hash))
-			if err != nil {
-				return cachedText{}, err
-			}
-			value := cachedText{text: text, truncated: truncated}
-			if len(textCache) >= 64 {
-				textCache = map[string]cachedText{"": {}}
-			}
-			textCache[hash] = value
-			return value, nil
-		}
-		for i := 0; i < len(changes); {
-			ch := changes[i]
-			j := i + 1
-			for j < len(changes) && changes[j].before == ch.before && changes[j].after == ch.after && changes[j].turnID == ch.turnID {
-				j++
-			}
-			group := changes[i:j]
-			i = j
-			oldText, err := loadText(ch.before)
-			if err != nil {
-				return err
-			}
-			newText, err := loadText(ch.after)
-			if err != nil {
-				return err
-			}
-			if oldText.truncated || newText.truncated {
-				uncertain = true
-				break
-			}
-			if recordedText != newText.text {
-				mapped, touched := why.MapLine(newText.text, recordedText, line)
-				if touched || mapped < 1 {
-					uncertain = true
-					uncertaintyMessage = "origin uncertain: line cannot be matched to the recorded history"
-					break
-				}
-				line = mapped
-			}
-			recordedText = oldText.text
-			laterInFile := true
-			for _, candidate := range group {
-				if candidate.start == 0 || candidate.start <= line {
-					laterInFile = false
-					break
-				}
-			}
-			if laterInFile {
-				continue
-			}
-			turnID, at := ch.turnID, ch.at
-			oldLine, touched := why.MapLine(oldText.text, newText.text, line)
-			if oldLine < 0 {
-				uncertain = true
-				break
-			}
-			if touched {
-				symbol := ""
-				for _, candidate := range group {
-					if candidate.detail != "" && line >= candidate.start && line <= candidate.end {
-						symbol = candidate.detail
-						break
-					}
-				}
-				r := whyResult{Time: at, Symbol: symbol}
-				if turnID == "" {
-					r.Agent = "human"
-					r.Message = "edited by you"
-				} else {
-					err = e.DB.QueryRow(`SELECT COALESCE(k.seq,0),s.agent,COALESCE(t.prompt,''),COALESCE(t.reasoning,''),COALESCE(c.sha,'')
-						FROM turns t JOIN sessions s ON s.id=t.session_id LEFT JOIN keyframes k ON k.turn_id=t.id
-						LEFT JOIN commits c ON c.keyframe_id=k.id WHERE t.id=?`, turnID).Scan(&r.Step, &r.Agent, &r.Prompt, &r.Reasoning, &r.Commit)
-					if err == sql.ErrNoRows {
-						r.Message = "turn has no keyframe yet"
-					} else if err != nil {
-						return err
-					}
-					if len(r.Reasoning) > 400 {
-						r.Reasoning = textutil.Truncate(r.Reasoning, 400)
-					}
-				}
-				results = append(results, r)
-				if !all {
-					break
-				}
-			}
-			line = oldLine
-			if line < 1 {
-				break
-			}
-		}
-		if uncertain {
-			results = append(results, whyResult{Agent: "unknown", Message: uncertaintyMessage})
-		} else if len(results) == 0 {
-			results = append(results, whyResult{Agent: "baseline", Message: "present at baseline"})
+		results := make([]whyResult, 0, len(origins))
+		for _, origin := range origins {
+			results = append(results, whyResult{Step: origin.Step, Agent: origin.Agent, Time: origin.Time, Prompt: origin.Prompt,
+				Reasoning: origin.Reasoning, Commit: origin.Commit, Symbol: origin.Symbol, Message: origin.Message})
 		}
 		if messages {
 			for i := range results {
