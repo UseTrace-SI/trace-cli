@@ -43,7 +43,7 @@ func appendSpoolFrame(dir string, b []byte) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking spool overflow mode: %w", err)
 	}
-	f, err := openStateFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND)
+	f, err := openStateFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_RDWR|os.O_APPEND)
 	if err != nil {
 		return fmt.Errorf("opening spool: %w", err)
 	}
@@ -62,7 +62,24 @@ func appendSpoolFrame(dir string, b []byte) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking spool overflow mode: %w", err)
 	}
+	// An earlier append may have been cut short (a full disk, or a hook
+	// killed mid-write). Start a new line so its fragment cannot absorb this
+	// frame, and roll back a failed write so it leaves no fragment itself.
+	end, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return fmt.Errorf("finding spool end: %w", err)
+	}
+	if end > 0 {
+		last := make([]byte, 1)
+		if _, err := f.ReadAt(last, end-1); err != nil {
+			return fmt.Errorf("reading spool end: %w", err)
+		}
+		if last[0] != '\n' {
+			b = append([]byte{'\n'}, b...)
+		}
+	}
 	if _, err := f.Write(b); err != nil {
+		_ = f.Truncate(end)
 		return fmt.Errorf("writing spool: %w", err)
 	}
 	return nil
