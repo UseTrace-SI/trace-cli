@@ -4,6 +4,8 @@
 
 Agent hooks send one redacted JSON line to a local Unix socket; a line can contain an ordered batch of events from one callback. If the socket is unavailable, the line is appended to `.trace/spool.jsonl`. If the spool lock is busy, the hook publishes a redacted file in `.trace/spool-pending/` without waiting for the lock. The daemon replays both locations; when Unix socket binding is denied, it polls them directly. Older daemons do not read pending files, so restart them after upgrading. The socket is mode `0600`; the daemon logs only event metadata and errors.
 
+The daemon removes spooled events only after processing them. If processing an event fails, for example because a turn-end scan exceeds a capture limit, the daemon keeps running: the spool keeps that event and everything after it, so events already processed, including earlier events of the same batch, are not replayed, and later events wait behind it. The daemon retries after 0.25 and 0.5 seconds; after the third failure it moves the event and the rest of its batch, with the redacted error, to `.trace/quarantine/` and continues with later events. Quarantine keeps the newest 32 frames and prunes frames older than 24 hours. If the daemon process crashes, events processed since the spool was last trimmed are delivered again, so delivery is at least once.
+
 Trace state must stay local to the checkout. Hooks write only when `.trace` is a real directory, and neither hooks nor the daemon follow a symlink in place of a state file or the socket. The daemon refuses to start if `.trace` is a symlink or Git tracks anything under it, so a cloned repository cannot redirect its writes.
 
 ## Keyframes

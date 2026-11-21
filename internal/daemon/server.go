@@ -3,6 +3,7 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,7 +55,7 @@ func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger
 		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENAMETOOLONG) {
 			cleanup := markBatchReady(dir)
 			defer cleanup()
-			return serveSpoolChecked(ctx, dir, consume)
+			return serveSpoolChecked(ctx, dir, logger, consume)
 		}
 		return fmt.Errorf("listening on socket: %w", err)
 	}
@@ -77,7 +78,7 @@ func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger
 			}
 		}
 	}()
-	delivery := orderedDelivery{dir: dir, queue: queue}
+	delivery := orderedDelivery{dir: dir, queue: queue, retry: frameRetry{logger: logger}}
 	if err := delivery.drain(); err != nil {
 		close(queue)
 		workers.Wait()
@@ -150,11 +151,69 @@ func markBatchReady(dir string) func() {
 	return func() { _ = os.Remove(path); _ = os.Remove(durable) }
 }
 
+const (
+	// A frame whose processing keeps failing is retried after doubling
+	// delays, then quarantined, so one event cannot block every later one.
+	maxFrameAttempts = 3
+	frameRetryDelay  = 250 * time.Millisecond
+)
+
+// frameRetry paces retries of the spooled frame whose processing failed.
+// Processing failures never stop the daemon.
+type frameRetry struct {
+	logger   *slog.Logger
+	key      [sha256.Size]byte
+	attempts int
+	next     time.Time
+}
+
+// drain delivers the spool unless a failed frame still awaits its retry. A
+// processing failure is logged rather than returned; pending then reports
+// that a backlog remains ahead of newer events.
+func (r *frameRetry) drain(dir string, consume func(event.Event) error) (pending bool, err error) {
+	if time.Now().Before(r.next) {
+		return true, nil
+	}
+	err = drainSpool(dir, consume, r.failed)
+	var failed *processingError
+	if errors.As(err, &failed) {
+		return true, nil
+	}
+	if err == nil {
+		r.attempts = 0
+	}
+	return false, err
+}
+
+// failed records a failed attempt on frame, which stays first in the queue,
+// and reports whether to quarantine it instead of retrying.
+func (r *frameRetry) failed(frame []byte, err error) bool {
+	logger := r.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if key := sha256.Sum256(frame); key != r.key {
+		r.key, r.attempts = key, 0
+	}
+	r.attempts++
+	reason := (redact.Redactor{}).Text(err.Error())
+	if r.attempts >= maxFrameAttempts {
+		logger.Error("quarantining spooled frame after repeated processing failures", "attempts", r.attempts, "error", reason)
+		r.attempts = 0
+		return true
+	}
+	delay := frameRetryDelay << (r.attempts - 1)
+	r.next = time.Now().Add(delay)
+	logger.Warn("processing spooled frame failed; retrying", "attempt", r.attempts, "delay", delay, "error", reason)
+	return false
+}
+
 // orderedDelivery keeps a completed fallback write ahead of later socket events.
 type orderedDelivery struct {
 	mu    sync.Mutex
 	dir   string
 	queue chan<- queuedEvent
+	retry frameRetry
 }
 
 type queuedEvent struct {
@@ -171,7 +230,8 @@ func (d *orderedDelivery) deliverSpool(ev event.Event) error {
 func (d *orderedDelivery) drain() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return ingestSpoolChecked(d.dir, d.deliverSpool)
+	_, err := d.retry.drain(d.dir, d.deliverSpool)
+	return err
 }
 
 func (d *orderedDelivery) socket(ev event.Event) error {
@@ -181,53 +241,53 @@ func (d *orderedDelivery) socket(ev event.Event) error {
 func (d *orderedDelivery) socketBatch(events []event.Event) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if err := ingestSpoolChecked(d.dir, d.deliverSpool); err != nil {
+	if pending, err := d.retry.drain(d.dir, d.deliverSpool); err != nil || pending {
 		// The sender has already written this frame and cannot observe the
-		// processing failure. Preserve it after the failed backlog before
-		// stopping the daemon, rather than silently dropping it.
-		return d.preserveSocketEvents(events, err)
+		// failed or waiting backlog. Keep the frame behind it rather than
+		// dropping it or letting it overtake the backlog.
+		if preserveErr := d.preserveSocketEvents(events); preserveErr != nil {
+			return errors.Join(err, preserveErr)
+		}
+		return err
 	}
 	for i, ev := range events {
 		if err := d.deliverSpool(ev.Sanitized()); err != nil {
-			return d.preserveSocketEvents(events[i:], err)
+			// Retry the rest from the spool like any failed spooled frame.
+			return d.preserveSocketEvents(events[i:])
 		}
 	}
 	return nil
 }
 
-func (d *orderedDelivery) preserveSocketEvents(events []event.Event, cause error) error {
-	clean := make([]event.Event, len(events))
-	for i := range events {
-		clean[i] = events[i].Sanitized()
-	}
-	b, err := json.Marshal(struct {
-		Events []event.Event `json:"events"`
-	}{clean})
+func (d *orderedDelivery) preserveSocketEvents(events []event.Event) error {
+	b, err := encodeBatch(events)
 	if err != nil {
 		return fmt.Errorf("encoding socket events after processing failure: %w", err)
 	}
-	if err := appendSpoolFrame(d.dir, append(b, '\n')); err != nil {
-		return fmt.Errorf("preserving socket events after processing failure %v: %w", cause, err)
+	if err := appendSpoolFrame(d.dir, b); err != nil {
+		return fmt.Errorf("preserving socket events after processing failure: %w", err)
 	}
-	return cause
+	return nil
 }
 
 // serveSpool keeps local capture usable where Unix socket binding is denied.
 // Hooks still use their bounded socket attempt and append-only spool fallback.
 func serveSpool(ctx context.Context, dir string, consume func(event.Event)) error {
-	return serveSpoolChecked(ctx, dir, func(ev event.Event) error { consume(ev); return nil })
+	return serveSpoolChecked(ctx, dir, slog.Default(), func(ev event.Event) error { consume(ev); return nil })
 }
 
-func serveSpoolChecked(ctx context.Context, dir string, consume func(event.Event) error) error {
+func serveSpoolChecked(ctx context.Context, dir string, logger *slog.Logger, consume func(event.Event) error) error {
 	ready := filepath.Join(dir, "spool.ready")
 	if err := WriteStateFile(ready, []byte("1\n")); err != nil {
 		return fmt.Errorf("marking spool daemon ready: %w", err)
 	}
 	defer os.Remove(ready)
-	if err := ingestSpoolChecked(dir, consume); err != nil {
+	retry := frameRetry{logger: logger}
+	drain := func() error { _, err := retry.drain(dir, consume); return err }
+	if err := drain(); err != nil {
 		return err
 	}
-	return pollSpool(ctx, func() error { return ingestSpoolChecked(dir, consume) })
+	return pollSpool(ctx, drain)
 }
 
 func pollSpool(ctx context.Context, drain func() error) error {
@@ -316,6 +376,23 @@ func pruneQuarantine(dir string) error {
 		}
 	}
 	return nil
+}
+
+// quarantineFailedFrame keeps a frame that repeatedly failed to process,
+// with its error, as a batch line that can be inspected or replayed.
+func quarantineFailedFrame(dir string, frame []byte, cause error) error {
+	events, err := decodeFrame(frame)
+	if err != nil {
+		return quarantineFrame(dir, frame)
+	}
+	record, err := json.Marshal(struct {
+		Error  string        `json:"error"`
+		Events []event.Event `json:"events"`
+	}{cause.Error(), events})
+	if err != nil {
+		return fmt.Errorf("encoding quarantined frame: %w", err)
+	}
+	return quarantineFrame(dir, append(record, '\n'))
 }
 
 func redactPreview(raw []byte) string {

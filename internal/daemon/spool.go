@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -147,6 +148,22 @@ func ingestSpool(dir string, consume func(event.Event)) error {
 }
 
 func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
+	return drainSpool(dir, consume, nil)
+}
+
+// processingError reports that the processing callback failed. The failed
+// event and everything after it were kept for a later attempt.
+type processingError struct{ err error }
+
+func (e *processingError) Error() string { return e.err.Error() }
+func (e *processingError) Unwrap() error { return e.err }
+
+// drainSpool delivers the spool and then the overflow queue, in order. After
+// a processing failure only the failed event and the ones after it are kept,
+// so a retry never repeats processed events; a crash can still replay them,
+// which keeps delivery at least once. giveUp, when set, learns of each
+// failure and may quarantine the frame so that later frames can continue.
+func drainSpool(dir string, consume func(event.Event) error, giveUp func(frame []byte, err error) bool) error {
 	f, err := openStateFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return fmt.Errorf("opening spool: %w", err)
@@ -161,7 +178,27 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 			_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		}
 	}()
-	if err := readSpoolFrames(f, func(b []byte) error { return quarantineFrame(dir, b) }, consume); err != nil {
+	var head []byte
+	keepFrom := int64(-1)
+	err = readSpoolFrames(f, func(b []byte) error { return quarantineFrame(dir, b) }, func(line []byte, events []event.Event, end int64) error {
+		frame, err := deliverFrame(line, events, consume)
+		if err == nil {
+			return nil
+		}
+		if giveUp != nil && giveUp(frame, err) {
+			return quarantineFailedFrame(dir, frame, err)
+		}
+		head, keepFrom = frame, end
+		return &processingError{err}
+	})
+	if keepFrom >= 0 {
+		// The frames before the failed one were processed: drop them.
+		if keepErr := keepSpoolSuffix(f, head, keepFrom); keepErr != nil {
+			return fmt.Errorf("keeping unprocessed spool frames: %w", keepErr)
+		}
+		return fmt.Errorf("processing spooled event: %w", err)
+	}
+	if err != nil {
 		return fmt.Errorf("reading spool: %w", err)
 	}
 	// Keep the original frames until their callbacks finish. If processing is
@@ -172,7 +209,7 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 	// Drain the overflow backlog while still holding the spool lock, so no
 	// writer can fall back to the main spool before the queue is empty (which
 	// would let a later write overtake an earlier overflow frame).
-	if err := ingestOverflow(dir, consume); err != nil {
+	if err := ingestOverflow(dir, consume, giveUp); err != nil {
 		return err
 	}
 	if err := clearOverflowMarker(dir); err != nil {
@@ -185,16 +222,71 @@ func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
 	return nil
 }
 
+// deliverFrame consumes a frame's events in order. On failure it returns
+// what is left to retry: the line itself if no event was consumed, otherwise
+// the remaining events re-encoded as one line.
+func deliverFrame(line []byte, events []event.Event, consume func(event.Event) error) ([]byte, error) {
+	for i, ev := range events {
+		if err := consume(ev); err != nil {
+			if i > 0 {
+				if rest, encodeErr := encodeBatch(events[i:]); encodeErr == nil {
+					return rest, err
+				}
+				// Replaying the processed events beats losing the rest.
+			}
+			return line, err
+		}
+	}
+	return nil, nil
+}
+
+// encodeBatch encodes events as one redacted spool line.
+func encodeBatch(events []event.Event) ([]byte, error) {
+	clean := make([]event.Event, len(events))
+	for i := range events {
+		clean[i] = events[i].Sanitized()
+	}
+	b, err := json.Marshal(struct {
+		Events []event.Event `json:"events"`
+	}{clean})
+	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
+}
+
+// keepSpoolSuffix rewrites the locked spool as head followed by its bytes
+// from offset on. Interrupted part-way, it can repeat retained frames but
+// cannot lose them.
+func keepSpoolSuffix(f *os.File, head []byte, offset int64) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	rest, err := io.ReadAll(io.NewSectionReader(f, offset, info.Size()-offset))
+	if err != nil {
+		return err
+	}
+	data := append(append(make([]byte, 0, len(head)+len(rest)), head...), rest...)
+	if _, err := f.WriteAt(data, 0); err != nil {
+		return err
+	}
+	return f.Truncate(int64(len(data)))
+}
+
 // readSpoolFrames bounds memory per line and quarantines damaged or oversized
 // lines before skipping them, allowing later valid events to be recovered
-// instead of silently discarding a frame the sender believed it sent.
-func readSpoolFrames(r io.Reader, quarantine func([]byte) error, consume func(event.Event) error) error {
+// instead of silently discarding a frame the sender believed it sent. deliver
+// receives each decoded line with the offset just past it.
+func readSpoolFrames(r io.Reader, quarantine func([]byte) error, deliver func(line []byte, events []event.Event, end int64) error) error {
 	const maxFrame = 4 << 20
 	reader := bufio.NewReaderSize(r, 4096)
 	var line []byte
+	var offset int64
 	oversized := false
 	for {
 		part, err := reader.ReadSlice('\n')
+		offset += int64(len(part))
 		if !oversized {
 			if len(line)+len(part) > maxFrame {
 				oversized = true
@@ -210,10 +302,8 @@ func readSpoolFrames(r io.Reader, quarantine func([]byte) error, consume func(ev
 				}
 			} else if len(line) != 0 {
 				if events, decodeErr := decodeFrame(line); decodeErr == nil {
-					for _, ev := range events {
-						if err := consume(ev); err != nil {
-							return fmt.Errorf("processing spooled event: %w", err)
-						}
+					if err := deliver(line, events, offset); err != nil {
+						return err
 					}
 				} else if qerr := quarantine(line); qerr != nil {
 					return fmt.Errorf("quarantining damaged spool frame: %w", qerr)
@@ -321,7 +411,7 @@ func pruneOverflowFrames(dir string) error {
 	return nil
 }
 
-func ingestOverflow(dir string, consume func(event.Event) error) error {
+func ingestOverflow(dir string, consume func(event.Event) error, giveUp func(frame []byte, err error) bool) error {
 	pending := filepath.Join(dir, "spool-pending")
 	// Consuming and pruning delete files, so never list a symlinked queue.
 	if err := checkStateDir(pending); err != nil {
@@ -370,9 +460,18 @@ func ingestOverflow(dir string, consume func(event.Event) error) error {
 			}
 			continue
 		}
-		for _, ev := range events {
-			if err := consume(ev); err != nil {
-				return fmt.Errorf("processing pending spool event: %w", err)
+		if frame, err := deliverFrame(b, events, consume); err != nil {
+			if giveUp == nil || !giveUp(frame, err) {
+				// Keep only the events of this frame that were not processed.
+				if !bytes.Equal(frame, b) {
+					if err := WriteStateFile(path, frame); err != nil {
+						return fmt.Errorf("keeping unprocessed pending spool events: %w", err)
+					}
+				}
+				return fmt.Errorf("processing pending spool event: %w", &processingError{err})
+			}
+			if err := quarantineFailedFrame(dir, frame, err); err != nil {
+				return err
 			}
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

@@ -643,8 +643,9 @@ func TestDeliveryRetainsFrameAfterWorkerError(t *testing.T) {
 	go func() { result <- delivery.drain() }()
 	item := <-queue
 	item.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("worker error was ignored")
+	// A processing failure is retried later; it must not stop the daemon.
+	if err := <-result; err != nil {
+		t.Fatalf("processing failure stopped delivery: %v", err)
 	}
 	var replayed []event.Event
 	if err := ingestSpool(dir, func(ev event.Event) { replayed = append(replayed, ev) }); err != nil || len(replayed) != 1 {
@@ -666,8 +667,8 @@ func TestSocketBatchIsSpooledAfterBacklogFailure(t *testing.T) {
 	}()
 	item := <-queue
 	item.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("backlog failure was ignored")
+	if err := <-result; err != nil {
+		t.Fatalf("backlog failure stopped delivery: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "spool.jsonl"))
 	if err != nil || strings.Contains(string(data), secret) {
@@ -694,8 +695,8 @@ func TestSocketBatchRetainsFailedSuffix(t *testing.T) {
 	first.done <- nil
 	second := <-queue
 	second.done <- errors.New("worker failed")
-	if err := <-result; err == nil {
-		t.Fatal("worker failure was ignored")
+	if err := <-result; err != nil {
+		t.Fatalf("worker failure stopped delivery: %v", err)
 	}
 	var got []event.Event
 	if err := ingestSpool(dir, func(ev event.Event) { got = append(got, ev) }); err != nil {

@@ -37,7 +37,7 @@ func TestDaemonStateDoesNotFollowPlantedSymlinks(t *testing.T) {
 		{"spool readiness", "spool.ready", "file", func(dir string) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			_ = serveSpoolChecked(ctx, dir, nop)
+			_ = serveSpoolChecked(ctx, dir, nil, nop)
 		}},
 		{"daemon lock", daemonLockName, "missing", func(dir string) {
 			lock, _, _ := TryAcquireDaemonLock(dir)
