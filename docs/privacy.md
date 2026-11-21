@@ -26,7 +26,7 @@ Codex assistant output and reasoning summaries, Cursor Agent CLI response and th
 
 ## File exclusions and removal
 
-Trace does not read `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.aws/`, or `.ssh/`. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
+Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, or `.ssh/`; these names match in any letter case. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
 

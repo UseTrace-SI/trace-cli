@@ -82,6 +82,37 @@ func TestSecretPath(t *testing.T) {
 	}
 }
 
+// Every OpenSSH key type and key/certificate files in any letter case must
+// stay out of snapshots, without catching ordinary source files.
+func TestSecretPathMatchesKeyFilesInAnyCase(t *testing.T) {
+	for _, tc := range []struct {
+		path   string
+		secret bool
+	}{
+		{"deploy/id_ed25519", true},
+		{"id_ed25519.pub", true},
+		{"keys/id_ecdsa", true},
+		{"id_ecdsa_sk.pub", true},
+		{"id_dsa", true},
+		{"ID_RSA", true},
+		{"certs/Server.PEM", true},
+		{"TLS.KEY", true},
+		{"tls.Key", true},
+		{".SSH/config", true},
+		{".AWS/credentials", true},
+		{".ENV.local", true},
+		{"internal/syncclient/credentials.go", false},
+		{"internal/manifest/excludes.go", false},
+		{"keys.go", false},
+		{"docs/pem-format.md", false},
+		{"src/Keyboard.tsx", false},
+	} {
+		if got := SecretPath(tc.path); got != tc.secret {
+			t.Errorf("SecretPath(%q) = %v; want %v", tc.path, got, tc.secret)
+		}
+	}
+}
+
 // Restores write manifest paths that may come from an imported bundle or a
 // recovery server. Git metadata must be protected at every depth, and on
 // case-insensitive file systems (the macOS default) in every letter case.
