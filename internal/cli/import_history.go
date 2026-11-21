@@ -301,7 +301,7 @@ func historyHashes(db interface {
 			return nil, err
 		}
 		for path, entry := range m {
-			if manifest.Excluded(path) || filepath.IsAbs(path) || path != filepath.ToSlash(filepath.Clean(path)) || path == ".." || strings.HasPrefix(path, "../") {
+			if !manifest.Portable(path) {
 				return nil, fmt.Errorf("unsafe path in imported history")
 			}
 			set[entry.Hash] = true

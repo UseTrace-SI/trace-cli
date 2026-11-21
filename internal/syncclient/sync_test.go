@@ -3,17 +3,22 @@ package syncclient
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/store"
 )
 
@@ -514,5 +519,62 @@ func TestBlobHaveBatches(t *testing.T) {
 	}
 	if len(counts) != 2 || counts[0] != 500 || counts[1] != 1 {
 		t.Fatalf("batch sizes: %v", counts)
+	}
+}
+
+// Recovery publishes history that a later rewind restores. A snapshot path
+// into Git metadata, outside the repository or excluded from capture must be
+// rejected before the recovered history is published.
+func TestPullRejectsUnsafeSnapshotPaths(t *testing.T) {
+	for _, rel := range []string{"sub/.git/hooks/pre-commit", ".GIT/hooks/pre-commit", "../outside.txt", ".git/hooks/pre-commit", ".trace/trace.db"} {
+		t.Run(rel, func(t *testing.T) {
+			sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
+			hook := []byte("#!/bin/sh\necho pwned > PWNED\n")
+			tree, err := json.Marshal(manifest.Manifest{rel: {Hash: blob.Hash(sum(hook)), Mode: 0755}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			objects := map[string][]byte{sum(hook): hook, sum(tree): tree}
+			client := &Client{
+				Config: Config{Endpoint: "https://trace.example", Remote: "owner/repo", Mode: "personal", ConnectionID: "conn"},
+				Token:  "token",
+				HTTP: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					q := r.URL.Query()
+					switch r.URL.Path {
+					case "/v1/sync/rows":
+						rows := []Row{}
+						if q.Get("table") == "keyframes" && q.Get("after") == "" {
+							data, _ := json.Marshal(map[string]any{"id": "K1", "seq": 1, "manifest_hash": sum(tree), "tag": "turn", "created_at": 1})
+							rows = append(rows, Row{Table: "keyframes", ID: "K1", Data: data})
+						}
+						body, _ := json.Marshal(map[string]any{"rows": rows, "next": nil})
+						return response(string(body)), nil
+					case "/v1/sync/blobs/list":
+						hashes := []string{}
+						if q.Get("after") == "" {
+							for h := range objects {
+								hashes = append(hashes, h)
+							}
+							sort.Strings(hashes)
+						}
+						body, _ := json.Marshal(map[string]any{"hashes": hashes, "next": nil})
+						return response(string(body)), nil
+					case "/v1/sync/blobs":
+						h := q.Get("hash")
+						body, _ := json.Marshal(map[string]any{"hash": h, "payload": base64.StdEncoding.EncodeToString(objects[h])})
+						return response(string(body)), nil
+					}
+					t.Fatalf("unexpected request %s", r.URL)
+					return nil, nil
+				})},
+			}
+			traceDir := filepath.Join(t.TempDir(), ".trace")
+			if _, _, err := client.Pull(context.Background(), traceDir, ""); err == nil {
+				t.Fatalf("recovery accepted a snapshot containing unsafe path %q", rel)
+			}
+			if _, err := os.Stat(filepath.Join(traceDir, "trace.db")); err == nil {
+				t.Fatal("rejected recovery left a published history behind")
+			}
+		})
 	}
 }

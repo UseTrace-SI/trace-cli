@@ -5,14 +5,17 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
 func TestBundleRejectsUnsafeArchivesWithoutChangingHistory(t *testing.T) {
@@ -217,5 +220,96 @@ func TestBundleRejectsTruncatedCompression(t *testing.T) {
 	target := competitiveRepo(t)
 	if err := readBundle(target, archive); err == nil {
 		t.Fatal("truncated gzip accepted")
+	}
+}
+
+func bundleWithSnapshotPath(t *testing.T, rel string) string {
+	t.Helper()
+	source := competitiveRepo(t)
+	e, err := engine.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := e.Blobs.PutBytes([]byte("#!/bin/sh\necho pwned > PWNED\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mh, err := (manifest.Manifest{rel: {Hash: h, Mode: 0755}}).Save(e.Blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,tag,created_at) VALUES('k-shared',1,?,'turn',2)", mh); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Build the archive by hand, as a crafted bundle would be: the exporter
+	// itself refuses to publish these paths.
+	snapshot := filepath.Join(t.TempDir(), "trace.db")
+	if err := snapshotHistory(context.Background(), filepath.Join(source, ".trace", "trace.db"), snapshot); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{".trace/trace.db": snapshot}
+	objects := filepath.Join(source, ".trace", "objects")
+	if err := filepath.WalkDir(objects, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(objects, p)
+		files[".trace/objects/"+filepath.ToSlash(rel)] = p
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "shared.tar.gz")
+	f, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	for name, src := range files {
+		b, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0600, Size: int64(len(b)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := errors.Join(tw.Close(), gz.Close(), f.Close()); err != nil {
+		t.Fatal(err)
+	}
+	return archive
+}
+
+// A shared bundle's snapshot is restored by a later rewind. Paths into Git
+// metadata, at any depth or in any letter case, would install hooks that run
+// on the next commit, so import must reject them.
+func TestBundleRejectsSnapshotPathsIntoGitMetadata(t *testing.T) {
+	for _, rel := range []string{"sub/.git/hooks/pre-commit", ".GIT/hooks/pre-commit", ".Git/config", ".TRACE/trace.db", ".MCP.json"} {
+		t.Run(rel, func(t *testing.T) {
+			archive := bundleWithSnapshotPath(t, rel)
+			target := competitiveRepo(t)
+			if out, err := exec.Command("git", "init", "-q", filepath.Join(target, "sub")).CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v: %s", err, out)
+			}
+			if err := readBundle(target, archive); err == nil {
+				e, err := engine.Open(target)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, _, rewindErr := e.Rewind(1, "", false)
+				e.Close()
+				t.Fatalf("import accepted protected snapshot path %q (rewind error: %v)", rel, rewindErr)
+			}
+			if _, err := os.Stat(filepath.Join(target, "sub", ".git", "hooks", "pre-commit")); err == nil {
+				t.Fatal("hook installed into nested repository")
+			}
+		})
 	}
 }

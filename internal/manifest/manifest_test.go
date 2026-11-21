@@ -82,6 +82,39 @@ func TestSecretPath(t *testing.T) {
 	}
 }
 
+// Restores write manifest paths that may come from an imported bundle or a
+// recovery server. Git metadata must be protected at every depth, and on
+// case-insensitive file systems (the macOS default) in every letter case.
+func TestExcludedProtectsGitMetadataAndTraceStateInAnyCase(t *testing.T) {
+	for _, tc := range []struct {
+		path     string
+		excluded bool
+	}{
+		{".git/config", true},
+		{"sub/.git/hooks/pre-commit", true},
+		{"vendor/lib/.git", true},
+		{".GIT/hooks/pre-commit", true},
+		{".Git/config", true},
+		{".g\u200cit/config", true},
+		{"sub/.GIT\ufeff/config", true},
+		{".TRACE/trace.db", true},
+		{".Trace-Brain/memory.db", true},
+		{".MCP.json", true},
+		{".Claude/settings.local.json", true},
+		{".CURSOR/hooks.json", true},
+		{".gitignore", false},
+		{".github/workflows/ci.yml", false},
+		{"docs/.gitkeep", false},
+		{"src/git/client.go", false},
+		{"pkg/.gitattributes", false},
+		{".tracebook/notes.md", false},
+	} {
+		if got := Excluded(tc.path); got != tc.excluded {
+			t.Errorf("Excluded(%q) = %v; want %v", tc.path, got, tc.excluded)
+		}
+	}
+}
+
 func TestCompanionStateExcludedFromAllNewSnapshots(t *testing.T) {
 	root := t.TempDir()
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
