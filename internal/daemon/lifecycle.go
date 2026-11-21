@@ -3,7 +3,6 @@ package daemon
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +19,7 @@ const (
 )
 
 func socketReady(dir string) bool {
-	conn, err := net.DialTimeout("unix", filepath.Join(dir, "sock"), 5*time.Millisecond)
+	conn, err := dialDaemon(dir, 5*time.Millisecond)
 	if err != nil {
 		return false
 	}
@@ -29,10 +28,10 @@ func socketReady(dir string) bool {
 }
 
 func openDaemonLock(dir string) (*os.File, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := ensureStateDir(dir); err != nil {
 		return nil, fmt.Errorf("creating trace directory: %w", err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, daemonLockName), os.O_CREATE|os.O_RDWR, 0600)
+	f, err := openStateFile(filepath.Join(dir, daemonLockName), os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("opening daemon lock: %w", err)
 	}
@@ -105,11 +104,11 @@ func startProcess(root string) error {
 // time so a stale pid file cannot be mistaken for a live daemon after PID reuse.
 func WriteDaemonIdentity(dir string) error {
 	pid := os.Getpid()
-	if err := os.WriteFile(filepath.Join(dir, daemonPIDName), []byte(strconv.Itoa(pid)), 0600); err != nil {
+	if err := WriteStateFile(filepath.Join(dir, daemonPIDName), []byte(strconv.Itoa(pid))); err != nil {
 		return fmt.Errorf("writing pid file: %w", err)
 	}
 	if start, ok := processStartTime(pid); ok {
-		if err := os.WriteFile(filepath.Join(dir, daemonStartTime), []byte(strconv.FormatUint(start, 10)), 0600); err != nil {
+		if err := WriteStateFile(filepath.Join(dir, daemonStartTime), []byte(strconv.FormatUint(start, 10))); err != nil {
 			return fmt.Errorf("writing daemon start time: %w", err)
 		}
 	}
@@ -122,7 +121,7 @@ func RemoveDaemonIdentity(dir string) {
 }
 
 func readDaemonStartTime(dir string) uint64 {
-	b, err := os.ReadFile(filepath.Join(dir, daemonStartTime))
+	b, err := readStateFile(filepath.Join(dir, daemonStartTime))
 	if err != nil {
 		return 0
 	}
@@ -136,11 +135,11 @@ func readDaemonStartTime(dir string) uint64 {
 // PersonalSyncReady identifies support in the running daemon, rather than
 // assuming a newly installed CLI has replaced an older resident process.
 func PersonalSyncReady(dir string) bool {
-	capability, err := os.ReadFile(filepath.Join(dir, "personal-sync.ready"))
+	capability, err := readStateFile(filepath.Join(dir, "personal-sync.ready"))
 	if err != nil || len(capability) == 0 {
 		return false
 	}
-	pid, err := os.ReadFile(filepath.Join(dir, daemonPIDName))
+	pid, err := readStateFile(filepath.Join(dir, daemonPIDName))
 	return err == nil && string(pid) == string(capability)
 }
 
@@ -151,6 +150,10 @@ func EnsureRunning(root string) error {
 	dir := filepath.Join(root, ".trace")
 	if SpoolReady(dir) || socketReady(dir) {
 		return nil
+	}
+	// Report a refused state directory here rather than as a start timeout.
+	if err := CheckTraceDir(root); err != nil {
+		return err
 	}
 	lock, acquired, err := TryAcquireDaemonLock(dir)
 	if err != nil {
@@ -205,7 +208,7 @@ func SpoolReady(dir string) bool {
 	if daemonLockHeld(dir) {
 		return true
 	}
-	b, err := os.ReadFile(filepath.Join(dir, daemonPIDName))
+	b, err := readStateFile(filepath.Join(dir, daemonPIDName))
 	if err != nil {
 		return false
 	}

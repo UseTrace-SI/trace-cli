@@ -44,7 +44,7 @@ func openRotatingLog(path string, limit int64) (*rotatingLog, error) {
 	if info, err := os.Stat(path); err == nil && info.Size() > limit {
 		_ = os.Rename(path, path+".1")
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (l *rotatingLog) Write(p []byte) (int, error) {
 	if l.size+int64(len(p)) > l.limit {
 		_ = l.file.Close()
 		_ = os.Rename(l.path, l.path+".1")
-		f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_NOFOLLOW, 0600)
 		if err != nil {
 			return 0, err
 		}
@@ -92,6 +92,11 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{Use: "daemon", Hidden: true, RunE: func(_ *cobra.Command, _ []string) error {
 		root, err := rootFromFlag(*repoPath)
 		if err != nil {
+			return err
+		}
+		// Hooks start the daemon in any repository an agent opens. Refuse a
+		// .trace that the repository controls before writing any state.
+		if err := daemon.CheckTraceDir(root); err != nil {
 			return err
 		}
 		dir := filepath.Join(root, ".trace")
@@ -181,7 +186,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer daemon.RemoveDaemonIdentity(dir)
 		personalReady := filepath.Join(dir, "personal-sync.ready")
-		if err := os.WriteFile(personalReady, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		if err := daemon.WriteStateFile(personalReady, []byte(strconv.Itoa(os.Getpid()))); err != nil {
 			return fmt.Errorf("marking personal sync support: %w", err)
 		}
 		defer os.Remove(personalReady)

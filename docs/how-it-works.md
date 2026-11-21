@@ -4,6 +4,8 @@
 
 Agent hooks send one redacted JSON line to a local Unix socket; a line can contain an ordered batch of events from one callback. If the socket is unavailable, the line is appended to `.trace/spool.jsonl`. If the spool lock is busy, the hook publishes a redacted file in `.trace/spool-pending/` without waiting for the lock. The daemon replays both locations; when Unix socket binding is denied, it polls them directly. Older daemons do not read pending files, so restart them after upgrading. The socket is mode `0600`; the daemon logs only event metadata and errors.
 
+Trace state must stay local to the checkout. Hooks write only when `.trace` is a real directory, and neither hooks nor the daemon follow a symlink in place of a state file or the socket. The daemon refuses to start if `.trace` is a symlink or Git tracks anything under it, so a cloned repository cannot redirect its writes.
+
 ## Keyframes
 
 Each completed turn gets a keyframe: a manifest mapping repository paths to content hashes. Blob bytes are compressed with zstd and stored under `.trace/objects/`. Trace ignores Git metadata, its own data directory, configured secret paths, and user integration files. File changes are also recorded as line-range operations for `why`. If a tool reports an edit without paths, the daemon scans the repository at turn end even if the watcher observed other changes. These scans can take longer in large repositories; if a file cannot be read, the turn keyframe is not written and the error is logged in `.trace/daemon.log`.

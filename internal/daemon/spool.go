@@ -35,7 +35,7 @@ func appendSpool(dir string, ev event.Event) error {
 }
 
 func appendSpoolFrame(dir string, b []byte) error {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := ensureStateDir(dir); err != nil {
 		return fmt.Errorf("creating spool directory: %w", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, spoolOverflowMarker)); err == nil {
@@ -43,7 +43,7 @@ func appendSpoolFrame(dir string, b []byte) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking spool overflow mode: %w", err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := openStateFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND)
 	if err != nil {
 		return fmt.Errorf("opening spool: %w", err)
 	}
@@ -73,7 +73,7 @@ func appendSpoolFrame(dir string, b []byte) error {
 // when they switch to overflow. This keeps a concurrent hook from switching
 // back to overflow between the daemon's final drain and marker removal.
 func overflowLock(dir string) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(dir, spoolOverflowLock), os.O_CREATE|os.O_RDWR, 0600)
+	f, err := openStateFile(filepath.Join(dir, spoolOverflowLock), os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("opening spool overflow lock: %w", err)
 	}
@@ -95,7 +95,7 @@ func appendOverflow(dir string, b []byte) error {
 		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		_ = lock.Close()
 	}()
-	marker, err := os.OpenFile(filepath.Join(dir, spoolOverflowMarker), os.O_CREATE|os.O_WRONLY, 0600)
+	marker, err := openStateFile(filepath.Join(dir, spoolOverflowMarker), os.O_CREATE|os.O_WRONLY)
 	if err != nil {
 		return fmt.Errorf("enabling spool overflow: %w", err)
 	}
@@ -103,7 +103,7 @@ func appendOverflow(dir string, b []byte) error {
 		return fmt.Errorf("closing spool overflow marker: %w", err)
 	}
 	pending := filepath.Join(dir, "spool-pending")
-	if err := os.MkdirAll(pending, 0700); err != nil {
+	if err := ensureStateDir(pending); err != nil {
 		return fmt.Errorf("creating pending spool: %w", err)
 	}
 	f, err := os.CreateTemp(pending, fmt.Sprintf("%020d-*.tmp", time.Now().UnixNano()))
@@ -130,7 +130,7 @@ func ingestSpool(dir string, consume func(event.Event)) error {
 }
 
 func ingestSpoolChecked(dir string, consume func(event.Event) error) error {
-	f, err := os.OpenFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_RDWR, 0600)
+	f, err := openStateFile(filepath.Join(dir, "spool.jsonl"), os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return fmt.Errorf("opening spool: %w", err)
 	}
@@ -305,10 +305,14 @@ func pruneOverflowFrames(dir string) error {
 }
 
 func ingestOverflow(dir string, consume func(event.Event) error) error {
+	pending := filepath.Join(dir, "spool-pending")
+	// Consuming and pruning delete files, so never list a symlinked queue.
+	if err := checkStateDir(pending); err != nil {
+		return fmt.Errorf("checking pending spool: %w", err)
+	}
 	if err := pruneOverflowFrames(dir); err != nil {
 		return err
 	}
-	pending := filepath.Join(dir, "spool-pending")
 	entries, err := os.ReadDir(pending)
 	if os.IsNotExist(err) {
 		return nil

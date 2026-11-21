@@ -38,11 +38,11 @@ func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := ensureStateDir(dir); err != nil {
 		return fmt.Errorf("creating daemon directory: %w", err)
 	}
 	sock := filepath.Join(dir, "sock")
-	if conn, err := net.DialTimeout("unix", sock, 20*time.Millisecond); err == nil {
+	if conn, err := dialDaemon(dir, 20*time.Millisecond); err == nil {
 		conn.Close()
 		return fmt.Errorf("daemon already listens on %s", sock)
 	}
@@ -142,11 +142,11 @@ func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger
 
 func markBatchReady(dir string) func() {
 	path := filepath.Join(dir, "batch.ready")
-	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+	if err := WriteStateFile(path, []byte(strconv.Itoa(os.Getpid()))); err != nil {
 		return func() {}
 	}
 	durable := filepath.Join(dir, "durable.ready")
-	_ = os.WriteFile(durable, []byte(strconv.Itoa(os.Getpid())), 0600)
+	_ = WriteStateFile(durable, []byte(strconv.Itoa(os.Getpid())))
 	return func() { _ = os.Remove(path); _ = os.Remove(durable) }
 }
 
@@ -220,7 +220,7 @@ func serveSpool(ctx context.Context, dir string, consume func(event.Event)) erro
 
 func serveSpoolChecked(ctx context.Context, dir string, consume func(event.Event) error) error {
 	ready := filepath.Join(dir, "spool.ready")
-	if err := os.WriteFile(ready, []byte("1\n"), 0600); err != nil {
+	if err := WriteStateFile(ready, []byte("1\n")); err != nil {
 		return fmt.Errorf("marking spool daemon ready: %w", err)
 	}
 	defer os.Remove(ready)
@@ -250,7 +250,8 @@ func pollSpool(ctx context.Context, drain func() error) error {
 // secret that hook-side redaction failed to remove.
 func quarantineFrame(dir string, raw []byte) error {
 	qdir := filepath.Join(dir, "quarantine")
-	if err := os.MkdirAll(qdir, 0700); err != nil {
+	// Pruning deletes files, so never use a symlinked quarantine directory.
+	if err := ensureStateDir(qdir); err != nil {
 		return fmt.Errorf("creating quarantine directory: %w", err)
 	}
 	name, err := id.New()
@@ -258,7 +259,7 @@ func quarantineFrame(dir string, raw []byte) error {
 		return fmt.Errorf("naming quarantined frame: %w", err)
 	}
 	data := (redact.Redactor{}).Text(string(raw))
-	if err := os.WriteFile(filepath.Join(qdir, name+".frame"), []byte(data), 0600); err != nil {
+	if err := WriteStateFile(filepath.Join(qdir, name+".frame"), []byte(data)); err != nil {
 		return fmt.Errorf("writing quarantined frame: %w", err)
 	}
 	// Socket quarantine needs the same bounds as spool quarantine: a stream of
