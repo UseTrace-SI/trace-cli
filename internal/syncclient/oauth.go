@@ -46,7 +46,11 @@ func (o OAuth) client() *http.Client {
 	if o.Client != nil {
 		return o.Client
 	}
-	return &http.Client{Timeout: 10 * time.Second}
+	// Request bodies carry refresh tokens, codes and PKCE verifiers. A 307 or
+	// 308 would resend them to another origin, possibly over plain HTTP.
+	return &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
 }
 
 func (o OAuth) base() string {
