@@ -321,6 +321,36 @@ func TestManifestAmbiguitySymlinksAndUnexpectedFilesAreRejected(t *testing.T) {
 		t.Fatal("unrelated file was removed")
 	}
 }
+func TestManifestCaseVariantDuplicateFieldsAreRejected(t *testing.T) {
+	_, _, key := testManager(t)
+	raw, err := os.ReadFile(filepath.Join(signedBundle(t, key, "publisher", "1.0.0", "plugin bytes"), "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// encoding/json matches field names case-insensitively, so each variant
+	// below would silently replace the signed version or format.
+	for _, test := range []struct {
+		name, old, new string
+		accepted       bool
+	}{
+		{name: "capitalized after", old: `"version":"1.0.0"`, new: `"version":"1.0.0","Version":"9.9.9"`},
+		{name: "capitalized before", old: `"version":"1.0.0"`, new: `"Version":"9.9.9","version":"1.0.0"`},
+		{name: "upper case", old: `"format":1`, new: `"format":1,"FORMAT":1`},
+		{name: "escaped", old: `"version":"1.0.0"`, new: `"version":"1.0.0","Version":"9.9.9"`},
+		{name: "unicode folding", old: `"version":"1.0.0"`, new: `"version":"1.0.0","verſion":"9.9.9"`},
+		{name: "single case variant", old: `"version":"1.0.0"`, new: `"Version":"1.0.0"`, accepted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manifest, err := parseManifest([]byte(strings.Replace(string(raw), test.old, test.new, 1)))
+			if test.accepted && (err != nil || manifest.Version != "1.0.0") {
+				t.Fatalf("case variant field rejected: %+v %v", manifest, err)
+			}
+			if !test.accepted && err == nil {
+				t.Fatalf("case variant duplicate field accepted; decoded version %q", manifest.Version)
+			}
+		})
+	}
+}
 func TestTrustInputAcceptsPublicPEMAndRejectsPrivateKeyMaterial(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

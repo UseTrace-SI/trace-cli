@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -79,22 +80,24 @@ func parseManifest(data []byte) (Manifest, error) {
 	}
 	// Reject duplicate keys before typed decoding; the signature covers the exact
 	// original bytes, so publishers do not need a custom canonical JSON encoder.
+	// encoding/json matches field names as strings.EqualFold does, so case
+	// variants of one field are duplicates too.
 	tokens := json.NewDecoder(bytes.NewReader(data))
 	first, err := tokens.Token()
 	if err != nil || first != json.Delim('{') {
 		return result, fmt.Errorf("invalid plugin manifest")
 	}
-	seen := map[string]bool{}
+	seen := []string{}
 	for tokens.More() {
 		key, err := tokens.Token()
 		if err != nil {
 			return result, err
 		}
 		name, ok := key.(string)
-		if !ok || seen[name] {
+		if !ok || slices.ContainsFunc(seen, func(prior string) bool { return strings.EqualFold(prior, name) }) {
 			return result, fmt.Errorf("duplicate plugin manifest field")
 		}
-		seen[name] = true
+		seen = append(seen, name)
 		var value json.RawMessage
 		if err := tokens.Decode(&value); err != nil {
 			return result, err
