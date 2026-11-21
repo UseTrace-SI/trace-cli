@@ -20,7 +20,17 @@ func LoadConfigCredentials(cfg Config) (Credentials, error) {
 
 func loadConfigCredentials(cfg Config, read func(string) (Credentials, error), save func(string, Credentials) error) (Credentials, error) {
 	if cfg.Mode != "personal" {
-		return read(cfg.CredentialKey())
+		credentials, err := read(cfg.CredentialKey())
+		if err == nil {
+			return credentials, nil
+		}
+		// Older versions saved GitHub logins under the repository name alone.
+		// That entry records no server and .trace/login.json may come from the
+		// repository, so it is never sent to the configured endpoint.
+		if _, legacyErr := read(cfg.Remote); legacyErr == nil {
+			return Credentials{}, fmt.Errorf("GitHub login for %s was saved by an older Trace version without its server; run trace login again", cfg.Remote)
+		}
+		return Credentials{}, err
 	}
 	if cfg.ConnectionID == "" {
 		return Credentials{}, errors.New("dashboard connection identity missing; run trace connect again")

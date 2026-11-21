@@ -134,11 +134,25 @@ func syncTokenProvider(cfg syncclient.Config) (func(context.Context) (string, er
 	}, nil
 }
 
+// saveGitHubLogin saves a legacy Pro/Team login for one Trace server and
+// repository. Automatic Pro sync also saves the key derived from
+// TRACE_SYNC_PASSPHRASE for background use.
+func saveGitHubLogin(traceDir string, cfg syncclient.Config, credentials syncclient.Credentials) error {
+	if cfg.AutoSync && cfg.Mode == "pro" {
+		cipher, err := syncclient.LoadCipher(traceDir, os.Getenv("TRACE_SYNC_PASSPHRASE"))
+		if err != nil {
+			return err
+		}
+		credentials.ProSyncKey = cipher.KeyForCredentialStore()
+	}
+	return syncclient.SaveCredentials(cfg.CredentialKey(), credentials)
+}
+
 func configuredCipher(traceDir string, cfg syncclient.Config) (*syncclient.Cipher, error) {
 	if passphrase := os.Getenv("TRACE_SYNC_PASSPHRASE"); passphrase != "" {
 		return syncclient.LoadCipher(traceDir, passphrase)
 	}
-	credentials, err := syncclient.LoadCredentials(cfg.Remote)
+	credentials, err := syncclient.LoadConfigCredentials(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -452,14 +466,7 @@ func loginCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 		}
 		cfg.AutoSync = autoSync
-		if autoSync && mode == "pro" {
-			cipher, err := syncclient.LoadCipher(repo.TraceDir(root), os.Getenv("TRACE_SYNC_PASSPHRASE"))
-			if err != nil {
-				return err
-			}
-			credentials.ProSyncKey = cipher.KeyForCredentialStore()
-		}
-		if err := syncclient.SaveCredentials(remote, credentials); err != nil {
+		if err := saveGitHubLogin(repo.TraceDir(root), cfg, credentials); err != nil {
 			return err
 		}
 		b, err := json.Marshal(cfg)

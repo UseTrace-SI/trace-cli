@@ -72,7 +72,8 @@ func (cfg Config) Validate() error {
 }
 
 // CredentialKey keeps account-scoped connections separate from GitHub login
-// credentials and from connections to another Trace server.
+// credentials and from connections to another Trace server. A GitHub login is
+// sent as a bearer token, so it is saved for one server and repository.
 func (cfg Config) CredentialKey() string {
 	if cfg.Device {
 		return "device|" + strings.TrimRight(cfg.Endpoint, "/") + "|" + cfg.ConnectionID
@@ -80,7 +81,7 @@ func (cfg Config) CredentialKey() string {
 	if cfg.Mode == "personal" {
 		return cfg.legacyCredentialKey() + "|" + cfg.ConnectionID
 	}
-	return cfg.Remote
+	return "github|" + strings.TrimRight(cfg.Endpoint, "/") + "|" + cfg.Remote
 }
 
 func (cfg Config) legacyCredentialKey() string {
