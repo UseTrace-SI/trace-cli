@@ -523,6 +523,13 @@ func runHook(repoPath, agent, hookEvent string) {
 		_ = daemon.SendBatch(filepath.Join(root, ".trace"), events)
 		return
 	}
+	if agent == "git" && (hookEvent == string(event.GitCommit) || hookEvent == string(event.GitRewrite)) {
+		// Each event is its own frame so a long rebase stays within frame limits.
+		for _, ev := range gitHookEvents(hookEvent, b, root) {
+			_ = daemon.Send(filepath.Join(root, ".trace"), ev)
+		}
+		return
+	}
 	ev, err := parseGenericHook(agent, hookEvent, b, root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trace hook: invalid payload")

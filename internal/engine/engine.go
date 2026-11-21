@@ -15,6 +15,7 @@ import (
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
+	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
@@ -129,6 +130,8 @@ func (e *Engine) Process(ev event.Event) error {
 		return e.endSession(ev)
 	case event.GitCommit:
 		return e.gitCommit(ev)
+	case event.GitRewrite:
+		return e.gitRewrite(ev)
 	default:
 		return nil
 	}
@@ -740,13 +743,85 @@ func (e *Engine) gitCommit(ev event.Event) error {
 	if ev.GitSHA == "" {
 		return nil
 	}
+	return e.recordCommit(attribution.CommitEvent{SHA: ev.GitSHA, Previous: ev.GitPrevious, Action: ev.GitAction,
+		Sources: ev.GitSources, At: ev.At})
+}
+
+// recordCommit links a commit to the latest keyframe and stores what Trace
+// knows about it now: its patch ID, the commits it rewrote and who wrote the
+// lines it introduced. The row is immutable once written, so it is only
+// described the first time the commit is seen.
+func (e *Engine) recordCommit(commit attribution.CommitEvent) error {
+	var exists int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM commits WHERE sha=?", commit.SHA).Scan(&exists); err != nil {
+		return fmt.Errorf("checking commit: %w", err)
+	}
+	if exists > 0 {
+		return nil
+	}
 	var keyID string
 	if err := e.DB.QueryRow("SELECT id FROM keyframes ORDER BY seq DESC LIMIT 1").Scan(&keyID); err != nil {
 		return fmt.Errorf("finding latest keyframe: %w", err)
 	}
-	_, err := e.DB.Exec("INSERT OR IGNORE INTO commits(sha,keyframe_id,at) VALUES(?,?,?)", ev.GitSHA, keyID, ev.At)
+	// Attribution is best effort: a commit Git cannot describe (for example
+	// one already garbage collected) is still linked.
+	d, describeErr := attribution.DescribeCommit(e.DB, e.Blobs, e.Root, commit)
+	if describeErr != nil {
+		d = attribution.CommitDescription{}
+	}
+	_, err := e.DB.Exec("INSERT OR IGNORE INTO commits(sha,keyframe_id,at,patch_id,rewrite_kind,rewritten_from,attribution) VALUES(?,?,?,?,?,?,?)",
+		commit.SHA, keyID, commit.At, nullable(d.PatchID), nullable(d.Kind), nullable(d.RewrittenFrom), nullable(d.Attribution))
 	if err != nil {
 		return fmt.Errorf("linking commit: %w", err)
+	}
+	return nil
+}
+
+func nullable(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// gitRewrite stores the pairs Git's post-rewrite hook reports for amend and
+// rebase. A rewritten commit that no post-commit hook reported is described
+// here, with the commits it replaced as its sources.
+func (e *Engine) gitRewrite(ev event.Event) error {
+	if len(ev.GitRewrites) == 0 {
+		return nil
+	}
+	kind := attribution.KindRebase
+	if ev.GitAction == "amend" {
+		kind = attribution.KindAmend
+	}
+	tx, err := e.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning rewrite record: %w", err)
+	}
+	defer tx.Rollback()
+	sources := map[string][]string{}
+	var order []string
+	for _, rewrite := range ev.GitRewrites {
+		if rewrite.Old == rewrite.New {
+			continue
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO commit_rewrites(id,old_sha,new_sha,kind,at) VALUES(?,?,?,?,?)",
+			rewrite.Old+"-"+rewrite.New, rewrite.Old, rewrite.New, kind, ev.At); err != nil {
+			return fmt.Errorf("recording rewrite: %w", err)
+		}
+		if _, ok := sources[rewrite.New]; !ok {
+			order = append(order, rewrite.New)
+		}
+		sources[rewrite.New] = append(sources[rewrite.New], rewrite.Old)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing rewrite record: %w", err)
+	}
+	for _, sha := range order {
+		if err := e.recordCommit(attribution.CommitEvent{SHA: sha, At: ev.At, RewriteKind: kind, Rewritten: sources[sha]}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

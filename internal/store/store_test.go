@@ -107,8 +107,14 @@ func TestOpenTwice(t *testing.T) {
 		if err := db.QueryRow("SELECT count(*) FROM schema_version").Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if n != 13 {
+		if n != 14 {
 			t.Fatalf("schema versions: %d", n)
+		}
+		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('commits') WHERE name IN ('patch_id','rewrite_kind','rewritten_from','attribution')").Scan(&n); err != nil || n != 4 {
+			t.Fatalf("commit rewrite columns: %d, %v", n, err)
+		}
+		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('commit_rewrites')").Scan(&n); err != nil || n != 5 {
+			t.Fatalf("commit rewrites table: %d, %v", n, err)
 		}
 		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('ops') WHERE name='detail'").Scan(&n); err != nil || n != 1 {
 			t.Fatalf("structural detail column: %d, %v", n, err)

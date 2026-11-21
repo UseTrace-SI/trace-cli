@@ -299,5 +299,41 @@ CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
     INSERT OR IGNORE INTO schema_version(version) VALUES(14);`); err != nil {
 		return fmt.Errorf("creating companion snapshots: %w", err)
 	}
+	var n15 int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version=15").Scan(&n15); err != nil {
+		return fmt.Errorf("checking rewrite migration: %w", err)
+	}
+	if n15 == 0 {
+		// Commit rows gain what was known when the commit was observed: its
+		// patch ID, the commits it rewrote and the attribution of the lines it
+		// introduced. commit_rewrites keeps post-rewrite pairs locally.
+		if err := migrateVersion(db, 15, func(tx *sql.Tx) error {
+			for _, column := range []string{"patch_id", "rewrite_kind", "rewritten_from", "attribution"} {
+				present, err := hasColumn(tx, "commits", column)
+				if err != nil {
+					return err
+				}
+				if present {
+					continue
+				}
+				if _, err := tx.Exec("ALTER TABLE commits ADD COLUMN " + column + " TEXT"); err != nil {
+					return fmt.Errorf("adding commit %s: %w", column, err)
+				}
+			}
+			for _, statement := range []string{
+				"CREATE INDEX IF NOT EXISTS commits_patch_id ON commits(patch_id)",
+				`CREATE TABLE IF NOT EXISTS commit_rewrites (id TEXT PRIMARY KEY, old_sha TEXT NOT NULL,
+  new_sha TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL)`,
+				"CREATE INDEX IF NOT EXISTS commit_rewrites_new ON commit_rewrites(new_sha)",
+			} {
+				if _, err := tx.Exec(statement); err != nil {
+					return fmt.Errorf("creating rewrite history: %w", err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }

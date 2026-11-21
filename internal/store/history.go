@@ -12,7 +12,7 @@ var HistoryColumns = map[string][]string{
 	"turns":             {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at", "tokens_in", "tokens_out", "cost_usd"},
 	"keyframes":         {"id", "turn_id", "seq", "manifest_hash", "git_head", "tag", "created_at"},
 	"ops":               {"id", "turn_id", "session_id", "path", "kind", "start_line", "end_line", "before_hash", "after_hash", "source", "at", "detail", "actor", "parent_op_id"},
-	"commits":           {"sha", "keyframe_id", "at"},
+	"commits":           {"sha", "keyframe_id", "at", "patch_id", "rewrite_kind", "rewritten_from", "attribution"},
 	"messages":          {"id", "session_id", "turn_id", "role", "content", "at"},
 	"comments":          {"id", "file", "line", "body", "turn_id", "session_id", "at"},
 	"trails":            {"id", "title", "kind", "base_step", "head_step", "created_at"},
