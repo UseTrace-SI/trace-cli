@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,9 +46,9 @@ func TestChainPostCommit(t *testing.T) {
 	if strings.Contains(string(installed), "| trace hook") {
 		t.Fatalf("post-commit hook kept a PATH-dependent command: %s", installed)
 	}
-	// The preserved hook runs before Trace; exercise it directly so the test
-	// binary is not invoked as the Trace executable.
-	cmd := exec.Command("sh", p+".pre-trace")
+	// Shell hooks keep their name and gain the block after the shebang. The
+	// block runs this test binary as the Trace executable (see TestMain).
+	cmd := exec.Command("sh", p)
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("running original hook: %s: %v", out, err)
@@ -104,5 +105,149 @@ func TestInstallHookMigratesBareCommand(t *testing.T) {
 	}
 	if strings.Count(string(migrated), begin) != 1 {
 		t.Fatalf("migration duplicated the block: %s", migrated)
+	}
+}
+
+func hookGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %s: %v", args, out, err)
+	}
+	return string(out)
+}
+
+func writeHookFiles(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for name, body := range files {
+		p := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Hook managers such as overcommit choose what to run from "$0". Renaming the
+// user's hook to post-commit.pre-trace made them look up the wrong hook.
+func TestInstallHookKeepsShellHookName(t *testing.T) {
+	for _, shebang := range []string{"#!/bin/sh", "#!/usr/bin/env bash", "#!/bin/sh -e"} {
+		t.Run(shebang, func(t *testing.T) {
+			root := t.TempDir()
+			hookGit(t, root, "init", "-q")
+			if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(t.TempDir(), "hook-name")
+			p, err := GitPath(root, "hooks/post-commit")
+			if err != nil {
+				t.Fatal(err)
+			}
+			original := shebang + "\nbasename \"$0\" > '" + marker + "'\n"
+			writeHookFiles(t, filepath.Dir(p), map[string]string{"post-commit": original})
+			if err := InstallHook(root); err != nil {
+				t.Fatal(err)
+			}
+			hookGit(t, root, "commit", "-q", "--allow-empty", "-m", "first")
+			if b, err := os.ReadFile(marker); err != nil || strings.TrimSpace(string(b)) != "post-commit" {
+				t.Fatalf("user hook saw its name as %q (%v); want post-commit", b, err)
+			}
+			if _, err := os.Stat(p + ".pre-trace"); !os.IsNotExist(err) {
+				t.Fatalf("shell hook was renamed: %v", err)
+			}
+			if err := UninstallHook(root); err != nil {
+				t.Fatal(err)
+			}
+			if b, err := os.ReadFile(p); err != nil || string(b) != original {
+				t.Fatalf("uninstall changed the user hook: %q, %v", b, err)
+			}
+		})
+	}
+}
+
+// A core.hooksPath inside the worktree holds tracked team hooks or files a
+// hook manager generates (husky). Trace must not edit or rename them.
+func TestInstallHookLeavesWorktreeHooksPathUnchanged(t *testing.T) {
+	for _, tc := range []struct {
+		name, hooksPath string
+		files           map[string]string
+		track           []string
+	}{
+		{"tracked hooks directory", ".githooks", map[string]string{".githooks/post-commit": "#!/bin/sh\necho team hook\n"}, []string{".githooks/post-commit"}},
+		{"husky", ".husky/_", map[string]string{
+			".husky/_/h":           "#!/usr/bin/env sh\nn=$(basename \"$0\")\ns=$(dirname \"$(dirname \"$0\")\")/$n\n[ ! -f \"$s\" ] && exit 0\nsh -e \"$s\" \"$@\"\n",
+			".husky/_/post-commit": "#!/usr/bin/env sh\n. \"$(dirname \"$0\")/h\"\n",
+			".husky/_/.gitignore":  "*\n",
+			".husky/post-commit":   "printf ran > ran-marker\n",
+		}, []string{".husky/post-commit"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			hookGit(t, root, "init", "-q")
+			writeHookFiles(t, root, tc.files)
+			writeHookFiles(t, root, map[string]string{".gitignore": ".trace/\nran-marker\n"})
+			hookGit(t, root, append([]string{"add", ".gitignore"}, tc.track...)...)
+			hookGit(t, root, "commit", "-q", "-m", "hooks")
+			hookGit(t, root, "config", "core.hooksPath", tc.hooksPath)
+			if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			err := InstallHook(root)
+			var manual *ManualHookError
+			if !errors.As(err, &manual) || !strings.Contains(manual.Block, begin) {
+				t.Fatalf("InstallHook = %v; want a manual setup notice", err)
+			}
+			for name, body := range tc.files {
+				if b, err := os.ReadFile(filepath.Join(root, name)); err != nil || string(b) != body {
+					t.Errorf("%s changed: %q, %v", name, b, err)
+				}
+			}
+			if status := hookGit(t, root, "status", "--porcelain", "--ignored"); strings.Contains(status, "pre-trace") || strings.Contains(status, " M ") {
+				t.Fatalf("hook files changed:\n%s", status)
+			}
+			if tc.name == "husky" {
+				hookGit(t, root, "commit", "-q", "--allow-empty", "-m", "second")
+				if _, err := os.Stat(filepath.Join(root, "ran-marker")); err != nil {
+					t.Fatal("husky no longer runs the user's post-commit hook")
+				}
+			}
+			if err := UninstallHook(root); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestInstallHookChainsNonShellHook(t *testing.T) {
+	root := t.TempDir()
+	hookGit(t, root, "init", "-q")
+	if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := GitPath(root, "hooks/post-commit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := "#!/usr/bin/env python3\nprint('hook')\n"
+	writeHookFiles(t, filepath.Dir(p), map[string]string{"post-commit": original})
+	if err := InstallHook(root); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(p + ".pre-trace"); err != nil || string(b) != original {
+		t.Fatalf("non-shell hook was not preserved for chaining: %q, %v", b, err)
+	}
+	installed, err := os.ReadFile(p)
+	if err != nil || !strings.Contains(string(installed), postCommitHook.chain) || !strings.Contains(string(installed), begin) {
+		t.Fatalf("chained hook = %q, %v", installed, err)
+	}
+	if err := UninstallHook(root); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(p); err != nil || string(b) != original {
+		t.Fatalf("uninstall did not restore the original: %q, %v", b, err)
 	}
 }

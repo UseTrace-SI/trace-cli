@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -254,7 +255,8 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := installMCP(root); err != nil {
 			return err
 		}
-		if err := gitx.InstallHook(root); err != nil {
+		var manualHook *gitx.ManualHookError
+		if err := gitx.InstallHook(root); err != nil && !errors.As(err, &manualHook) {
 			return err
 		}
 		if err := daemon.EnsureRunning(root); err != nil {
@@ -271,7 +273,15 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			} else if agent == "qwen" {
 				result["additional_setup"] = qwenEnableNotice
 			}
+			if manualHook != nil {
+				result["git_hook_setup"] = map[string]string{"path": manualHook.Path, "block": manualHook.Block}
+			}
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
+		}
+		if manualHook != nil {
+			if _, err := fmt.Fprintf(c.OutOrStdout(), "Git runs hooks from %s inside this repository, so Trace left them unchanged.\nTo link commits to steps, add these lines to %s:\n%s", filepath.Dir(manualHook.Path), manualHook.Path, manualHook.Block); err != nil {
+				return err
+			}
 		}
 		if agent == "gemini" {
 			_, err = fmt.Fprintf(c.OutOrStdout(), "Trace initialized. Gemini hooks installed. %s\n", geminiEnableNotice)
