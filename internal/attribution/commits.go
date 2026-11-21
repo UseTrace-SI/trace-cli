@@ -28,6 +28,10 @@ const (
 	maxRecordPaths  = 200
 	maxResolveDepth = 24
 	maxCandidates   = 8
+	// maxCandidateReads bounds the files read for inferred matches during
+	// one command or commit description.
+	maxCandidateReads = 32
+	maxAncestors      = 4000
 )
 
 // Rewrite kinds stored in commit rows and reported in rewrite chains.
@@ -95,11 +99,15 @@ type resolver struct {
 	contents map[string]fileContent
 	blames   map[string]blameLines
 	cands    map[string][]string
+	// reads counts candidate files read for inferred matches.
+	reads     int
+	ancestors map[string]map[string]bool
 }
 
 func newResolver(db Querier, blobs *blob.Store, root string, all bool) *resolver {
 	return &resolver{w: newWalker(db, blobs), root: root, all: all, infos: map[string]*commitInfo{},
-		contents: map[string]fileContent{}, blames: map[string]blameLines{}, cands: map[string][]string{}}
+		contents: map[string]fileContent{}, blames: map[string]blameLines{}, cands: map[string][]string{},
+		ancestors: map[string]map[string]bool{}}
 }
 
 func (r *resolver) content(sha, path string) (string, bool) {
@@ -337,6 +345,17 @@ func (r *resolver) computeLines(info *commitInfo, path string, lines []int, dept
 		}
 		return out, nil
 	}
+	base, err := r.w.baseline()
+	if err != nil {
+		return nil, err
+	}
+	if base.exists && info.at > 0 && info.at < base.at {
+		// Committed before Trace started recording this repository.
+		for k := range out {
+			out[k] = verdict{kind: "baseline", message: messageBaseline, confidence: Exact, origin: info.sha}
+		}
+		return out, nil
+	}
 	pending := make([]int, len(lines))
 	for k := range pending {
 		pending[k] = k
@@ -359,22 +378,9 @@ func (r *resolver) computeLines(info *commitInfo, path string, lines []int, dept
 		for i, k := range pending {
 			at[i] = lines[k]
 		}
-		var verdicts []verdict
-		base, err := r.w.baseline()
+		verdicts, err := r.w.walk(path, content, at, info.at, r.all)
 		if err != nil {
 			return nil, err
-		}
-		if base.exists && info.at > 0 && info.at < base.at {
-			// Committed before Trace started recording this repository.
-			verdicts = make([]verdict, len(at))
-			for i := range verdicts {
-				verdicts[i] = verdict{kind: "baseline", message: messageBaseline, confidence: Exact}
-			}
-		} else {
-			verdicts, err = r.w.walk(path, content, at, info.at, r.all)
-			if err != nil {
-				return nil, err
-			}
 		}
 		var weak []int
 		for i, k := range pending {
@@ -412,6 +418,12 @@ func (r *resolver) computeLines(info *commitInfo, path string, lines []int, dept
 // returned. Inferred transfers accept only distinctive exact matches and only
 // replace answers the recorded edits could not settle.
 func (r *resolver) transfer(sha, path, content string, lines, pending []int, out []verdict, src source, depth int, inferred bool) ([]int, error) {
+	if inferred {
+		if r.reads >= maxCandidateReads {
+			return pending, nil
+		}
+		r.reads++
+	}
 	srcContent, ok := r.content(src.sha, path)
 	if !ok {
 		return pending, nil
@@ -576,10 +588,15 @@ func (r *resolver) candidates(info *commitInfo, path string) ([]string, error) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, err
 	}
+	ancestors, ok := r.ancestors[info.sha]
+	if !ok {
+		ancestors, _ = gitx.Ancestors(r.root, info.sha, maxAncestors)
+		r.ancestors[info.sha] = ancestors
+	}
 	var out []string
 	for _, x := range found {
 		record := decodeRecord(x.record)
-		if record == nil || len(record.Files[path]) == 0 || gitx.IsAncestor(r.root, x.sha, info.sha) {
+		if record == nil || len(record.Files[path]) == 0 || ancestors == nil || ancestors[x.sha] {
 			continue
 		}
 		out = append(out, x.sha)

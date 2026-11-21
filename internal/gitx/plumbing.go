@@ -193,6 +193,22 @@ func IsAncestor(root, a, b string) bool {
 	return gitCommand(root, "merge-base", "--is-ancestor", a, b).Run() == nil
 }
 
+// Ancestors returns up to limit commits reachable from sha, sha included.
+func Ancestors(root, sha string, limit int) (map[string]bool, error) {
+	if !ValidSHA(sha) {
+		return nil, errors.New("invalid commit")
+	}
+	b, _, err := boundedOutput(gitCommand(root, "rev-list", "--max-count="+strconv.Itoa(limit), sha), int64(limit)*66)
+	if err != nil {
+		return nil, fmt.Errorf("listing ancestors: %w", err)
+	}
+	out := map[string]bool{}
+	for _, line := range strings.Fields(string(b)) {
+		out[line] = true
+	}
+	return out, nil
+}
+
 // CommitExists reports whether sha names a commit in the repository.
 func CommitExists(root, sha string) bool {
 	if !ValidSHA(sha) {
