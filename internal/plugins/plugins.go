@@ -396,6 +396,39 @@ func (manager Manager) verify(receipt Receipt) (string, error) {
 	return filepath.Join(path, "plugin"), nil
 }
 
+// checkRetainedVersion rejects a release whose version is still retained (active,
+// previous, removed or not yet pruned) with different signed manifest bytes. The
+// manifest commits to the executable digest; the signing key may differ.
+func checkRetainedVersion(parent string, receipt Receipt) error {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		// Versions contain no "-", so this prefix selects exactly one version.
+		if !strings.HasPrefix(entry.Name(), receipt.Manifest.Version+"-") {
+			continue
+		}
+		path := filepath.Join(parent, entry.Name())
+		if err := privateDirectory(path, false); err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		root, err := os.OpenRoot(path)
+		if err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		raw, err := regular(root, "manifest.json", 8192)
+		root.Close()
+		if err != nil {
+			return fmt.Errorf("checking retained plugin release %s: %w", entry.Name(), err)
+		}
+		if digest(raw) != receipt.ManifestSHA256 {
+			return fmt.Errorf("retained plugin version %s cannot be replaced with different signed bytes", receipt.Manifest.Version)
+		}
+	}
+	return nil
+}
+
 func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, error) {
 	var receipt Receipt
 	unlock, err := manager.lock()
@@ -487,6 +520,9 @@ func (manager Manager) Install(bundle string, allowDowngrade bool) (Receipt, err
 		return receipt, fmt.Errorf("insufficient free space for a safe plugin install")
 	}
 	if err := privateDirectory(parent, true); err != nil {
+		return receipt, err
+	}
+	if err := checkRetainedVersion(parent, receipt); err != nil {
 		return receipt, err
 	}
 	destination := releasePath(manager.Root, receipt)

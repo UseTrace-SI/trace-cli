@@ -152,6 +152,71 @@ func TestReinstallingTheActiveVersionKeepsThePreviousRelease(t *testing.T) {
 		})
 	}
 }
+func TestRetainedVersionsCannotBeRepublishedWithDifferentBytes(t *testing.T) {
+	original := func(version string) string { return "#!/bin/sh\necho " + version + "\n" }
+	for _, test := range []struct {
+		name     string
+		setup    []string // versions installed with their original bytes, or remove, prune, rotate
+		version  string   // version installed last
+		differs  string   // "executable" or "manifest" bytes differ from the original; "" is identical
+		accepted bool
+	}{
+		{name: "different executable after removal", setup: []string{"1.0.0", "remove"}, version: "1.0.0", differs: "executable"},
+		{name: "different executable on downgrade", setup: []string{"1.0.0", "2.0.0"}, version: "1.0.0", differs: "executable"},
+		{name: "different executable on update", setup: []string{"1.0.0", "2.0.0", "1.0.0"}, version: "2.0.0", differs: "executable"},
+		{name: "different manifest under a replacement key", setup: []string{"1.0.0", "2.0.0", "rotate"}, version: "1.0.0", differs: "manifest"},
+		{name: "identical bytes after removal", setup: []string{"1.0.0", "remove"}, version: "1.0.0", accepted: true},
+		{name: "identical bytes under a replacement key", setup: []string{"1.0.0", "2.0.0", "rotate"}, version: "1.0.0", accepted: true},
+		{name: "different executable after pruning", setup: []string{"1.0.0", "remove", "prune"}, version: "1.0.0", differs: "executable", accepted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager, _, key := testManager(t)
+			for _, operation := range test.setup {
+				var err error
+				switch operation {
+				case "remove":
+					err = manager.Remove("example")
+				case "prune":
+					_, err = manager.Prune("example")
+				case "rotate":
+					var public ed25519.PublicKey
+					if public, key, err = ed25519.GenerateKey(rand.Reader); err == nil {
+						_, err = manager.Trust("publisher", public, true)
+					}
+				default:
+					_, err = manager.Install(signedBundle(t, key, "publisher", operation, original(operation)), true)
+				}
+				if err != nil {
+					t.Fatal(operation, err)
+				}
+			}
+			body := original(test.version)
+			if test.differs == "executable" {
+				body += "echo changed\n"
+			}
+			bundle := signedBundle(t, key, "publisher", test.version, body)
+			if test.differs == "manifest" {
+				raw, err := os.ReadFile(filepath.Join(bundle, "manifest.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw = append(raw, '\n') // same fields and executable, different signed bytes
+				for name, data := range map[string][]byte{"manifest.json": raw, "manifest.sig": []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(key, raw)))} {
+					if err := os.WriteFile(filepath.Join(bundle, name), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			_, err := manager.Install(bundle, true)
+			if test.accepted && err != nil {
+				t.Fatal(err)
+			}
+			if !test.accepted && (err == nil || !strings.Contains(err.Error(), "different signed bytes")) {
+				t.Fatalf("version %s republished with different %s bytes: %v", test.version, test.differs, err)
+			}
+		})
+	}
+}
 func TestTamperingWrongPublishersAndKeyRevocationFailClosed(t *testing.T) {
 	manager, _, key := testManager(t)
 	bundle := signedBundle(t, key, "publisher", "1.0.0", "#!/bin/sh\necho verified\n")
