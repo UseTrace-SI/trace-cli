@@ -196,8 +196,9 @@ func (w *walker) walk(file, text string, lines []int, cutoff int64, all bool) ([
 	out := make([]verdict, len(lines))
 	state := make([]*pending, len(lines))
 	open := 0
+	count := len(splitLines(text))
 	for k, line := range lines {
-		if line < 1 {
+		if line < 1 || line > count {
 			out[k] = verdict{kind: "unknown", message: messageUnmatched, confidence: Uncertain}
 			continue
 		}

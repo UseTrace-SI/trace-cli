@@ -424,6 +424,10 @@ func (r *resolver) transfer(sha, path, content string, lines, pending []int, out
 	var mapped, at []int
 	var rest []int
 	for _, k := range pending {
+		if lines[k] < 1 || lines[k] > len(matches) {
+			rest = append(rest, k)
+			continue
+		}
 		m := matches[lines[k]-1]
 		if m.Line <= 0 || (inferred && (m.Normalized || !accepted[lines[k]-1])) {
 			rest = append(rest, k)

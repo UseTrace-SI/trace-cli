@@ -132,3 +132,14 @@ func TestWalkAttribution(t *testing.T) {
 		})
 	}
 }
+
+func TestWalkRejectsLinesOutsideText(t *testing.T) {
+	db, bs := historyFixture(t, nil, []recordedOp{{"t1", "a\n", "a\nb\n", 1}})
+	verdicts, err := newWalker(db, bs).walk("f.go", "a\nb\n", []int{0, 3, 2}, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdicts[0].kind != "unknown" || verdicts[1].kind != "unknown" || verdicts[2].kind != "turn" {
+		t.Fatalf("verdicts = %+v", verdicts)
+	}
+}
