@@ -175,7 +175,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		return report, fmt.Errorf("source history failed integrity validation")
 	}
 	available := map[string][]string{}
-	for _, table := range store.HistoryTables {
+	for _, table := range store.ImportTables() {
 		rows, err := read.QueryContext(ctx, "PRAGMA table_info("+table+")")
 		if err != nil {
 			return report, err
@@ -214,7 +214,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		return report, err
 	}
 	remap := stepRemap{tx: write, steps: map[string]map[int64]int64{}, shifted: map[string]bool{}}
-	for _, table := range store.HistoryTables {
+	for _, table := range store.ImportTables() {
 		if len(available[table]) == 0 {
 			continue
 		}

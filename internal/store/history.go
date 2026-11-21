@@ -7,6 +7,16 @@ const HistorySchemaVersion = 1
 
 var HistoryTables = []string{"sessions", "turns", "keyframes", "ops", "commits", "messages", "comments", "trails", "sync_updates", "context_snapshots"}
 
+// LocalHistoryTables travel with exported bundles and database imports but
+// are not uploaded by sync, whose server accepts only HistoryTables.
+var LocalHistoryTables = []string{"commit_rewrites"}
+
+// ImportTables lists every table a bundle or database import merges, in
+// dependency order.
+func ImportTables() []string {
+	return append(append([]string(nil), HistoryTables...), LocalHistoryTables...)
+}
+
 var HistoryColumns = map[string][]string{
 	"sessions":          {"id", "agent", "agent_sid", "worktree", "started_at", "ended_at", "forked_from"},
 	"turns":             {"id", "session_id", "seq", "prompt", "reasoning", "tool_calls", "files_read", "started_at", "ended_at", "tokens_in", "tokens_out", "cost_usd"},
@@ -18,4 +28,5 @@ var HistoryColumns = map[string][]string{
 	"trails":            {"id", "title", "kind", "base_step", "head_step", "created_at"},
 	"sync_updates":      {"id", "table_name", "row_id", "data"},
 	"context_snapshots": {"id", "source_step", "created_at", "payload", "fingerprint"},
+	"commit_rewrites":   {"id", "old_sha", "new_sha", "kind", "at"},
 }
