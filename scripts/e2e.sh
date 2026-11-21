@@ -50,6 +50,7 @@ export TRACE_HOME
 hermes_profile=$(mktemp -d)
 work_fork=$(mktemp -d)
 fork_target="${work_fork}-fork-1-e2e"
+work_rewrite=$(mktemp -d)
 # On failure, print each daemon's state and recent log before it is stopped, so
 # an intermittent CI failure can be attributed to a stalled or exited daemon
 # rather than to the event pipeline.
@@ -67,7 +68,7 @@ diagnose() {
 cleanup() {
   exit_status=$?
   [ "$exit_status" -eq 0 ] || echo "e2e failed with exit $exit_status; daemon diagnostics follow" >&2
-  for dir in "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$work_fork" "$fork_target"; do
+  for dir in "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$work_fork" "$fork_target" "$work_rewrite"; do
     pid=$(cat "$dir/.trace/daemon.pid" 2>/dev/null || true)
     if [ "$exit_status" -ne 0 ] && [ -f "$dir/.trace/daemon.log" ]; then
       diagnose "$dir" "$pid"
@@ -86,7 +87,7 @@ cleanup() {
     sleep 0.05
   done
   attempts=0
-  until rm -rf "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$cline_config" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$hermes_profile" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$mock_agents" "$work_fork" "$fork_target" 2>/dev/null; do
+  until rm -rf "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$cline_config" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$hermes_profile" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$mock_agents" "$work_fork" "$fork_target" "$work_rewrite" 2>/dev/null; do
     attempts=$((attempts+1))
     [ "$attempts" -lt 20 ] || return 1
     sleep 0.05
@@ -1018,4 +1019,30 @@ while :; do
   n=$((n+1)); [ "$n" -lt 100 ] || { echo 'Kiro global turn was not recorded' >&2; exit 1; }
   sleep 0.05
 done
+# Attribution survives an amend: the real hooks reach the daemon, which links
+# the rewritten commit to the agent's step.
+rewrite_git() { git -C "$work_rewrite" -c user.name=e2e -c user.email=e2e@example.invalid -c commit.gpgsign=false "$@"; }
+rewrite_git init -q
+printf 'base\n' > "$work_rewrite/app.txt"
+rewrite_git add app.txt
+rewrite_git commit -q -m base
+"$binary" --repo "$work_rewrite" init --agent claude-code >/dev/null
+printf '{"session_id":"rewrite-e2e","hook_event_name":"SessionStart"}\n' | "$binary" --repo "$work_rewrite" hook claude-code SessionStart
+printf '{"session_id":"rewrite-e2e","hook_event_name":"UserPromptSubmit","prompt":"add the agent line"}\n' | "$binary" --repo "$work_rewrite" hook claude-code UserPromptSubmit
+printf 'base\nagent line\n' > "$work_rewrite/app.txt"
+printf '{"session_id":"rewrite-e2e","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s/app.txt"}}\n' "$work_rewrite" | "$binary" --repo "$work_rewrite" hook claude-code PostToolUse
+printf '{"session_id":"rewrite-e2e","hook_event_name":"Stop"}\n' | "$binary" --repo "$work_rewrite" hook claude-code Stop
+n=0
+until "$binary" --repo "$work_rewrite" --json show 1 2>/dev/null | python3 -c 'import json,sys; sys.exit(json.load(sys.stdin)["prompt"] != "add the agent line")' 2>/dev/null; do
+  n=$((n+1)); [ "$n" -lt 100 ] || { echo 'rewrite turn not recorded' >&2; exit 1; }
+  sleep 0.05
+done
+rewrite_git commit -q -a -m agent
+rewrite_git commit -q --amend -m 'agent, reworded'
+n=0
+until "$binary" --repo "$work_rewrite" --json why app.txt:2 2>/dev/null | python3 -c 'import json,sys; s=json.load(sys.stdin)[0]; sys.exit(not (s["agent"] == "claude-code" and s["confidence"] == "exact" and [r["kind"] for r in s.get("rewrite_chain", [])] == ["amend"]))' 2>/dev/null; do
+  n=$((n+1)); [ "$n" -lt 100 ] || { echo 'amended commit lost its attribution' >&2; "$binary" --repo "$work_rewrite" --json why app.txt:2 >&2; exit 1; }
+  sleep 0.05
+done
+"$binary" --repo "$work_rewrite" --json blame app.txt | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["summary"] == {"baseline": 1, "claude-code": 1}, s'
 echo 'e2e passed'
