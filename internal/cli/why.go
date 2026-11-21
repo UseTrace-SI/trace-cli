@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,16 +17,29 @@ import (
 )
 
 type whyResult struct {
-	Step         int64        `json:"step,omitempty"`
-	Agent        string       `json:"agent"`
-	Time         int64        `json:"time"`
-	Prompt       string       `json:"prompt,omitempty"`
-	Reasoning    string       `json:"reasoning,omitempty"`
-	Commit       string       `json:"commit,omitempty"`
-	Symbol       string       `json:"symbol,omitempty"`
-	Message      string       `json:"message,omitempty"`
-	Messages     []whyMessage `json:"messages,omitempty"`
-	MoreMessages bool         `json:"more_messages,omitempty"`
+	Step      int64  `json:"step,omitempty"`
+	Agent     string `json:"agent"`
+	Time      int64  `json:"time"`
+	Prompt    string `json:"prompt,omitempty"`
+	Reasoning string `json:"reasoning,omitempty"`
+	// Commit is the commit that currently contains the line; OriginCommit
+	// is where it was first committed when Git rewrites moved it since.
+	Commit       string `json:"commit,omitempty"`
+	OriginCommit string `json:"origin_commit,omitempty"`
+	Symbol       string `json:"symbol,omitempty"`
+	Message      string `json:"message,omitempty"`
+	// Confidence is exact, normalized (matched ignoring formatting),
+	// inferred (matched by content to another commit) or uncertain.
+	Confidence   string                `json:"confidence"`
+	RewriteChain []attribution.Rewrite `json:"rewrite_chain,omitempty"`
+	Messages     []whyMessage          `json:"messages,omitempty"`
+	MoreMessages bool                  `json:"more_messages,omitempty"`
+}
+
+func newWhyResult(origin attribution.Origin) whyResult {
+	return whyResult{Step: origin.Step, Agent: origin.Agent, Time: origin.Time, Prompt: origin.Prompt,
+		Reasoning: origin.Reasoning, Commit: origin.Commit, OriginCommit: origin.OriginCommit, Symbol: origin.Symbol,
+		Message: origin.Message, Confidence: string(origin.Confidence), RewriteChain: origin.Rewrites}
 }
 
 type whyMessage struct {
@@ -66,14 +80,13 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
-		origins, err := attribution.Explain(e.DB, e.Blobs, file, string(current), line, all)
+		origins, err := attribution.ExplainCommitted(e.DB, e.Blobs, root, file, string(current), line, all)
 		if err != nil {
 			return err
 		}
 		results := make([]whyResult, 0, len(origins))
 		for _, origin := range origins {
-			results = append(results, whyResult{Step: origin.Step, Agent: origin.Agent, Time: origin.Time, Prompt: origin.Prompt,
-				Reasoning: origin.Reasoning, Commit: origin.Commit, Symbol: origin.Symbol, Message: origin.Message})
+			results = append(results, newWhyResult(origin))
 		}
 		if messages {
 			for i := range results {
@@ -95,6 +108,9 @@ func whyCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				if _, err := fmt.Fprintf(c.OutOrStdout(), "Symbol: %s\n", r.Symbol); err != nil {
 					return err
 				}
+			}
+			if err := printProvenance(c.OutOrStdout(), r); err != nil {
+				return err
 			}
 			if r.Step > 0 {
 				if _, err := fmt.Fprintf(c.OutOrStdout(), "Step %d: %s — %s\n", r.Step, r.Agent, r.Prompt); err != nil {
@@ -145,4 +161,35 @@ func whyMessages(e *engine.Engine, step int64) ([]whyMessage, bool, error) {
 		return messages[:20], true, nil
 	}
 	return messages, false, nil
+}
+
+// printProvenance reports where a committed line has been since it was
+// written: its commit, the rewrites that carried it there and how closely it
+// matched.
+func printProvenance(out io.Writer, r whyResult) error {
+	if r.Commit != "" {
+		line := "Commit: " + shortSHA(r.Commit)
+		if len(r.RewriteChain) > 0 {
+			chain := shortSHA(r.RewriteChain[0].From)
+			for _, rewrite := range r.RewriteChain {
+				chain += " -> " + shortSHA(rewrite.To) + " (" + rewrite.Kind + ")"
+			}
+			line += ", rewritten " + chain
+		}
+		if _, err := fmt.Fprintln(out, line); err != nil {
+			return err
+		}
+	}
+	if r.Confidence != "" && r.Confidence != string(attribution.Exact) && r.Confidence != string(attribution.Uncertain) {
+		_, err := fmt.Fprintf(out, "Confidence: %s\n", r.Confidence)
+		return err
+	}
+	return nil
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }

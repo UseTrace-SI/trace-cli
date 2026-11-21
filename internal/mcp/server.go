@@ -58,10 +58,12 @@ type WhyInput struct {
 	Line int    `json:"line"`
 }
 type WhyOutput struct {
-	Step    int64  `json:"step,omitempty"`
-	Agent   string `json:"agent"`
-	Prompt  string `json:"prompt,omitempty"`
-	Message string `json:"message,omitempty"`
+	Step       int64  `json:"step,omitempty"`
+	Agent      string `json:"agent"`
+	Prompt     string `json:"prompt,omitempty"`
+	Message    string `json:"message,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Confidence string `json:"confidence,omitempty"`
 }
 type SearchInput struct {
 	Query      string `json:"query,omitempty"`
@@ -172,7 +174,8 @@ func New(e *engine.Engine) *mcp.Server {
 			return nil, WhyOutput{}, err
 		}
 		origin := origins[0]
-		return nil, WhyOutput{Step: origin.Step, Agent: origin.Agent, Prompt: origin.Prompt, Message: origin.Message}, nil
+		return nil, WhyOutput{Step: origin.Step, Agent: origin.Agent, Prompt: origin.Prompt, Message: origin.Message,
+			Commit: origin.Commit, Confidence: string(origin.Confidence)}, nil
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "search_history", Description: "Search turn text, messages, and edited paths"}, func(_ context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 		hits, err := historysearch.Search(e.DB.DB, historysearch.Options{

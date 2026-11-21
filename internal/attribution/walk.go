@@ -79,6 +79,7 @@ type walker struct {
 	texts   map[string]cachedText
 	changes map[string][]change
 	base    *baselineState
+	turns   map[string]turnDetails
 }
 
 type baselineState struct {

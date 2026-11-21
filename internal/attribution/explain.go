@@ -85,7 +85,7 @@ func ExplainFile(db Querier, blobs *blob.Store, root, file string, line int, all
 	if line > len(strings.Split(strings.TrimSuffix(current, "\n"), "\n")) {
 		return nil, errors.New("line is outside the file")
 	}
-	return Explain(db, blobs, file, current, line, all)
+	return ExplainCommitted(db, blobs, root, file, current, line, all)
 }
 
 // Explain maps a line of current, the working text of file, back through the
@@ -99,6 +99,17 @@ func Explain(db Querier, blobs *blob.Store, file, current string, line int, all 
 		return nil, err
 	}
 	return w.origins(verdicts[0], all)
+}
+
+// ExplainCommitted explains a line of the working copy of file in a Git
+// repository, following committed lines through `git blame` and recorded
+// rewrites (see ExplainLines).
+func ExplainCommitted(db Querier, blobs *blob.Store, root, file, current string, line int, all bool) ([]Origin, error) {
+	origins, err := ExplainLines(db, blobs, root, file, current, []int{line}, all)
+	if err != nil {
+		return nil, err
+	}
+	return origins[0], nil
 }
 
 // origins expands a verdict, and with all its formatting-only edits, into
@@ -136,10 +147,9 @@ func (w *walker) origin(v verdict) (Origin, error) {
 		o.Agent = "unknown"
 		o.Confidence = Uncertain
 	case "turn":
-		var commit string
-		err := w.db.QueryRow(`SELECT COALESCE(k.seq,0),s.agent,COALESCE(t.prompt,''),COALESCE(t.reasoning,''),COALESCE(c.sha,'')
-			FROM turns t JOIN sessions s ON s.id=t.session_id LEFT JOIN keyframes k ON k.turn_id=t.id
-			LEFT JOIN commits c ON c.keyframe_id=k.id WHERE t.id=?`, v.turnID).Scan(&o.Step, &o.Agent, &o.Prompt, &o.Reasoning, &commit)
+		t, err := w.turn(v.turnID)
+		o.Step, o.Agent, o.Prompt, o.Reasoning = t.step, t.agent, t.prompt, t.reasoning
+		commit := t.commit
 		if err == sql.ErrNoRows {
 			o.Agent = v.agent
 			if o.Agent == "" {
@@ -178,4 +188,25 @@ func textLimited(bs *blob.Store, h blob.Hash) (string, bool, error) {
 		return textutil.TruncateBytes(string(b), MaxTextBytes), true, nil
 	}
 	return string(b), false, nil
+}
+
+type turnDetails struct {
+	step                             int64
+	agent, prompt, reasoning, commit string
+	err                              error
+}
+
+func (w *walker) turn(id string) (turnDetails, error) {
+	if w.turns == nil {
+		w.turns = map[string]turnDetails{}
+	}
+	if t, ok := w.turns[id]; ok {
+		return t, t.err
+	}
+	var t turnDetails
+	t.err = w.db.QueryRow(`SELECT COALESCE(k.seq,0),s.agent,COALESCE(t.prompt,''),COALESCE(t.reasoning,''),COALESCE(c.sha,'')
+		FROM turns t JOIN sessions s ON s.id=t.session_id LEFT JOIN keyframes k ON k.turn_id=t.id
+		LEFT JOIN commits c ON c.keyframe_id=k.id WHERE t.id=?`, id).Scan(&t.step, &t.agent, &t.prompt, &t.reasoning, &t.commit)
+	w.turns[id] = t
+	return t, t.err
 }
