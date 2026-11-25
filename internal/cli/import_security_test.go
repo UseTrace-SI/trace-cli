@@ -546,3 +546,81 @@ func TestBundleLeavesOutSinceExcludedHistory(t *testing.T) {
 		t.Fatalf("database import of history listing .npmrc failed: %v", err)
 	}
 }
+
+// Exports leave since-excluded content out, so a history and its own export
+// differ only there. Re-importing either way must report duplicates and keep
+// the local rows, not a conflict.
+func TestReimportingStrippedHistoryKeepsLocalRows(t *testing.T) {
+	a, secret := sinceExcludedHistory(t)
+	stripped := filepath.Join(t.TempDir(), "stripped.tar.gz")
+	if _, err := exportBundle(a, stripped, bundleOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := readBundleReport(context.Background(), a, stripped)
+	if err != nil {
+		t.Fatalf("re-importing A's own export into A: %v", err)
+	}
+	if report.Imported != 0 || report.Skipped == 0 {
+		t.Fatalf("self re-import report %+v; want only duplicates", report)
+	}
+	e, err := engine.Open(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := e.ManifestAt(1)
+	var after sql.NullString
+	if err == nil {
+		err = e.DB.QueryRow("SELECT after_hash FROM ops WHERE id='o-npmrc'").Scan(&after)
+	}
+	e.Close()
+	if err != nil || m[".npmrc"].Hash != secret || after.String != string(secret) {
+		t.Fatalf("self re-import changed local rows: %v %v %v", m, after, err)
+	}
+
+	// A -> B -> A through handoff bundles.
+	b := competitiveRepo(t)
+	if err := readBundle(b, stripped); err != nil {
+		t.Fatal(err)
+	}
+	back := filepath.Join(t.TempDir(), "back.tar.gz")
+	jsonOutput := false
+	handoff := handoffCommand(&b, &jsonOutput)
+	handoff.SetArgs([]string{"--out", back})
+	handoff.SetOut(io.Discard)
+	if err := handoff.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readBundleReport(context.Background(), a, back); err != nil {
+		t.Fatalf("importing B's handoff back into A: %v", err)
+	}
+
+	// The reverse: A's opt-in export, which keeps .npmrc, into B's stripped
+	// copy.
+	full := filepath.Join(t.TempDir(), "full.tar.gz")
+	if _, err := exportBundle(a, full, bundleOptions{IncludeExcludedHistory: true}); err != nil {
+		t.Fatal(err)
+	}
+	report, err = readBundleReport(context.Background(), b, full)
+	if err != nil {
+		t.Fatalf("importing an unstripped export into a stripped copy: %v", err)
+	}
+	if report.Imported != 0 {
+		t.Fatalf("reverse import added rows: %+v", report)
+	}
+	e, err = engine.Open(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if m, err := e.ManifestAt(1); err != nil || m[".npmrc"].Hash != "" {
+		t.Fatalf("reverse import replaced the stripped local row: %v %v", m, err)
+	}
+
+	// A genuinely different row still conflicts.
+	if _, err := e.DB.Exec("UPDATE ops SET kind='delete' WHERE id='o-npmrc'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readBundleReport(context.Background(), b, full); err == nil || !strings.Contains(err.Error(), "conflicting ops row") {
+		t.Fatalf("changed operation row was not a conflict: %v", err)
+	}
+}
