@@ -14,8 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/codex"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/companions"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
@@ -182,7 +181,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 			return err
 		}
-		codexEvents := &codexSources{process: process}
+		sources := newSessionSources(process)
 		if err := daemon.WriteDaemonIdentity(dir); err != nil {
 			return err
 		}
@@ -217,30 +216,19 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			cancel()
 			<-gcDone
 		}()
-		if _, err := os.Stat(filepath.Join(dir, "codex.enabled")); err == nil {
-			home, err := os.UserHomeDir()
-			if err == nil {
-				config, err := codex.ConfigHome(home)
-				if err != nil {
-					logger.Error("resolving Codex home", "error", err)
-				} else {
-					go func() {
-						if err := codex.Run(ctx, root, filepath.Join(config, "sessions"), codexEvents.transcript); err != nil {
-							logger.Error("Codex adapter stopped", "error", err)
-						}
-					}()
-				}
+		// Agents enabled by a marker are read from their own session files.
+		for _, reader := range adapters.SessionReaders() {
+			if _, err := os.Stat(filepath.Join(dir, reader.EnableMarker().File)); err != nil {
+				continue
 			}
-		}
-		if _, err := os.Stat(filepath.Join(dir, "opencode.enabled")); err == nil {
-			go func() {
-				if err := opencode.Run(ctx, root, "", process); err != nil {
-					logger.Error("OpenCode adapter stopped", "error", err)
-				}
-			}()
+			send := process
+			if reader.HooksSupersedeSessions() {
+				send = sources.transcript
+			}
+			reader.StartSessionReader(ctx, root, logger, send)
 		}
 		err = daemon.ServeCheckedWithLogger(ctx, dir, logger, func(ev event.Event) error {
-			err := codexEvents.hook(ev)
+			err := sources.hook(ev)
 			if err != nil {
 				logger.Error("processing event", "kind", ev.Kind, "error", err)
 			} else if ev.Kind == event.TurnEnd || ev.Kind == event.SessionEnd {

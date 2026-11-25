@@ -146,3 +146,15 @@ func Markers() []MarkerEnabled {
 	}
 	return out
 }
+
+// SessionReaders returns the agents whose sessions the daemon reads, in
+// registry order.
+func SessionReaders() []SessionReader {
+	var out []SessionReader
+	for _, a := range registry {
+		if r, ok := a.(SessionReader); ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}

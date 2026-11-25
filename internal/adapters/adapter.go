@@ -7,9 +7,11 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,6 +176,20 @@ type Launcher interface {
 type Reviewer interface {
 	Adapter
 	ReviewCommand() (string, []string)
+}
+
+// SessionReader is a marker-enabled agent whose sessions the daemon reads
+// from the agent's own files while the marker exists.
+type SessionReader interface {
+	MarkerEnabled
+	// StartSessionReader is called once when the daemon starts. It
+	// resolves what it needs, logs failures to logger and reads sessions in
+	// its own goroutine until ctx ends, passing events to process.
+	StartSessionReader(ctx context.Context, root string, logger *slog.Logger, process func(event.Event) error)
+	// HooksSupersedeSessions reports whether an event kind this agent's
+	// hooks already delivered for a session is dropped when the session
+	// reader reports it too.
+	HooksSupersedeSessions() bool
 }
 
 // TranscriptTurn is what an agent's transcript adds to a finished turn.

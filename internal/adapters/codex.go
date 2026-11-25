@@ -1,6 +1,12 @@
 package adapters
 
 import (
+	"context"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/codex"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/codexhook"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
@@ -38,6 +44,30 @@ func (codexAdapter) DecodeHook(c *HookCall, body []byte, root string) ([]event.E
 func (codexAdapter) EnableMarker() Marker {
 	return Marker{File: "codex.enabled", Label: "Codex", RemovedByUninstall: true}
 }
+
+// StartSessionReader tails the rollouts in the Codex home's sessions
+// directory.
+func (codexAdapter) StartSessionReader(ctx context.Context, root string, logger *slog.Logger, process func(event.Event) error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	config, err := codex.ConfigHome(home)
+	if err != nil {
+		logger.Error("resolving Codex home", "error", err)
+		return
+	}
+	go func() {
+		if err := codex.Run(ctx, root, filepath.Join(config, "sessions"), process); err != nil {
+			logger.Error("Codex adapter stopped", "error", err)
+		}
+	}()
+}
+
+// HooksSupersedeSessions: the rollout reader is the fallback for hooks the
+// user has not trusted; Codex lets users trust hooks individually, so the
+// fallback applies per event kind.
+func (codexAdapter) HooksSupersedeSessions() bool { return true }
 
 func (codexAdapter) Integration() Integration {
 	return Integration{Kind: "CLI/Desktop", Commands: []string{"codex"}, Profiles: []string{".codex"}, Apps: []string{"Codex.app"}}

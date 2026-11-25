@@ -1,10 +1,13 @@
 package adapters
 
 import (
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/opencode"
+	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
 
 // opencodeAdapter: per repository, the daemon reads OpenCode sessions when
@@ -49,6 +52,17 @@ func (opencodeAdapter) SkipHook(c *HookCall, root string) bool {
 func (opencodeAdapter) EnableMarker() Marker {
 	return Marker{File: "opencode.enabled", Label: "OpenCode"}
 }
+
+// StartSessionReader reads OpenCode's session database.
+func (opencodeAdapter) StartSessionReader(ctx context.Context, root string, logger *slog.Logger, process func(event.Event) error) {
+	go func() {
+		if err := opencode.Run(ctx, root, "", process); err != nil {
+			logger.Error("OpenCode adapter stopped", "error", err)
+		}
+	}()
+}
+
+func (opencodeAdapter) HooksSupersedeSessions() bool { return false }
 
 func (opencodeAdapter) Integration() Integration {
 	return Integration{Kind: "CLI/Desktop", Commands: []string{"opencode"}, Profiles: []string{".config/opencode"}, Apps: []string{"OpenCode.app"}}
