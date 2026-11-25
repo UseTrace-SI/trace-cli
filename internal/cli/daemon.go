@@ -21,6 +21,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/UseTrace-SI/trace-cli/internal/watch"
 	"github.com/spf13/cobra"
@@ -117,6 +118,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		defer logfile.Close()
 		logger := slog.New(slog.NewTextHandler(logfile, nil))
+		redact.EnsureMarkerKey()
 		e, err := engine.Open(root)
 		if err != nil {
 			return err

@@ -20,6 +20,8 @@ Revoking a device does not delete uploaded history.
 
 Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys and tokens (including AWS, GitHub, GitLab, Google, OpenAI, Anthropic, Slack, Stripe, SendGrid, npm, PyPI, Hugging Face, DigitalOcean, Twilio, Shopify, Azure AD and Atlassian formats), HTTP `Authorization` header credentials, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
 
+A redacted value becomes a marker such as `⟨redacted:api-key:1a2b3c4d⟩`. Its digits are an HMAC of the value under a random per-install key, `~/.trace/redaction.key` (mode 0600; under `$TRACE_HOME` when set), so equal secrets share a marker on one machine but a marker cannot be used to confirm a guessed secret. Markers from different machines differ.
+
 For Claude Code and Antigravity CLI, the daemon reads newly appended assistant transcript records after a turn ends and redacts text before storing it. Tool call records keep names and safe repository paths; they do not store raw tool inputs or tool results.
 
 Codex assistant output and reasoning summaries, Cursor Agent CLI response and thought hooks, Windsurf Cascade response summaries, and Gemini CLI and Qwen Code final responses pass through the same redactor before storage. Copilot CLI hooks record prompts, tool names, and safe paths without raw tool arguments or results. Windsurf's full transcript file is not read by the hook. The available context depends on what each agent actually emits.

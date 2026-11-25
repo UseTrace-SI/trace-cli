@@ -126,7 +126,7 @@ Cursor project and preview global hooks route single-folder workspaces from the 
 
 The hook performance check covers global Cursor read and Gemini completion callbacks as well as the existing Antigravity path.
 
-Hook events redact recognized secrets in text and metadata before spooling; sensitive session identifiers are hashed so events still correlate. Redaction is pattern-based.
+Hook events redact recognized secrets in text and metadata before spooling; sensitive session identifiers are hashed so events still correlate. Redaction is pattern-based. Redaction markers are keyed with a random per-install key (`~/.trace/redaction.key`), so they cannot be used to confirm a guessed secret; see [privacy](docs/privacy.md).
 
 If processing a spooled event fails, the daemon keeps running and retries it after 0.25 and 0.5 seconds. The spool keeps only that event and the ones after it, so events already processed are not repeated. After a third failure, the event and the rest of its batch are moved with the redacted error to `.trace/quarantine/` (newest 32 frames, pruned after 24 hours) and later events continue. Failed socket events and any remaining batch events are spooled behind the backlog. The daemon refuses to start when `.trace` is a symlink or Git tracks anything under it, and its state files are never written through symlinks. Legacy resident daemons can still lose socket events on a process crash before processing or spooling; restart after upgrade to enable durable spool delivery.
 
