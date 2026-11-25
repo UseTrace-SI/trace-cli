@@ -55,3 +55,7 @@ func (openclaudeAdapter) SetupGlobal(home string, remove bool) error {
 	}
 	return openclaude.InstallGlobal(configRoot)
 }
+
+func (openclaudeAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".openclaude/settings.local.json", Contains: " hook openclaude"}}
+}

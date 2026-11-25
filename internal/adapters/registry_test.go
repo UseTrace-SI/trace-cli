@@ -223,3 +223,57 @@ func TestRunnerOnlyAgentsUseGenericHooks(t *testing.T) {
 		}
 	}
 }
+
+// The files `trace doctor` accepts as an installed project integration,
+// as the doctor listed them before adapters provided them.
+func TestInstallEvidence(t *testing.T) {
+	want := map[string]string{
+		".claude/settings.local.json":            " hook claude-code Stop",
+		".cline/hooks/TaskComplete":              "Trace Cline CLI hook",
+		".openclaude/settings.local.json":        " hook openclaude",
+		".pi/extensions/trace/index.ts":          "Trace coding-agent extension",
+		".omp/extensions/trace/index.ts":         "Trace coding-agent extension",
+		".grok/hooks/trace.json":                 " hook grok",
+		".agents/plugins/trace/hooks/hooks.json": " hook goose",
+		".amp/plugins/trace.ts":                  "Trace Amp plugin",
+		".kilo/plugin/trace.ts":                  "Trace Kilo plugin",
+		".kiro/hooks/trace.json":                 "Trace managed hook",
+		".cursor/hooks.json":                     " hook cursor",
+		".agents/hooks.json":                     " hook agy",
+		".devin/hooks.json":                      " hook windsurf",
+		".windsurf/hooks.json":                   " hook windsurf",
+		".gemini/settings.json":                  " hook gemini",
+		".github/hooks/usetrace.json":            " hook copilot",
+		".qwen/settings.json":                    " hook qwen",
+		".factory/hooks.json":                    " hook factory",
+		".factory/settings.json":                 " hook factory",
+	}
+	got := map[string]string{}
+	for _, a := range All() {
+		e, ok := a.(ProjectEvidencer)
+		if !ok {
+			continue
+		}
+		for _, evidence := range e.InstallEvidence() {
+			if _, dup := got[evidence.Path]; dup {
+				t.Errorf("%s: duplicate evidence %s", a.Name(), evidence.Path)
+			}
+			got[evidence.Path] = evidence.Contains
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("evidence %v, want %v", got, want)
+	}
+	for path, contains := range want {
+		if got[path] != contains {
+			t.Errorf("%s: %q, want %q", path, got[path], contains)
+		}
+	}
+	var markers []string
+	for _, m := range Markers() {
+		markers = append(markers, m.EnableMarker().File)
+	}
+	if !slices.Equal(markers, []string{"codex.enabled", "opencode.enabled"}) {
+		t.Errorf("markers %v", markers)
+	}
+}

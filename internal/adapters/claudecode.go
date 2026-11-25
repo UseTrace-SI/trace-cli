@@ -86,3 +86,7 @@ func (claudeCode) ReadTranscript(path string, offset int64, root string) (Transc
 
 // ResponseInReasoning: the Stop hook carries the final assistant message.
 func (claudeCode) ResponseInReasoning() bool { return true }
+
+func (claudeCode) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".claude/settings.local.json", Contains: " hook claude-code Stop"}}
+}

@@ -65,3 +65,7 @@ func (clineAdapter) SetupGlobal(home string, remove bool) error {
 	}
 	return cline.InstallGlobal(home)
 }
+
+func (clineAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".cline/hooks/TaskComplete", Contains: "Trace Cline CLI hook"}}
+}

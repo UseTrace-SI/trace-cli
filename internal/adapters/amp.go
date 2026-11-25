@@ -46,3 +46,7 @@ func (ampAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]any
 
 func (ampAdapter) SetupHeadline() (string, bool) { return "Amp observer installed.", false }
 func (ampAdapter) SetupNotice(string) string     { return ampReload }
+
+func (ampAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".amp/plugins/trace.ts", Contains: "Trace Amp plugin"}}
+}

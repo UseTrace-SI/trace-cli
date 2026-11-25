@@ -238,6 +238,20 @@ type TranscriptReader interface {
 	ResponseInReasoning() bool
 }
 
+// InstallEvidence is a file whose content shows that an agent's project
+// integration is installed (`trace doctor`).
+type InstallEvidence struct {
+	// Path is relative to the repository root, slash-separated.
+	Path     string
+	Contains string
+}
+
+// ProjectEvidencer is an agent whose project integration `trace doctor`
+// recognizes.
+type ProjectEvidencer interface {
+	InstallEvidence() []InstallEvidence
+}
+
 // HookCall is one `trace hook` invocation.
 type HookCall struct {
 	// Agent is the adapter's canonical name.

@@ -72,3 +72,7 @@ func (windsurfAdapter) SetupJSONNotice(_ string, remove bool) (string, map[strin
 
 func (windsurfAdapter) SetupHeadline() (string, bool) { return "Windsurf hooks installed.", false }
 func (windsurfAdapter) SetupNotice(string) string     { return windsurfRestart }
+
+func (windsurfAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".devin/hooks.json", Contains: " hook windsurf"}, {Path: ".windsurf/hooks.json", Contains: " hook windsurf"}}
+}

@@ -70,3 +70,7 @@ func (factoryAdapter) SetupGlobal(home string, remove bool) error {
 	}
 	return factory.InstallGlobal(home)
 }
+
+func (factoryAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".factory/hooks.json", Contains: " hook factory"}, {Path: ".factory/settings.json", Contains: " hook factory"}}
+}

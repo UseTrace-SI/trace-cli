@@ -83,3 +83,7 @@ func (cursorAdapter) SetupGlobal(home string, remove bool) error {
 func (cursorAdapter) LaunchCommand(context string) (string, []string) {
 	return "agent", []string{context}
 }
+
+func (cursorAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".cursor/hooks.json", Contains: " hook cursor"}}
+}

@@ -69,3 +69,7 @@ func (kiloAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]an
 
 func (kiloAdapter) SetupHeadline() (string, bool) { return "Kilo observer installed.", false }
 func (kiloAdapter) SetupNotice(string) string     { return kiloRestart }
+
+func (kiloAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".kilo/plugin/trace.ts", Contains: "Trace Kilo plugin"}}
+}

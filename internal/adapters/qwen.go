@@ -59,3 +59,7 @@ func (qwenAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]an
 
 func (qwenAdapter) SetupHeadline() (string, bool) { return "", true }
 func (qwenAdapter) SetupNotice(string) string     { return qwenEnableNotice }
+
+func (qwenAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".qwen/settings.json", Contains: " hook qwen"}}
+}

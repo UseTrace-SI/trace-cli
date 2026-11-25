@@ -61,3 +61,7 @@ func (geminiAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]
 
 func (geminiAdapter) SetupHeadline() (string, bool) { return "", true }
 func (geminiAdapter) SetupNotice(string) string     { return geminiEnableNotice }
+
+func (geminiAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".gemini/settings.json", Contains: " hook gemini"}}
+}

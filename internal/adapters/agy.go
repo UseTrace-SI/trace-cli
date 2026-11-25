@@ -61,3 +61,7 @@ func (agyAdapter) ReadTranscript(path string, offset int64, root string) (Transc
 }
 
 func (agyAdapter) ResponseInReasoning() bool { return false }
+
+func (agyAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".agents/hooks.json", Contains: " hook agy"}}
+}

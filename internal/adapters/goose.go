@@ -54,3 +54,7 @@ func (gooseAdapter) DecodeHook(c *HookCall, body []byte, root string) ([]event.E
 
 func (gooseAdapter) InstallProject(root string) error { return goose.Install(root) }
 func (gooseAdapter) RemoveProject(root string) error  { return goose.Uninstall(root) }
+
+func (gooseAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".agents/plugins/trace/hooks/hooks.json", Contains: " hook goose"}}
+}

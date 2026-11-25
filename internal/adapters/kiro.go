@@ -90,3 +90,7 @@ func (kiroAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]an
 
 func (kiroAdapter) SetupHeadline() (string, bool) { return "Kiro hooks installed.", true }
 func (kiroAdapter) SetupNotice(string) string     { return kiroRestart }
+
+func (kiroAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".kiro/hooks/trace.json", Contains: "Trace managed hook"}}
+}

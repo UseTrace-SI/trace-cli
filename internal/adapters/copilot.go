@@ -65,3 +65,7 @@ func (copilotAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string
 
 func (copilotAdapter) SetupHeadline() (string, bool) { return "Copilot CLI hooks installed.", false }
 func (copilotAdapter) SetupNotice(string) string     { return copilotRestart }
+
+func (copilotAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".github/hooks/usetrace.json", Contains: " hook copilot"}}
+}

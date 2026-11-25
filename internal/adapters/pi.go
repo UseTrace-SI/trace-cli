@@ -47,6 +47,10 @@ func (a piFamily) SetupNotice(string) string {
 	return "Restart " + a.name + " and confirm the Trace extension loaded."
 }
 
+func (a piFamily) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: "." + a.name + "/extensions/trace/index.ts", Contains: "Trace coding-agent extension"}}
+}
+
 type piAdapter struct{ piFamily }
 
 func newPi() piAdapter { return piAdapter{piFamily{name: "pi"}} }

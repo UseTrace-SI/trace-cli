@@ -19,3 +19,7 @@ func (grokAdapter) DecodeHook(c *HookCall, body []byte, root string) ([]event.Ev
 
 func (grokAdapter) InstallProject(root string) error { return grok.Install(root) }
 func (grokAdapter) RemoveProject(root string) error  { return grok.Uninstall(root) }
+
+func (grokAdapter) InstallEvidence() []InstallEvidence {
+	return []InstallEvidence{{Path: ".grok/hooks/trace.json", Contains: " hook grok"}}
+}
