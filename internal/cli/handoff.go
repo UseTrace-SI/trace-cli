@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,7 +52,10 @@ func handoffCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			fmt.Fprintf(f, "- symbol %s:%d %s %s\n", s.File, s.Line, s.Kind, s.Name)
 		}
 		if *jsonOutput {
-			return reportExcludedHistory(nil, c.ErrOrStderr(), excluded, includeExcluded)
+			if err := reportExcludedHistory(nil, c.ErrOrStderr(), excluded, includeExcluded); err != nil {
+				return err
+			}
+			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"path": out, "context": ctxFile, "historical_paths_now_excluded": nonNil(excluded), "excluded_history_included": includeExcluded})
 		}
 		fmt.Fprintf(c.OutOrStdout(), "handoff bundle: %s\ncontext: %s\n", out, ctxFile)
 		return reportExcludedHistory(c.OutOrStdout(), c.ErrOrStderr(), excluded, includeExcluded)

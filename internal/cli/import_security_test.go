@@ -624,3 +624,28 @@ func TestReimportingStrippedHistoryKeepsLocalRows(t *testing.T) {
 		t.Fatalf("changed operation row was not a conflict: %v", err)
 	}
 }
+
+func TestHandoffJSONListsLeftOutPaths(t *testing.T) {
+	source, _ := sinceExcludedHistory(t)
+	jsonOutput := true
+	out := filepath.Join(t.TempDir(), "handoff.tar.gz")
+	cmd := handoffCommand(&source, &jsonOutput)
+	cmd.SetArgs([]string{"--out", out})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Path     string   `json:"path"`
+		Context  string   `json:"context"`
+		LeftOut  []string `json:"historical_paths_now_excluded"`
+		Included bool     `json:"excluded_history_included"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("%v: %q", err, stdout.String())
+	}
+	if got.Path != out || got.Context == "" || len(got.LeftOut) != 1 || got.LeftOut[0] != ".npmrc" || got.Included {
+		t.Fatalf("handoff --json = %+v", got)
+	}
+}
