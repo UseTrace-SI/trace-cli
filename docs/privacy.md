@@ -49,8 +49,9 @@ indexes, even when tracked by Git. Use a relative filename, a directory prefix
 ending in `/`, or a single-level glob such as `secrets/*.json` or `*.local`.
 Blank lines and `#` comments are supported. Negation and `**` patterns are rejected.
 Built-in secret exclusions always apply. Existing snapshots and hosted history
-are not erased when `.traceignore` changes, and those snapshots are still exported and uploaded; the preview identifies historical paths
-that are now excluded. Review or delete that history before connecting if needed.
+are not erased when `.traceignore` changes, and those snapshots are still exported and uploaded; the preview lists them as
+`historical_paths_still_uploaded`, and lists earlier credential files that
+uploads leave out as `historical_paths_left_out` (neither counted nor scanned). Review or delete that history before connecting if needed.
 
 Default capture budgets are 64 MiB per file, 512 MiB per scan/batch, and 64 MiB of
 free disk reserved beyond the source size. Positive byte-count environment

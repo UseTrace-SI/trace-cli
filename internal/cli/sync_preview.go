@@ -18,14 +18,20 @@ type uploadPreview struct {
 	Objects          int      `json:"objects"`
 	Rows             int64    `json:"rows"`
 	PotentialSecrets []string `json:"potential_secret_paths"`
-	ExcludedHistory  []string `json:"historical_paths_now_excluded"`
-	SampledBytes     int64    `json:"sampled_bytes"`
-	ScanIncomplete   bool     `json:"scan_incomplete"`
-	Disclosure       string   `json:"disclosure"`
+	// ExcludedHistory lists both of the following, for older readers.
+	ExcludedHistory []string `json:"historical_paths_now_excluded"`
+	// LeftOut are historical paths under built-in exclusions; uploads leave
+	// their snapshots out. StillUploaded are paths .traceignore excludes from
+	// new captures whose earlier snapshots are still uploaded.
+	LeftOut        []string `json:"historical_paths_left_out"`
+	StillUploaded  []string `json:"historical_paths_still_uploaded"`
+	SampledBytes   int64    `json:"sampled_bytes"`
+	ScanIncomplete bool     `json:"scan_incomplete"`
+	Disclosure     string   `json:"disclosure"`
 }
 
 func previewUpload(ctx context.Context, e *engine.Engine) (uploadPreview, error) {
-	out := uploadPreview{PotentialSecrets: []string{}, ExcludedHistory: []string{}, Disclosure: "Approval uploads existing and future history and derived context. Source bytes remain exact and may contain credentials. Hosted personal history is server-encrypted and readable by the service. Earlier snapshots of files matching Trace's built-in credential exclusions are left out of uploads; .traceignore changes do not erase earlier snapshots. Secret scanning is best effort."}
+	out := uploadPreview{PotentialSecrets: []string{}, ExcludedHistory: []string{}, LeftOut: []string{}, StillUploaded: []string{}, Disclosure: "Approval uploads existing and future history and derived context. Source bytes remain exact and may contain credentials. Hosted personal history is server-encrypted and readable by the service. Earlier snapshots of files matching Trace's built-in credential exclusions are left out of uploads; .traceignore changes do not erase earlier snapshots. Secret scanning is best effort."}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	rows, err := e.DB.QueryContext(ctx, "SELECT manifest_hash FROM keyframes")
@@ -53,7 +59,7 @@ func previewUpload(ctx context.Context, e *engine.Engine) (uploadPreview, error)
 	files := map[string]bool{}
 	scanned := map[blob.Hash]bool{}
 	suspect := map[string]bool{}
-	excluded := map[string]bool{}
+	leftOut, stillUploaded := map[string]bool{}, map[string]bool{}
 	for _, hash := range hashes {
 		if err := ctx.Err(); err != nil {
 			return out, err
@@ -63,13 +69,20 @@ func previewUpload(ctx context.Context, e *engine.Engine) (uploadPreview, error)
 			return out, err
 		}
 		for path, entry := range m {
+			// Uploads leave built-in exclusions out entirely (see
+			// syncclient.referencedHashes), so they are neither counted nor
+			// scanned.
+			if manifest.Excluded(path) {
+				leftOut[path] = true
+				continue
+			}
 			files[path] = true
 			omit, err := manifest.CaptureExcluded(e.Root, path)
 			if err != nil {
 				return out, err
 			}
 			if omit {
-				excluded[path] = true
+				stillUploaded[path] = true
 			}
 			if scanned[entry.Hash] {
 				continue
@@ -107,9 +120,15 @@ func previewUpload(ctx context.Context, e *engine.Engine) (uploadPreview, error)
 		out.PotentialSecrets = append(out.PotentialSecrets, path)
 	}
 	sort.Strings(out.PotentialSecrets)
-	for path := range excluded {
-		out.ExcludedHistory = append(out.ExcludedHistory, path)
+	for path := range leftOut {
+		out.LeftOut = append(out.LeftOut, path)
 	}
+	for path := range stillUploaded {
+		out.StillUploaded = append(out.StillUploaded, path)
+	}
+	sort.Strings(out.LeftOut)
+	sort.Strings(out.StillUploaded)
+	out.ExcludedHistory = append(append(out.ExcludedHistory, out.LeftOut...), out.StillUploaded...)
 	sort.Strings(out.ExcludedHistory)
 	for _, table := range []string{"sessions", "turns", "keyframes", "ops", "commits", "messages", "comments", "trails", "sync_updates", "context_snapshots"} {
 		var n int64
@@ -142,8 +161,13 @@ func printUploadPreview(ctx context.Context, root string, out io.Writer, jsonOut
 			return err
 		}
 	}
-	for _, path := range preview.ExcludedHistory {
-		if _, err := fmt.Fprintf(out, "Excluded from future capture, still present in history: %s\n", path); err != nil {
+	for _, path := range preview.LeftOut {
+		if _, err := fmt.Fprintf(out, "Credential file in earlier history, left out of uploads: %s\n", path); err != nil {
+			return err
+		}
+	}
+	for _, path := range preview.StillUploaded {
+		if _, err := fmt.Fprintf(out, "Excluded by .traceignore from future capture, earlier snapshots still uploaded: %s\n", path); err != nil {
 			return err
 		}
 	}
