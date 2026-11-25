@@ -22,7 +22,17 @@ func Install(root string) error {
 // HasProjectHook only recognizes an unchanged Trace hook with no additional
 // conditions or platform-specific command overrides.
 func HasProjectHook(root, name string) bool {
-	b, err := os.ReadFile(filepath.Join(root, configPath))
+	return hasHook(filepath.Join(root, configPath), name, "copilot")
+}
+
+// HasGlobalHook reports Trace's user-level Copilot hook for an event.
+func HasGlobalHook(home, name string) bool {
+	root, err := globalRoot(home)
+	return err == nil && hasHook(filepath.Join(root, "hooks/usetrace.json"), name, "copilot-global")
+}
+
+func hasHook(path, name, agent string) bool {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
@@ -39,7 +49,7 @@ func HasProjectHook(root, name string) bool {
 	}
 	for _, entry := range entries {
 		command, ok := entry["command"].(string)
-		if len(entry) == 2 && entry["type"] == "command" && ok && hookcmd.IsTraceHook(command, "copilot") && hookcmd.IsTraceHookFor(command, "copilot", name) {
+		if len(entry) == 2 && entry["type"] == "command" && ok && hookcmd.IsTraceHook(command, agent) && hookcmd.IsTraceHookFor(command, agent, name) {
 			return true
 		}
 	}

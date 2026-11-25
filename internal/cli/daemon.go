@@ -274,9 +274,13 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return fmt.Errorf("parsing daemon pid: %w", err)
 		}
-		if !daemon.ProcessIsTraceDaemon(pid, root) {
+		switch daemon.CheckTraceDaemon(pid, root) {
+		case daemon.DaemonAbsent:
 			_ = os.Remove(filepath.Join(root, ".trace", "daemon.pid"))
 			return nil
+		case daemon.DaemonUnknown:
+			// Deleting the pid file here would orphan a running daemon.
+			return fmt.Errorf("cannot confirm that process %d is the Trace daemon; daemon.pid was kept, stop the process manually", pid)
 		}
 		p, err := os.FindProcess(pid)
 		if err != nil {

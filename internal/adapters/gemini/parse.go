@@ -45,10 +45,13 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 	case "AfterTool":
 		switch p.ToolName {
 		case "write_file", "replace", "run_shell_command":
+			ev.Kind = event.ToolEdit
+		case "read_file":
+			// Documented tool arguments: read_file takes file_path.
+			ev.Kind = event.FileRead
 		default:
 			return nil, nil
 		}
-		ev.Kind = event.ToolEdit
 		ev.ToolName = p.ToolName
 		path := p.ToolInput.FilePath
 		if path == "" {

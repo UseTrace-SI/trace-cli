@@ -233,23 +233,69 @@ func ProcessRunning(pid int) bool {
 	return err == nil || err == syscall.EPERM
 }
 
-// ProcessIsTraceDaemon guards against signalling a recycled PID from a stale
+// DaemonIdentity is the result of checking whether a PID belongs to this
+// repository's Trace daemon.
+type DaemonIdentity int
+
+const (
+	// DaemonAbsent: the process is gone, or it is provably another process.
+	DaemonAbsent DaemonIdentity = iota
+	// DaemonConfirmed: the process is this repository's daemon.
+	DaemonConfirmed
+	// DaemonUnknown: the process exists but could not be identified, for
+	// example because ps is not installed. Callers must neither signal it nor
+	// treat the pid file as stale.
+	DaemonUnknown
+)
+
+// readCommandLine is replaced in tests.
+var readCommandLine = processCommandLine
+
+// CheckTraceDaemon guards against signalling a recycled PID from a stale
 // daemon.pid file. A recorded process start time identifies the exact process
 // instance; the command-line check remains as a fallback for older daemons.
-func ProcessIsTraceDaemon(pid int, root string) bool {
-	if !ProcessRunning(pid) {
-		return false
+func CheckTraceDaemon(pid int, root string) DaemonIdentity {
+	if !ProcessRunning(pid) || processZombie(pid) {
+		return DaemonAbsent
 	}
 	if expected := readDaemonStartTime(filepath.Join(root, ".trace")); expected > 0 {
 		actual, ok := processStartTime(pid)
-		if !ok || actual != expected {
-			return false
+		if !ok {
+			return DaemonUnknown
+		}
+		if actual != expected {
+			return DaemonAbsent
 		}
 	}
+	command, err := readCommandLine(pid)
+	if err != nil {
+		if !ProcessRunning(pid) {
+			return DaemonAbsent
+		}
+		return DaemonUnknown
+	}
+	if strings.Contains(command, "--repo "+root) && strings.HasSuffix(command, " daemon") {
+		return DaemonConfirmed
+	}
+	return DaemonAbsent
+}
+
+// ProcessIsTraceDaemon reports whether pid is confirmed to be this
+// repository's daemon. An unidentifiable process is not confirmed.
+func ProcessIsTraceDaemon(pid int, root string) bool {
+	return CheckTraceDaemon(pid, root) == DaemonConfirmed
+}
+
+// psCommandLine asks ps for a process' command line. It fails when ps is not
+// installed, which is common in slim containers.
+func psCommandLine(pid int) (string, error) {
 	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=").Output()
 	if err != nil {
-		return false
+		return "", fmt.Errorf("running ps: %w", err)
 	}
 	command := strings.TrimSpace(string(out))
-	return strings.Contains(command, "--repo "+root) && strings.HasSuffix(command, " daemon")
+	if command == "" {
+		return "", errors.New("ps returned no command line")
+	}
+	return command, nil
 }
