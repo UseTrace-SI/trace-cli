@@ -108,3 +108,19 @@ func TestImportGitAIIsReadOnlyAndIdempotent(t *testing.T) {
 		t.Fatalf("stored excluded path: %+v", excluded)
 	}
 }
+
+func TestParseGitAINoteCaps(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("a.go\n  h_31dce776f88375 ")
+	for i := 1; i <= MaxHintsPerPath+10; i++ {
+		if i > 1 {
+			b.WriteString(",")
+		}
+		b.WriteString(strconv.Itoa(i))
+	}
+	b.WriteString("\n---\n{\"schema_version\":\"authorship/3.0.0\",\"base_commit_sha\":\"x\",\"prompts\":{},\"humans\":{\"h_31dce776f88375\":{\"author\":\"x\"}}}\n")
+	hints, err := ParseGitAINote("c", []byte(b.String()))
+	if err != nil || len(hints) != MaxHintsPerPath {
+		t.Fatalf("hints %d %v", len(hints), err)
+	}
+}

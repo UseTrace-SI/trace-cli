@@ -27,6 +27,10 @@ const SourceGitAI = "git-ai"
 const (
 	maxNoteBytes = 4 << 20
 	maxNotes     = 100000
+	// MaxHintsPerNote and MaxHintsPerPath bound what one note can store;
+	// ranges past either limit are dropped.
+	MaxHintsPerNote = 20000
+	MaxHintsPerPath = 2000
 )
 
 // Hint is one imported attributed range of a file as committed in Commit.
@@ -96,6 +100,7 @@ func ParseGitAINote(commit string, note []byte) ([]Hint, error) {
 		return nil, fmt.Errorf("unsupported schema_version %q", md.SchemaVersion)
 	}
 	var hints []Hint
+	perPath := map[string]int{}
 	path := ""
 	sc := bufio.NewScanner(strings.NewReader(attest))
 	sc.Buffer(make([]byte, 64<<10), maxNoteBytes)
@@ -157,6 +162,13 @@ func ParseGitAINote(commit string, note []byte) ([]Hint, error) {
 			if err1 != nil || err2 != nil || start < 1 || end < start {
 				continue
 			}
+			if len(hints) >= MaxHintsPerNote {
+				return hints, nil
+			}
+			if perPath[path] >= MaxHintsPerPath {
+				break
+			}
+			perPath[path]++
 			h.StartLine, h.EndLine = start, end
 			hints = append(hints, h)
 		}
@@ -258,7 +270,7 @@ func HintsFor(db interface {
 	Query(string, ...any) (*sql.Rows, error)
 }, commit, path string) ([]Hint, error) {
 	rows, err := db.Query(`SELECT start_line,end_line,contributor,tool,model,conversation FROM imported_attributions
-		WHERE commit_sha=? AND path=? ORDER BY start_line`, commit, path)
+		WHERE commit_sha=? AND path=? ORDER BY start_line,end_line LIMIT ?`, commit, path, MaxHintsPerPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading hints: %w", err)
 	}

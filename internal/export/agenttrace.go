@@ -14,8 +14,11 @@ import (
 )
 
 // SpecVersion is the Agent Trace specification version written in records.
-// Agent Trace 0.1.0 (https://agent-trace.dev) constrains `version` to the
-// pattern ^[0-9]+\.[0-9]+$, so the two-part form is used.
+// Agent Trace 0.1.0 (https://agent-trace.dev) is internally inconsistent: the
+// normative JSON Schema in section 6.1 constrains `version` to the pattern
+// ^[0-9]+\.[0-9]+$ (its own description gives '1.0'), while the prose examples
+// write "0.1.0", which that pattern rejects. Records must validate against
+// the schema, so Trace writes the two-part "0.1" for spec version 0.1.0.
 const SpecVersion = "0.1"
 
 // MediaType is the media type Agent Trace defines for one record.
@@ -38,6 +41,13 @@ type Conversation struct {
 	URL         string       `json:"url,omitempty"`
 	Contributor *Contributor `json:"contributor,omitempty"`
 	Ranges      []Range      `json:"ranges"`
+	Related     []Related    `json:"related,omitempty"`
+}
+
+// Related links a conversation to another resource.
+type Related struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
 }
 
 // File lists the attributed ranges of one repository-relative path.
@@ -80,6 +90,9 @@ type Line struct {
 	// hint's model.
 	Type    string
 	ModelID string
+	// Imported, when set, is the URI naming the imported conversation
+	// (for git-ai, urn:git-ai:session:<key>).
+	Imported string
 }
 
 // contributorType maps a Trace origin to an Agent Trace contributor type.
@@ -99,7 +112,7 @@ func contributorType(l Line) string {
 // TurnURL is the conversation URL of a recorded turn.
 func TurnURL(turnID string) string { return "trace://turn/" + turnID }
 
-type convKey struct{ kind, turn, model string }
+type convKey struct{ kind, turn, model, imported string }
 
 // FileRecord groups one file's per-line origins (index 0 is line first) into
 // conversations of contiguous ranges. It returns the file and turn details for
@@ -108,13 +121,16 @@ func FileRecord(path string, first int, lines []Line, turns map[string]map[strin
 	f := File{Path: path}
 	index := map[convKey]int{}
 	for i, l := range lines {
-		k := convKey{contributorType(l), l.TurnID, l.ModelID}
+		k := convKey{contributorType(l), l.TurnID, l.ModelID, l.Imported}
 		if k.kind != "ai" {
 			k.turn = ""
 		}
 		at, ok := index[k]
 		if !ok {
 			c := Conversation{Contributor: &Contributor{Type: k.kind, ModelID: k.model}}
+			if k.imported != "" {
+				c.Related = []Related{{Type: "git-ai.session", URL: k.imported}}
+			}
 			if k.turn != "" {
 				c.URL = TurnURL(k.turn)
 				if turns != nil {
@@ -142,7 +158,7 @@ func MergeFile(f *File, other File) {
 		merged := false
 		for i := range f.Conversations {
 			c := &f.Conversations[i]
-			if c.URL == oc.URL && *c.Contributor == *oc.Contributor {
+			if c.URL == oc.URL && *c.Contributor == *oc.Contributor && relatedKey(c.Related) == relatedKey(oc.Related) {
 				c.Ranges = append(c.Ranges, oc.Ranges...)
 				merged = true
 				break
@@ -152,6 +168,41 @@ func MergeFile(f *File, other File) {
 			f.Conversations = append(f.Conversations, oc)
 		}
 	}
+}
+
+func relatedKey(r []Related) string {
+	var b strings.Builder
+	for _, x := range r {
+		b.WriteString(x.Type + " " + x.URL + "\n")
+	}
+	return b.String()
+}
+
+// ModelID returns a model name in the models.dev provider/model form Agent
+// Trace recommends. A name that already has a provider is kept; otherwise a
+// provider is added only for unambiguous prefixes, and an unknown provider
+// yields "".
+func ModelID(model string) string {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" || len(m) > 250 || strings.ContainsAny(m, " \t\n") {
+		return ""
+	}
+	if strings.Count(m, "/") == 1 && !strings.HasPrefix(m, "/") && !strings.HasSuffix(m, "/") {
+		return m
+	}
+	if strings.Contains(m, "/") {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(m, "claude-"):
+		return "anthropic/" + m
+	case strings.HasPrefix(m, "gpt-"), strings.HasPrefix(m, "chatgpt-"), strings.HasPrefix(m, "codex-"),
+		len(m) >= 2 && m[0] == 'o' && m[1] >= '1' && m[1] <= '9':
+		return "openai/" + m
+	case strings.HasPrefix(m, "gemini-"):
+		return "google/" + m
+	}
+	return ""
 }
 
 // NewRecord builds a record. A non-empty revision yields a git vcs entry and

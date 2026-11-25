@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,35 +20,42 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
+// maxHintSteps bounds the range-to-line matching work for one file.
+const maxHintSteps = 1 << 20
+
 // applyHints explains lines Trace has no origin for (unknown or baseline)
-// from imported git-ai hints for the same commit and path.
-func applyHints(db attribution.Querier, sha, path string, lines []int, out []Line) (int, error) {
+// from imported git-ai hints for the same commit and path. lines is
+// ascending. It records each imported conversation's identity in imported.
+func applyHints(db attribution.Querier, sha, path string, lines []int, out []Line, imported map[string]map[string]any) (int, error) {
 	hints, err := interop.HintsFor(db, sha, path)
 	if err != nil || len(hints) == 0 {
 		return 0, err
 	}
-	n := 0
-	for i, line := range lines {
-		if contributorType(out[i]) != "unknown" {
-			continue
-		}
-		for _, h := range hints {
-			if line >= h.StartLine && line <= h.EndLine {
-				out[i] = Line{Agent: h.Tool, Type: h.Contributor, ModelID: textModel(h.Model)}
-				n++
-				break
+	n, steps := 0, 0
+	for _, h := range hints {
+		for j := sort.SearchInts(lines, h.StartLine); j < len(lines) && lines[j] <= h.EndLine; j++ {
+			if steps++; steps > maxHintSteps {
+				return n, nil
 			}
+			if contributorType(out[j]) != "unknown" || out[j].Type != "" {
+				continue
+			}
+			urn := "urn:git-ai:session:" + h.Session
+			out[j] = Line{Agent: h.Tool, Type: h.Contributor, ModelID: ModelID(h.Model), Imported: urn}
+			if imported[urn] == nil {
+				entry := map[string]any{"source": interop.SourceGitAI, "session": h.Session}
+				if h.Tool != "" {
+					entry["tool"] = h.Tool
+				}
+				if h.Model != "" && len(h.Model) <= 250 {
+					entry["model"] = h.Model
+				}
+				imported[urn] = entry
+			}
+			n++
 		}
 	}
 	return n, nil
-}
-
-// textModel bounds a model ID to the 250 characters Agent Trace allows.
-func textModel(m string) string {
-	if len(m) > 250 {
-		return ""
-	}
-	return m
 }
 
 // MaxCommits bounds the commits one export walks.
@@ -161,6 +169,7 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 	}
 	turns := map[string]map[string]any{}
 	imported := 0
+	importedConvs := map[string]map[string]any{}
 	var files []File
 	for _, ch := range changes {
 		if ch.Status == 'D' || !exportable(root, ch.Path) {
@@ -178,7 +187,7 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 			return Record{}, err
 		}
 		resolved := toLines(origins)
-		if hinted, err := applyHints(db, sha, ch.Path, lines, resolved); err != nil {
+		if hinted, err := applyHints(db, sha, ch.Path, lines, resolved, importedConvs); err != nil {
 			return Record{}, err
 		} else if hinted > 0 {
 			imported += hinted
@@ -200,6 +209,7 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 	m := metadata("commit", turns)
 	if imported > 0 {
 		m["imported_hint_lines"] = map[string]int{interop.SourceGitAI: imported}
+		m["imported_conversations"] = importedConvs
 	}
 	return NewRecord(sha, at, files, m)
 }

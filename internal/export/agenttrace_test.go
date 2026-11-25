@@ -92,6 +92,20 @@ func validate(raw []byte) error {
 			if err := contributor(conv["contributor"], false); err != nil {
 				return err
 			}
+			if rel, ok := conv["related"]; ok {
+				list, ok := rel.([]any)
+				if !ok {
+					return fmt.Errorf("related %v", rel)
+				}
+				for _, item := range list {
+					m, _ := item.(map[string]any)
+					typ, _ := m["type"].(string)
+					u, _ := m["url"].(string)
+					if parsed, err := url.Parse(u); typ == "" || err != nil || parsed.Scheme == "" {
+						return fmt.Errorf("related %v", item)
+					}
+				}
+			}
 			ranges, ok := conv["ranges"].([]any)
 			if !ok {
 				return fmt.Errorf("ranges %v", conv)
@@ -301,9 +315,28 @@ func TestCommitRecordUsesImportedHints(t *testing.T) {
 	if err := validate(b); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `{"contributor":{"type":"ai","model_id":"claude-sonnet-4-5"},"ranges":[{"start_line":1,"end_line":1}]}`) ||
+	if !strings.Contains(string(b), `{"contributor":{"type":"ai","model_id":"anthropic/claude-sonnet-4-5"},"ranges":[{"start_line":1,"end_line":1}],"related":[{"type":"git-ai.session","url":"urn:git-ai:session:s_1"}]}`) ||
 		!strings.Contains(string(b), `"url":"trace://turn/t1","contributor":{"type":"ai"},"ranges":[{"start_line":2,"end_line":3}]`) ||
-		!strings.Contains(string(b), `"imported_hint_lines":{"git-ai":1}`) {
+		!strings.Contains(string(b), `"imported_hint_lines":{"git-ai":1}`) ||
+		!strings.Contains(string(b), `"urn:git-ai:session:s_1":{"model":"claude-sonnet-4-5","session":"s_1","source":"git-ai","tool":"cursor"}`) {
 		t.Fatalf("record: %s", b)
+	}
+}
+
+func TestModelID(t *testing.T) {
+	for in, want := range map[string]string{
+		"claude-sonnet-4-5-20250514": "anthropic/claude-sonnet-4-5-20250514",
+		"gpt-5":                      "openai/gpt-5",
+		"o3-mini":                    "openai/o3-mini",
+		"gemini-2.5-pro":             "google/gemini-2.5-pro",
+		"anthropic/claude-opus-4-5":  "anthropic/claude-opus-4-5",
+		"llama-3":                    "",
+		"opus":                       "",
+		"a/b/c":                      "",
+		"":                           "",
+	} {
+		if got := ModelID(in); got != want {
+			t.Errorf("ModelID(%q) = %q; want %q", in, got, want)
+		}
 	}
 }
