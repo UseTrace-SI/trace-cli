@@ -13,32 +13,49 @@ var patterns = []struct {
 	rx   *regexp.Regexp
 }{
 	{"private-key", regexp.MustCompile(`(?s)(-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----)`)},
-	{"aws-key", regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)},
-	{"github-token", regexp.MustCompile(`\b(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}\b`)},
-	{"slack-token", regexp.MustCompile(`\bxox[abeoprs]-[A-Za-z0-9-]{10,}\b|\bxapp-[0-9]-[A-Za-z0-9-]{10,}\b`)},
+	{"aws-key", token(`(?:AKIA|ASIA)[A-Z0-9]{16}\b`)},
+	{"github-token", token(`(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}\b`)},
+	{"slack-token", token(`xox[abeoprs]-[A-Za-z0-9-]{10,}\b|xapp-[0-9]-[A-Za-z0-9-]{10,}\b`)},
 	{"slack-webhook", regexp.MustCompile(`https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]{20,}`)},
-	{"stripe-key", regexp.MustCompile(`\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b|\bwhsec_[A-Za-z0-9+/=]{24,}`)},
-	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
+	{"stripe-key", token(`(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b|whsec_[A-Za-z0-9+/=]{24,}`)},
+	{"jwt", token(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
 	// OpenAI (sk-..., sk-proj-..., sk-svcacct-...) and Anthropic (sk-ant-...)
 	// keys share this prefix.
-	{"api-key", regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`)},
-	{"google-api-key", regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}`)},
-	{"gitlab-token", regexp.MustCompile(`\b(?:glpat|glptt|gldt|glrt|glcbt|glft|glsoat)-[0-9A-Za-z_-]{20,}`)},
-	{"npm-token", regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`)},
-	{"huggingface-token", regexp.MustCompile(`\bhf_[A-Za-z0-9]{34,}\b`)},
-	{"sendgrid-key", regexp.MustCompile(`\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`)},
-	{"digitalocean-token", regexp.MustCompile(`\bdo[opr]_v1_[a-f0-9]{64}\b`)},
-	{"twilio-key", regexp.MustCompile(`\bSK[0-9a-fA-F]{32}\b`)},
-	{"shopify-token", regexp.MustCompile(`\bshp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}\b`)},
-	{"pypi-token", regexp.MustCompile(`\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}`)},
-	{"azure-client-secret", regexp.MustCompile(`\b[A-Za-z0-9_~.]{3}[0-9]Q~[A-Za-z0-9_~.-]{31,34}`)},
-	{"atlassian-token", regexp.MustCompile(`\bATATT3[A-Za-z0-9_=-]{180,}`)},
+	{"api-key", token(`sk-[A-Za-z0-9_-]{20,}\b`)},
+	{"google-api-key", token(`AIza[0-9A-Za-z_-]{35}`)},
+	{"gitlab-token", token(`(?:glpat|glptt|gldt|glrt|glcbt|glft|glsoat)-[0-9A-Za-z_-]{20,}`)},
+	{"npm-token", token(`npm_[A-Za-z0-9]{36}\b`)},
+	{"huggingface-token", tokenAfterNonWord(`hf_[A-Za-z0-9]{34,}\b`)},
+	{"sendgrid-key", token(`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`)},
+	{"digitalocean-token", token(`do[opr]_v1_[a-f0-9]{64}\b`)},
+	{"twilio-key", token(`SK[0-9a-fA-F]{32}\b`)},
+	{"shopify-token", token(`shp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}\b`)},
+	{"pypi-token", token(`pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}`)},
+	{"azure-client-secret", token(`[A-Za-z0-9_~.]{3}[0-9]Q~[A-Za-z0-9_~.-]{31,34}`)},
+	{"atlassian-token", token(`ATATT3[A-Za-z0-9_=-]{180,}`)},
 	{"url-password", regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]*:[^\s@/]+@`)},
 	// An HTTP Authorization header value: the scheme and an RFC 6750 token
 	// (Basic credentials are base64, a subset). The credential needs a digit
 	// or 16 characters, so a word after the scheme ("an Authorization: Bearer
 	// token header", "Bearer authentication") is left alone.
 	{"auth-header", regexp.MustCompile(`\b(?:[Aa]uthorization|AUTHORIZATION)["']?\s*(?:=>|[:=,])\s*["']?(?i:bearer|basic|token)[ \t]+(?:[A-Za-z._~+/-]*[0-9][A-Za-z0-9._~+/-]*|[A-Za-z0-9._~+/-]{16,})=*`)},
+}
+
+// token compiles a credential pattern that must not continue a word: it may
+// start the text or follow any character except an ASCII letter. Unlike \b it
+// also matches after a digit or underscore ("1ghp_…", "KEY_AKIA…"), which
+// commonly glue a credential to a label or counter, while a preceding letter
+// ("task-…", "disk-…") still rules it out. The credential is submatch s; the
+// leading character is kept.
+func token(body string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[^A-Za-z])(?P<s>` + body + `)`)
+}
+
+// tokenAfterNonWord keeps the \b behaviour after an underscore. "hf_" with
+// 34 letters is also a plausible snake_case identifier tail
+// ("load_hf_AutoModel…"), so only a digit or non-word character may precede.
+func tokenAfterNonWord(body string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[^A-Za-z_])(?P<s>` + body + `)`)
 }
 
 // Necessary literal fragments cheaply rule out patterns before invoking the
@@ -69,9 +86,11 @@ var patternHints = map[string][]string{
 
 // envValue matches a secret-like name, an assignment or comparison operator
 // (group 2) and its value (group 3). A quoted, JSON-style name must end with
-// the secret word; group 1 holds its closing quote. Multi-character operators
-// come first so their trailing character is never taken as the value.
-var envValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)(?:[A-Z0-9_]*|(["']))\s*(===?|!==?|:=|=>|[:=])\s*("[^"\n]*"|'[^'\n]*'|["']?[^\s,"']+)`)
+// the secret word; group 1 holds its closing quote, which may be escaped when
+// the JSON is itself inside a string (`{\"password\": \"…\"}`), and such a
+// value runs to the next escaped quote. Multi-character operators come first
+// so their trailing character is never taken as the value.
+var envValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)(?:[A-Z0-9_]*|(\\*["']))\s*(===?|!==?|:=|=>|[:=])\s*(\\+"[^"\n]*?\\+"|"[^"\n]*"|'[^'\n]*'|["']?[^\s,"']+)`)
 var redactionMarker = regexp.MustCompile(`⟨redacted:[a-z-]+:[0-9a-f]{8}⟩`)
 var email = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b`)
 var phone = regexp.MustCompile(`\b\+?[0-9][0-9 ()-]{8,}[0-9]\b`)
@@ -93,7 +112,7 @@ func (r Redactor) Text(s string) string {
 		if !possible {
 			continue
 		}
-		s = p.rx.ReplaceAllStringFunc(s, func(v string) string { return marker(p.kind, v) })
+		s = replaceMatches(p.rx, s, p.kind)
 	}
 	context := hasKeyContext(s)
 	if context {
@@ -121,6 +140,29 @@ func (r Redactor) Text(s string) string {
 		s = phone.ReplaceAllStringFunc(s, func(v string) string { return marker("phone", v) })
 	}
 	return s
+}
+
+// replaceMatches replaces each match of rx with a marker, or only its
+// submatch s when the pattern has one.
+func replaceMatches(rx *regexp.Regexp, s, kind string) string {
+	group := rx.SubexpIndex("s")
+	if group < 0 {
+		return rx.ReplaceAllStringFunc(s, func(v string) string { return marker(kind, v) })
+	}
+	matches := rx.FindAllStringSubmatchIndex(s, -1)
+	if len(matches) == 0 {
+		return s
+	}
+	var out strings.Builder
+	last := 0
+	for _, m := range matches {
+		start, end := m[2*group], m[2*group+1]
+		out.WriteString(s[last:start])
+		out.WriteString(marker(kind, s[start:end]))
+		last = end
+	}
+	out.WriteString(s[last:])
+	return out.String()
 }
 
 func hasKeyContext(s string) bool {
@@ -157,6 +199,26 @@ func redactEnvValues(s string) string {
 		}
 		start, end := match[6], match[7]
 		value := s[start:end]
+		if value[0] == '\\' {
+			// An escaped string literal: mask what lies between the
+			// escaped quotes and keep the escapes.
+			open := strings.IndexByte(value, '"') + 1
+			close := strings.LastIndexByte(value, '\\')
+			for close > open && value[close-1] == '\\' {
+				close--
+			}
+			if close <= open {
+				continue
+			}
+			start, end, value = start+open, start+close, value[open:close]
+			if location := redactionMarker.FindStringIndex(value); location != nil && location[0] == 0 && location[1] == len(value) {
+				continue
+			}
+			out.WriteString(s[last:start])
+			out.WriteString(marker("env", value))
+			last = end
+			continue
+		}
 		quoted := value[0] == '"' || value[0] == '\''
 		// Only a plain assignment takes a bare value. After a quoted name, a
 		// comparison or a hash rocket a credential is a string literal, so
