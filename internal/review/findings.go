@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
 // Severities, most severe first.
@@ -235,7 +237,42 @@ func cleanFile(file string) string {
 	if file == "." || file == ".." || strings.HasPrefix(file, "../") || len(file) > 4096 {
 		return ""
 	}
+	// A scheme or drive ("https://…", "file:x", "c:x") is not a repository
+	// path, and a secret path is never reported.
+	if first, _, _ := strings.Cut(file, "/"); strings.Contains(first, ":") || manifest.Excluded(file) {
+		return ""
+	}
 	return file
+}
+
+// Constrain keeps findings inside the reviewed change. lines maps each
+// reviewed path to its line count on the new side (0 when it has none, such
+// as a deleted or binary file). A finding on any other path loses its
+// location, which is kept in its detail as text; line ranges are clamped to
+// the file, and a range that starts past its end is dropped.
+func Constrain(findings []Finding, lines map[string]int) []Finding {
+	for i := range findings {
+		f := &findings[i]
+		if f.File == "" {
+			continue
+		}
+		n, reviewed := lines[f.File]
+		if !reviewed {
+			note := "Reported location (not a reviewed file): " + f.Location()
+			if f.Detail != "" {
+				note += "\n\n" + f.Detail
+			}
+			f.Detail = clip(note, MaxDetailBytes)
+			f.File, f.StartLine, f.EndLine = "", 0, 0
+			continue
+		}
+		if f.StartLine > n {
+			f.StartLine, f.EndLine = 0, 0
+		} else if f.EndLine > n {
+			f.EndLine = n
+		}
+	}
+	return findings
 }
 
 func firstNonEmpty(values ...string) string {

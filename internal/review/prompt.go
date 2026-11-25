@@ -3,22 +3,29 @@ package review
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // Caps on what the judge receives.
 const (
-	MaxJudgeInputBytes       = 64 << 10
-	MaxJudgeReviewerBytes    = 24 << 10
-	maxJudgeSummaryBytes     = 8 << 10
-	untrustedCloseTagPattern = "</untrusted"
+	MaxJudgeInputBytes    = 64 << 10
+	MaxJudgeReviewerBytes = 24 << 10
+	maxJudgeSummaryBytes  = 8 << 10
 )
 
-// Fence neutralizes text that would close an untrusted evidence block, so a
-// diff, prompt or reviewer answer cannot end the block early and pose as
-// instructions.
+// evidenceTag matches anything that opens or closes an untrusted evidence
+// block, in any letter case.
+var evidenceTag = regexp.MustCompile(`(?i)<(/?)(untrusted)`)
+
+// Fence neutralizes text that would open or close an untrusted evidence
+// block, so a diff, prompt or reviewer answer cannot end the block early or
+// pose as a new one.
 func Fence(s string) string {
-	return strings.ReplaceAll(s, untrustedCloseTagPattern, "<\\/untrusted")
+	if !strings.Contains(strings.ToLower(s), "untrusted") {
+		return s
+	}
+	return evidenceTag.ReplaceAllString(s, `<\${1}${2}`)
 }
 
 // ReviewerInput is one reviewer's answer as given to the judge: its parsed
@@ -48,6 +55,9 @@ func JudgePrompt(summary string, reviewers []string, inputs []ReviewerInput) str
 	budget := MaxJudgeInputBytes
 	for _, in := range inputs {
 		body := in.Raw
+		if strings.TrimSpace(body) == "" && !in.Parsed {
+			body = "(empty answer)"
+		}
 		if in.Parsed {
 			// The block names the reviewer, so per-finding attribution
 			// is left out.

@@ -506,3 +506,75 @@ func TestReviewProvenanceForStagedContent(t *testing.T) {
 		t.Fatalf("diverged staged provenance: %v %s", err, out)
 	}
 }
+
+func TestReviewJudgeCreditsOnlyReviewersItHeard(t *testing.T) {
+	root := reviewFixture(t)
+	bin := installReviewStubs(t, map[string]string{
+		"claude.reviewer":      "partial",
+		"claude.reviewer.exit": "exit 2",
+		"codex.reviewer":       `{"findings":[{"file":"source.go","start_line":1,"end_line":40,"severity":"high","title":"Secret"},{"file":"elsewhere.go","start_line":3,"severity":"low","title":"Elsewhere"}]}`,
+		"codex.judge":          `{"findings":[{"file":"source.go","start_line":7,"severity":"high","title":"Secret","reviewers":["claude-code","codex"]},{"file":".env","severity":"low","title":"Env","reviewers":["codex"]}]}`,
+	})
+	out, err := runReview(t, root, true, "--agents", "claude-code,codex", "--judge", "codex")
+	if err == nil {
+		t.Fatal("failed reviewer accepted")
+	}
+	var report reviewReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatal(err)
+	}
+	judged := *report.Findings
+	if report.FindingsSource != "judge" || len(judged) != 2 || judged[0].Agreement != 1 || strings.Join(judged[0].Reviewers, ",") != "codex" || judged[0].StartLine != 0 || judged[1].File != "" {
+		t.Fatalf("judge findings must credit only codex, drop lines past the file end and secret paths: %+v", judged)
+	}
+	own := *report.Results[1].Findings
+	if own[0].EndLine != 1 || own[1].File != "" || !strings.Contains(own[1].Detail, "Reported location (not a reviewed file): elsewhere.go:3") {
+		t.Fatalf("reviewer findings not constrained: %+v", own)
+	}
+	judgeInput, err := os.ReadFile(filepath.Join(bin, "codex.judge.in"))
+	if err != nil || !strings.Contains(string(judgeInput), "1 independent reviewer (codex)") || strings.Contains(string(judgeInput), `reviewer="claude-code"`) {
+		t.Fatalf("judge input: %v\n%s", err, judgeInput)
+	}
+}
+
+func TestReviewEmptyAnswerIsMarked(t *testing.T) {
+	root := reviewFixture(t)
+	installReviewStubs(t, map[string]string{"codex.reviewer": ""})
+	out, err := runReview(t, root, false, "--agent", "codex", "--judge", "codex")
+	if err != nil || !strings.Contains(out, "(no answer)") {
+		t.Fatalf("text: %v %s", err, out)
+	}
+	md, err := runReview(t, root, false, "--agent", "codex", "--format", "markdown")
+	if err != nil || !strings.Contains(md, "codex returned no answer") {
+		t.Fatalf("markdown: %v %s", err, md)
+	}
+	js, err := runReview(t, root, true, "--agent", "codex", "--judge", "codex")
+	if err != nil || !strings.Contains(js, `"unstructured":true`) {
+		t.Fatalf("json: %v %s", err, js)
+	}
+}
+
+func TestReviewTextOutputStripsTerminalControls(t *testing.T) {
+	root := reviewFixture(t)
+	installReviewStubs(t, map[string]string{"codex.reviewer": "fine\x1b[2J\x1b]0;pwned\x07 \u202eok"})
+	out, err := runReview(t, root, false, "--agent", "codex")
+	if err != nil || out != "fine ok\n\n" {
+		t.Fatalf("text output %q %v", out, err)
+	}
+}
+
+func TestReviewProvenanceRefersToPromptsAcrossHunksAndRedactsPaths(t *testing.T) {
+	root := provenanceFixture(t, "rename the line")
+	secretName := "notes-ghp_" + strings.Repeat("aB3dE5fG7h", 4) + ".txt"
+	files := []review.FileDiff{{Path: "file.txt", Hunks: []review.Hunk{{NewStart: 2, NewCount: 1, Added: []int{2}}, {NewStart: 3, NewCount: 1, Added: []int{3}}}}, {Path: secretName, Hunks: []review.Hunk{{NewStart: 1, NewCount: 1, Added: []int{1}}}}}
+	got, err := reviewProvenance(root, false, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "file.txt line 2: step 1 by codex (1 of 1 added lines), prompt: \"rename the line\"\nfile.txt line 3: step 1 by codex (1 of 1 added lines), prompt shown above\n") {
+		t.Fatalf("second hunk must refer to the prompt shown above:\n%s", got)
+	}
+	if strings.Contains(got, "ghp_aB3") || !strings.Contains(got, "⟨redacted:github-token:") {
+		t.Fatalf("path not redacted:\n%s", got)
+	}
+}

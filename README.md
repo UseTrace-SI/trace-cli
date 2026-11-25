@@ -31,7 +31,8 @@ findings into a deduplicated, severity-ranked list with agreement counts;
 `--with-provenance` adds each changed hunk's recorded prompt (redacted, capped);
 `--format markdown` prints a pull request comment and `--format sarif` a SARIF
 2.1.0 log checked against the official schema. Reviewers are asked for JSON
-findings only when one of these is used; other answers stay raw text. See
+findings only with `--judge` or a non-text `--format`; answers outside the
+schema stay raw text. See
 [independent review](docs/cli.md#independent-review).
 Offline subprocess regressions pass; live provider review acceptance is pending.
 

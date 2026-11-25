@@ -202,3 +202,85 @@ func TestMarkdownEscapesModelText(t *testing.T) {
 		t.Fatalf("empty report:\n%s", empty)
 	}
 }
+
+func TestConstrainKeepsFindingsInsideTheChange(t *testing.T) {
+	got, ok := Parse(`{"findings":[
+		{"file":"a.go","start_line":3,"end_line":99,"severity":"high","title":"clamped"},
+		{"file":"a.go","start_line":50,"severity":"high","title":"past the end"},
+		{"file":"other.go","start_line":2,"severity":"low","title":"elsewhere","detail":"d"},
+		{"file":"gone.go","start_line":1,"severity":"low","title":"deleted"},
+		{"file":"https://evil.example/x","severity":"low","title":"url"},
+		{"file":"file:a.go","severity":"low","title":"scheme"},
+		{"file":"config/.env","severity":"low","title":"secret path"},
+		{"file":"keys/id_rsa","start_line":1,"severity":"low","title":"secret path 2"}]}`)
+	if !ok {
+		t.Fatal("parse")
+	}
+	got = Constrain(got, map[string]int{"a.go": 10, "gone.go": 0})
+	want := []Finding{
+		{File: "a.go", StartLine: 3, EndLine: 10, Title: "clamped"},
+		{File: "a.go", Title: "past the end"},
+		{Title: "elsewhere", Detail: "Reported location (not a reviewed file): other.go:2\n\nd"},
+		{File: "gone.go", Title: "deleted"},
+		{Title: "url"}, {Title: "scheme"}, {Title: "secret path"}, {Title: "secret path 2"},
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.File != w.File || g.StartLine != w.StartLine || g.EndLine != w.EndLine || g.Title != w.Title || g.Detail != w.Detail {
+			t.Errorf("finding %d = %+v; want %+v", i, g, w)
+		}
+	}
+	for _, f := range got {
+		if strings.Contains(f.Detail+f.File, ".env") || strings.Contains(f.Detail+f.File, "id_rsa") || strings.Contains(f.Detail+f.File, "evil") {
+			t.Fatalf("leaked an unsafe path: %+v", f)
+		}
+	}
+}
+
+func TestFenceNeutralizesOpenersAndClosersInAnyCase(t *testing.T) {
+	for in, want := range map[string]string{
+		"a </untrusted_diff> b":         `a <\/untrusted_diff> b`,
+		"a </UNTRUSTED_diff> b":         `a <\/UNTRUSTED_diff> b`,
+		"<Untrusted_reviewer_findings>": `<\Untrusted_reviewer_findings>`,
+		"untrusted but no tag":          "untrusted but no tag",
+	} {
+		if got := Fence(in); got != want {
+			t.Errorf("Fence(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
+
+func TestMarkdownNeutralizesAutolinks(t *testing.T) {
+	r := Report{Reviewers: []string{"codex"}, Source: "merged", Findings: []Finding{{
+		File: "a.go", Severity: High, Title: "see https://evil.example and www.evil.example, fixes #123",
+		Detail: "mail me@evil.example or http://x.example/#frag", Reviewers: []string{"codex"}, Agreement: 1,
+	}}}
+	md := Markdown(r)
+	for _, bad := range []string{"https://evil", "www.evil", "#123", "http://x", "me@evil"} {
+		if strings.Contains(md, bad) {
+			t.Errorf("markdown keeps linkable %q:\n%s", bad, md)
+		}
+	}
+}
+
+func TestPrintableStripsTerminalControls(t *testing.T) {
+	in := "ok\x1b[31mred\x1b[0m \x1b]8;;https://x\x07link\x1b]8;;\x07 \u202eevil\u202c\r\n\ttab\x00\u009b"
+	if got := Printable(in); got != "okred link evil\n\ttab" {
+		t.Fatalf("Printable = %q", got)
+	}
+}
+
+func TestEmptyAnswersAreReported(t *testing.T) {
+	r := Report{Reviewers: []string{"codex"}, Source: "merged", Outcomes: []Outcome{{Agent: "codex", Status: "completed", Empty: true}}}
+	if md := Markdown(r); !strings.Contains(md, "codex returned no answer") {
+		t.Fatalf("markdown:\n%s", md)
+	}
+	log, err := SARIF(r)
+	if err != nil || !strings.Contains(string(log), "codex returned no answer") {
+		t.Fatalf("SARIF: %v %s", err, log)
+	}
+	validateSARIF(t, log)
+	if p := JudgePrompt("s", []string{"codex"}, []ReviewerInput{{Name: "codex"}}); !strings.Contains(p, "(empty answer)") {
+		t.Fatalf("judge prompt: %s", p)
+	}
+}

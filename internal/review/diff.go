@@ -16,9 +16,19 @@ type Hunk struct {
 
 // FileDiff is one changed path in a diff.
 type FileDiff struct {
-	Path   string
-	Binary bool
-	Hunks  []Hunk
+	Path    string
+	Binary  bool
+	Deleted bool
+	Hunks   []Hunk
+}
+
+// LastLine is the last new-side line the hunks cover.
+func (f FileDiff) LastLine() int {
+	last := 0
+	for _, h := range f.Hunks {
+		last = max(last, h.NewStart+h.NewCount-1)
+	}
+	return last
 }
 
 // Additions counts added lines across hunks.
@@ -78,6 +88,9 @@ func ParseDiff(diff string, paths []string) (files []FileDiff, ok bool) {
 		if !inHunk {
 			if strings.HasPrefix(line, "Binary files ") || line == "GIT binary patch" {
 				current.Binary = true
+			}
+			if strings.HasPrefix(line, "deleted file mode ") {
+				current.Deleted = true
 			}
 			continue
 		}

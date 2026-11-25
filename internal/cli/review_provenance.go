@@ -59,39 +59,41 @@ func reviewProvenance(root string, staged bool, files []review.FileDiff) (string
 		if len(added) == 0 {
 			continue
 		}
-		var entries []provenanceEntry
-		current, reason := reviewedContent(root, f.Path, staged, f.Binary)
-		if reason != "" {
-			entries = append(entries, provenanceEntry{text: fmt.Sprintf("%s: provenance unavailable (%s)\n", f.Path, reason)})
-		} else {
-			origins, err := attribution.ExplainLines(e.DB, e.Blobs, root, f.Path, current, added, false)
-			if err != nil {
-				// Provenance is context for reviewers; one unexplainable file
-				// should not stop the review.
-				entries = append(entries, provenanceEntry{text: fmt.Sprintf("%s: provenance unavailable (history lookup failed)\n", f.Path)})
-				origins = nil
-			}
-			byLine := map[int]attribution.Origin{}
-			for i, line := range added {
-				if i < len(origins) && len(origins[i]) > 0 {
-					byLine[line] = origins[i][len(origins[i])-1]
-				}
-			}
-			for _, h := range f.Hunks {
-				if len(h.Added) > 0 && origins != nil {
-					entries = append(entries, hunkProvenance(f.Path, h, byLine, shown, redactor))
-				}
-			}
-		}
-		for _, entry := range entries {
-			if b.Len()+len(entry.text) > maxProvenanceBytes {
+		// Each entry is redacted whole (paths and agent names included),
+		// then written if it fits; a prompt counts as shown only once its
+		// entry is written, so later hunks can refer to it.
+		write := func(entry provenanceEntry) {
+			text := redactor.Text(entry.text)
+			if b.Len()+len(text) > maxProvenanceBytes {
 				omitted++
-				continue
+				return
 			}
-			b.WriteString(entry.text)
-			// A prompt counts as shown only once its entry is written.
+			b.WriteString(text)
 			for _, step := range entry.shows {
 				shown[step] = true
+			}
+		}
+		current, reason := reviewedContent(root, f.Path, staged, f.Binary)
+		if reason != "" {
+			write(provenanceEntry{text: fmt.Sprintf("%s: provenance unavailable (%s)\n", f.Path, reason)})
+			continue
+		}
+		origins, err := attribution.ExplainLines(e.DB, e.Blobs, root, f.Path, current, added, false)
+		if err != nil {
+			// Provenance is context for reviewers; one unexplainable file
+			// should not stop the review.
+			write(provenanceEntry{text: fmt.Sprintf("%s: provenance unavailable (history lookup failed)\n", f.Path)})
+			continue
+		}
+		byLine := map[int]attribution.Origin{}
+		for i, line := range added {
+			if i < len(origins) && len(origins[i]) > 0 {
+				byLine[line] = origins[i][len(origins[i])-1]
+			}
+		}
+		for _, h := range f.Hunks {
+			if len(h.Added) > 0 {
+				write(hunkProvenance(f.Path, h, byLine, shown, redactor))
 			}
 		}
 	}

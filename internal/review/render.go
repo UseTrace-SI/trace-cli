@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -15,6 +16,8 @@ type Outcome struct {
 	Status string
 	// Raw is set when the answer did not follow the findings schema.
 	Raw string
+	// Empty marks a completed run that returned no answer at all.
+	Empty bool
 }
 
 // Report is what SARIF and Markdown render: the consolidated findings and
@@ -96,6 +99,12 @@ func SARIF(r Report) ([]byte, error) {
 			notifications = append(notifications, map[string]any{
 				"level":   "error",
 				"message": sarifMessage{fmt.Sprintf("%s review %s", o.Agent, o.Status)},
+			})
+		}
+		if o.Empty {
+			notifications = append(notifications, map[string]any{
+				"level":   "warning",
+				"message": sarifMessage{fmt.Sprintf("%s returned no answer", o.Agent)},
 			})
 		}
 		if o.Raw != "" {
@@ -213,6 +222,9 @@ func Markdown(r Report) string {
 		if o.Status != "completed" {
 			fmt.Fprintf(&b, "\n> **%s review %s.**\n", mdInline(o.Agent), mdInline(o.Status))
 		}
+		if o.Empty {
+			fmt.Fprintf(&b, "\n> **%s returned no answer.**\n", mdInline(o.Agent))
+		}
 		if o.Raw != "" {
 			fence := strings.Repeat("`", max(3, longestRun(o.Raw, '`')+1))
 			fmt.Fprintf(&b, "\n<details><summary>Unstructured answer from %s</summary>\n\n%stext\n%s\n%s\n\n</details>\n", htmlInline(o.Agent), fence, strings.TrimRight(o.Raw, "\n"), fence)
@@ -247,9 +259,11 @@ func mdCode(s string) string {
 var mdEscaper = strings.NewReplacer(
 	"&", "&amp;", "<", "&lt;", ">", "&gt;",
 	`\`, `\\`, "`", "\\`", "*", `\*`, "_", `\_`, "[", `\[`, "]", `\]`,
-	"#", `\#`, "|", `\|`, "~", `\~`, "!", `\!`,
-	// A zero-width joiner keeps @name from notifying anyone.
-	"@", "@\u200d",
+	"|", `\|`, "~", `\~`, "!", `\!`,
+	// A zero-width joiner keeps @name from notifying anyone, and keeps
+	// GitHub from turning bare URLs, www. hosts, e-mail addresses and #123
+	// references into links.
+	"@", "@\u200d", "://", "://\u200d", "www.", "www\u200d.", "#", "#\u200d",
 )
 
 // mdInline escapes one line of model text.
@@ -257,10 +271,13 @@ func mdInline(s string) string {
 	return mdEscaper.Replace(oneLine(s))
 }
 
+var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "[", "&#91;", "]", "&#93;",
+	"@", "@\u200d", "://", "://\u200d", "www.", "www\u200d.", "#", "#\u200d")
+
 // htmlInline escapes one line of model text inside an HTML block, where
 // Markdown escapes are not processed.
 func htmlInline(s string) string {
-	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "[", "&#91;", "]", "&#93;", "@", "@\u200d").Replace(oneLine(s))
+	return htmlEscaper.Replace(oneLine(s))
 }
 
 func mdCell(s string) string {
@@ -292,4 +309,15 @@ func longestRun(s string, c byte) int {
 		}
 	}
 	return longest
+}
+
+// terminalControl matches ANSI escape sequences (CSI and OSC) and the
+// characters that can rewrite or reorder a terminal line: C0 controls other
+// than tab and newline, DEL, C1 controls and bidirectional overrides.
+var terminalControl = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]|\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?|[\x00-\x08\x0b-\x1f\x7f\u0080-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
+// Printable removes terminal control sequences from model text before it is
+// printed as plain text.
+func Printable(s string) string {
+	return terminalControl.ReplaceAllString(s, "")
 }

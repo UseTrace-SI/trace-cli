@@ -8,11 +8,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters"
+	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/review"
@@ -26,8 +28,11 @@ type reviewResult struct {
 	Prompt    string `json:"prompt,omitempty"`
 	Truncated bool   `json:"truncated,omitempty"`
 	// Findings is set when structured output was requested (--judge or a
-	// --format other than text) and the answer followed the schema.
-	Findings *[]review.Finding `json:"findings,omitempty"`
+	// --format other than text) and the answer followed the schema;
+	// otherwise, in that mode, Unstructured is set (also for an empty
+	// answer) and Output is the raw text.
+	Findings     *[]review.Finding `json:"findings,omitempty"`
+	Unstructured bool              `json:"unstructured,omitempty"`
 }
 type reviewReport struct {
 	Protocol int            `json:"protocol"`
@@ -153,8 +158,10 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 		}
 		if structured && !noLaunch {
+			lines := reviewLineCounts(root, staged, files)
 			var perReviewer [][]review.Finding
 			var inputs []review.ReviewerInput
+			var received []string
 			for i := range report.Results {
 				r := &report.Results[i]
 				if r.Status != "completed" {
@@ -162,23 +169,30 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				}
 				findings, ok := review.Parse(r.Output)
 				if ok {
-					findings = review.Attribute(findings, r.Agent)
+					findings = review.Constrain(review.Attribute(findings, r.Agent), lines)
 					r.Findings = &findings
 					perReviewer = append(perReviewer, findings)
+				} else {
+					r.Unstructured = true
 				}
 				inputs = append(inputs, review.ReviewerInput{Name: r.Agent, Findings: findings, Parsed: ok, Raw: r.Output})
+				received = append(received, r.Agent)
 			}
 			consolidated, source := review.Merge(perReviewer), "merged"
 			if judge != "" {
 				j := reviewResult{Agent: judge, Status: "skipped"}
 				if len(inputs) > 0 {
-					j = runReviewAgent(c.Context(), judge, root, review.JudgePrompt(summary, selected, inputs), timeout)
+					// The judge sees, and can credit, only the reviewers
+					// whose answers it received.
+					j = runReviewAgent(c.Context(), judge, root, review.JudgePrompt(summary, received, inputs), timeout)
 					if j.Status != "completed" {
 						failures = append(failures, fmt.Errorf("%s judge %s", judge, j.Status))
 					} else if findings, ok := review.Parse(j.Output); ok {
-						findings = review.Reconcile(findings, selected)
+						findings = review.Reconcile(review.Constrain(findings, lines), received)
 						j.Findings = &findings
 						consolidated, source = findings, "judge"
+					} else {
+						j.Unstructured = true
 					}
 				}
 				report.Judge = &j
@@ -320,8 +334,10 @@ func printReviewResult(out io.Writer, r reviewResult, noLaunch bool, reviewers i
 		fmt.Fprintln(out, r.Prompt)
 	case r.Findings != nil:
 		printFindings(out, *r.Findings, reviewers)
+	case r.Unstructured && strings.TrimSpace(r.Output) == "":
+		fmt.Fprintln(out, "(no answer)")
 	default:
-		fmt.Fprintln(out, r.Output)
+		fmt.Fprintln(out, review.Printable(r.Output))
 	}
 	if r.Truncated {
 		fmt.Fprintln(out, "Review output truncated at 64 KiB.")
@@ -342,13 +358,60 @@ func printFindings(out io.Writer, findings []review.Finding, reviewers int) {
 		if reviewers > 1 {
 			line += fmt.Sprintf(" (%d/%d: %s)", f.Agreement, reviewers, strings.Join(f.Reviewers, ", "))
 		}
-		fmt.Fprintln(out, line)
-		for _, detail := range strings.Split(f.Detail, "\n") {
+		fmt.Fprintln(out, review.Printable(line))
+		for _, detail := range strings.Split(review.Printable(f.Detail), "\n") {
 			if strings.TrimSpace(detail) != "" {
 				fmt.Fprintln(out, "    "+detail)
 			}
 		}
 	}
+}
+
+// reviewLineCounts maps each reviewed path to its new-side line count, so
+// findings can be kept inside the change: 0 for deleted and binary files,
+// the reviewed content's length when it can be read, else the last line the
+// hunks cover.
+func reviewLineCounts(root string, staged bool, files []review.FileDiff) map[string]int {
+	lines := make(map[string]int, len(files))
+	for _, f := range files {
+		if f.Deleted || f.Binary {
+			lines[f.Path] = 0
+			continue
+		}
+		n, ok := newSideLineCount(root, f.Path, staged)
+		if !ok {
+			n = f.LastLine()
+		}
+		lines[f.Path] = n
+	}
+	return lines
+}
+
+func newSideLineCount(root, path string, staged bool) (int, bool) {
+	var data string
+	if staged {
+		blob, err := gitBlobLimited(root, ":0:"+path, attribution.MaxTextBytes)
+		if err != nil {
+			return 0, false
+		}
+		data = blob
+	} else {
+		full := filepath.Join(root, filepath.FromSlash(path))
+		info, err := os.Lstat(full)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > attribution.MaxTextBytes {
+			return 0, false
+		}
+		b, err := os.ReadFile(full)
+		if err != nil {
+			return 0, false
+		}
+		data = string(b)
+	}
+	n := strings.Count(data, "\n")
+	if data != "" && !strings.HasSuffix(data, "\n") {
+		n++
+	}
+	return n, true
 }
 
 // renderableReport collects what SARIF and Markdown show.
@@ -362,7 +425,7 @@ func renderableReport(report reviewReport, reviewers []string, judge string, fil
 		results = append(append([]reviewResult{}, results...), *report.Judge)
 	}
 	for _, r := range results {
-		o := review.Outcome{Agent: r.Agent, Status: r.Status}
+		o := review.Outcome{Agent: r.Agent, Status: r.Status, Empty: r.Unstructured && strings.TrimSpace(r.Output) == ""}
 		// A judge that answered in the schema already consolidated any
 		// unstructured reviewer answers.
 		consolidated := report.FindingsSource == "judge"
