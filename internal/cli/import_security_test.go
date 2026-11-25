@@ -358,6 +358,20 @@ func sinceExcludedHistory(t *testing.T) (root string, secret blob.Hash) {
 	return root, secret
 }
 
+func objectCount(t *testing.T, root string) int {
+	t.Helper()
+	n := 0
+	if err := filepath.WalkDir(filepath.Join(root, ".trace", "objects"), func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			n++
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 func bundleEntries(t *testing.T, archive string) map[string]bool {
 	t.Helper()
 	f, err := os.Open(archive)
@@ -393,6 +407,7 @@ func TestBundleLeavesOutSinceExcludedHistory(t *testing.T) {
 	secretEntry := ".trace/objects/" + string(secret[:2]) + "/" + string(secret[2:])
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
 	jsonOutput := false
+	objectsBefore := objectCount(t, source)
 	export := exportCommand(&source, &jsonOutput)
 	export.SetArgs([]string{"--format", "bundle", "--out", archive})
 	var exportOut bytes.Buffer
@@ -405,6 +420,9 @@ func TestBundleLeavesOutSinceExcludedHistory(t *testing.T) {
 	}
 	if bundleEntries(t, archive)[secretEntry] {
 		t.Fatal("bundle carries the .npmrc bytes")
+	}
+	if after := objectCount(t, source); after != objectsBefore {
+		t.Fatalf("export wrote %d objects into the live store", after-objectsBefore)
 	}
 	handoffOut := filepath.Join(t.TempDir(), "handoff.tar.gz")
 	handoff := handoffCommand(&source, &jsonOutput)

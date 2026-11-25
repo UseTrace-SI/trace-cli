@@ -350,9 +350,11 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 	return report, nil
 }
 
+// historyHashes lists the objects a history references. Manifests are read
+// from bs, or from the first of more that holds them.
 func historyHashes(db interface {
 	Query(string, ...any) (*sql.Rows, error)
-}, bs *blob.Store) ([]blob.Hash, error) {
+}, bs *blob.Store, more ...*blob.Store) ([]blob.Hash, error) {
 	rows, err := db.Query("SELECT manifest_hash FROM keyframes UNION SELECT before_hash FROM ops WHERE before_hash IS NOT NULL AND before_hash!='' UNION SELECT after_hash FROM ops WHERE after_hash IS NOT NULL AND after_hash!=''")
 	if err != nil {
 		return nil, err
@@ -389,6 +391,12 @@ func historyHashes(db interface {
 	}
 	for _, h := range manifests {
 		m, err := manifest.Load(h, bs)
+		for _, other := range more {
+			if err == nil {
+				break
+			}
+			m, err = manifest.Load(h, other)
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -413,7 +413,7 @@ func readRows(db *sql.DB, bs *blob.Store, table, after string, limit int) ([]Row
 				if bs == nil {
 					return nil, nil, errors.New("reading keyframes for sync requires the object store")
 				}
-				stripped, _, err := manifest.StripExcluded(blob.Hash(h), bs)
+				stripped, err := manifest.StrippedHash(blob.Hash(h), bs)
 				if err != nil {
 					return nil, nil, fmt.Errorf("leaving excluded paths out of keyframe: %w", err)
 				}
@@ -560,7 +560,7 @@ func referencedHashes(db *sql.DB, bs *blob.Store, strip bool) ([]string, error) 
 	rows.Close()
 	for _, h := range manifests {
 		if strip {
-			stripped, _, err := manifest.StripExcluded(blob.Hash(h), bs)
+			stripped, _, err := manifest.StripExcluded(blob.Hash(h), bs, bs)
 			if err != nil {
 				return nil, err
 			}

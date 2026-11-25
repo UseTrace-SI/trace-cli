@@ -60,13 +60,19 @@ func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 	if err := snapshotHistory(ctx, filepath.Join(root, ".trace", "trace.db"), snapshot); err != nil {
 		return fmt.Errorf("snapshotting history: %w", err)
 	}
-	// Stripped manifests are new objects; they are saved beside the history's
-	// own, where GC removes them once nothing references them.
-	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+	liveDir := filepath.Join(root, ".trace", "objects")
+	bs, err := blob.OpenReadOnly(liveDir)
 	if err != nil {
 		return err
 	}
-	if *found, err = stripBundleHistory(ctx, snapshot, bs, !opts.IncludeExcludedHistory); err != nil {
+	// Stripped manifests are new objects private to this export. They live in
+	// the stage, where GC of the live store cannot remove them mid-export.
+	stageDir := filepath.Join(stage, "objects")
+	staged, err := blob.Open(stageDir)
+	if err != nil {
+		return err
+	}
+	if *found, err = stripBundleHistory(ctx, snapshot, bs, staged, !opts.IncludeExcludedHistory); err != nil {
 		return fmt.Errorf("leaving excluded paths out of the bundle: %w", err)
 	}
 	db, err := openHistoryReadOnly(snapshot)
@@ -74,14 +80,18 @@ func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 		return err
 	}
 	defer db.Close()
-	hashes, err := historyHashes(db, bs)
+	hashes, err := historyHashes(db, staged, bs)
 	if err != nil {
 		return err
 	}
 	files := map[string]string{".trace/trace.db": snapshot}
 	for _, h := range hashes {
+		store, dir := bs, liveDir
+		if _, err := os.Lstat(filepath.Join(stageDir, string(h[:2]), string(h[2:]))); err == nil {
+			store, dir = staged, stageDir
+		}
 		// Verify every byte before publishing a supposedly recoverable archive.
-		reader, err := bs.Get(h)
+		reader, err := store.Get(h)
 		if err != nil {
 			return err
 		}
@@ -89,13 +99,13 @@ func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 		if err := errors.Join(copyErr, reader.Close()); err != nil {
 			return err
 		}
-		files[".trace/objects/"+string(h[:2])+"/"+string(h[2:])] = filepath.Join(root, ".trace", "objects", string(h[:2]), string(h[2:]))
-		chunks, err := bs.Chunks(h)
+		files[".trace/objects/"+string(h[:2])+"/"+string(h[2:])] = filepath.Join(dir, string(h[:2]), string(h[2:]))
+		chunks, err := store.Chunks(h)
 		if err != nil {
 			return err
 		}
 		for _, ch := range chunks {
-			files[".trace/objects/chunks/"+string(ch[:2])+"/"+string(ch[2:])] = filepath.Join(root, ".trace", "objects", "chunks", string(ch[:2]), string(ch[2:]))
+			files[".trace/objects/chunks/"+string(ch[:2])+"/"+string(ch[2:])] = filepath.Join(dir, "chunks", string(ch[:2]), string(ch[2:]))
 		}
 	}
 	if len(files) > maxBundleEntries {
@@ -182,7 +192,7 @@ func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 // those paths, and such operations keep their metadata but no longer
 // reference content. The history stays self-consistent, so the bundle still
 // imports, rewinds and explains lines; restores skip these paths anyway.
-func stripBundleHistory(ctx context.Context, snapshot string, bs *blob.Store, apply bool) ([]string, error) {
+func stripBundleHistory(ctx context.Context, snapshot string, bs, staged *blob.Store, apply bool) ([]string, error) {
 	abs, err := filepath.Abs(snapshot)
 	if err != nil {
 		return nil, err
@@ -216,7 +226,7 @@ func stripBundleHistory(ctx context.Context, snapshot string, bs *blob.Store, ap
 			}
 			continue
 		}
-		stripped, dropped, err := manifest.StripExcluded(blob.Hash(h), bs)
+		stripped, dropped, err := manifest.StripExcluded(blob.Hash(h), bs, staged)
 		if err != nil {
 			return nil, err
 		}

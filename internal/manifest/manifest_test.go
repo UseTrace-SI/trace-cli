@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -380,6 +381,50 @@ func TestExcludedAgreesWithSecretPath(t *testing.T) {
 		}
 		if !SecretPath(p) && Excluded(p) && !protectedFolded(foldPath(p)) {
 			t.Errorf("Excluded(%q) without being secret or protected", p)
+		}
+	}
+}
+
+// StrippedHash must name exactly the object StripExcluded stores, for small
+// manifests and for ones large enough to be chunked.
+func TestStrippedHashMatchesStoredManifest(t *testing.T) {
+	for _, n := range []int{1, 40000} {
+		from, err := blob.Open(filepath.Join(t.TempDir(), "from"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		to, err := blob.Open(filepath.Join(t.TempDir(), "to"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := from.PutBytes([]byte("content"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := Manifest{".npmrc": {Hash: h, Mode: 0600}}
+		for i := 0; i < n; i++ {
+			m[fmt.Sprintf("src/file_%06d.go", i)] = Entry{Hash: h, Mode: 0644}
+		}
+		original, err := m.Save(from)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := StrippedHash(original, from)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, dropped, err := StripExcluded(original, from, to)
+		if err != nil || got != want || len(dropped) != 1 || dropped[0] != ".npmrc" {
+			t.Fatalf("n=%d: StripExcluded = %s %v %v; StrippedHash = %s", n, got, dropped, err, want)
+		}
+		if _, err := Load(got, to); err != nil {
+			t.Fatalf("n=%d: stripped manifest not in the target store: %v", n, err)
+		}
+		if _, err := Load(got, from); err == nil {
+			t.Fatalf("n=%d: stripped manifest written to the source store", n)
+		}
+		if same, err := StrippedHash(got, to); err != nil || same != got {
+			t.Fatalf("n=%d: stripping a stripped manifest changed it: %s %v", n, same, err)
 		}
 	}
 }

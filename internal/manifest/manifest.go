@@ -2,6 +2,8 @@ package manifest
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -330,16 +332,14 @@ func (m Manifest) Save(bs *blob.Store) (blob.Hash, error) {
 	return bs.PutBytes(b)
 }
 
-// StripExcluded returns the manifest stored at h without the paths Trace
-// excludes, for sharing history beyond this machine. A keyframe recorded
-// before an exclusion was added can still list such a file, and its bytes
-// must not leave with the history. When nothing is excluded it returns h
-// unchanged; otherwise it saves the stripped manifest to bs and returns its
-// hash with the dropped paths.
-func StripExcluded(h blob.Hash, bs *blob.Store) (blob.Hash, []string, error) {
+// stripExcluded loads the manifest at h and returns it without the paths
+// Trace excludes, the encoding a store would hold, and the dropped paths.
+// A keyframe recorded before an exclusion was added can still list such a
+// file, and its bytes must not leave with the history.
+func stripExcluded(h blob.Hash, bs *blob.Store) ([]byte, []string, error) {
 	m, err := Load(h, bs)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 	var dropped []string
 	for rel := range m {
@@ -348,17 +348,43 @@ func StripExcluded(h blob.Hash, bs *blob.Store) (blob.Hash, []string, error) {
 		}
 	}
 	if len(dropped) == 0 {
-		return h, nil, nil
+		return nil, nil, nil
 	}
 	for _, rel := range dropped {
 		delete(m, rel)
 	}
-	stripped, err := m.Save(bs)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encoding manifest: %w", err)
+	}
+	sort.Strings(dropped)
+	return b, dropped, nil
+}
+
+// StripExcluded returns the hash of the manifest at h (read from from)
+// without excluded paths, saving that manifest to to, with the dropped
+// paths. When nothing is excluded it returns h unchanged and saves nothing.
+func StripExcluded(h blob.Hash, from, to *blob.Store) (blob.Hash, []string, error) {
+	b, dropped, err := stripExcluded(h, from)
+	if err != nil || b == nil {
+		return h, nil, err
+	}
+	stripped, err := to.PutBytes(b)
 	if err != nil {
 		return "", nil, err
 	}
-	sort.Strings(dropped)
 	return stripped, dropped, nil
+}
+
+// StrippedHash is the hash StripExcluded would return, computed without
+// saving anything.
+func StrippedHash(h blob.Hash, bs *blob.Store) (blob.Hash, error) {
+	b, _, err := stripExcluded(h, bs)
+	if err != nil || b == nil {
+		return h, err
+	}
+	sum := sha256.Sum256(b)
+	return blob.Hash(hex.EncodeToString(sum[:])), nil
 }
 
 func Load(h blob.Hash, bs *blob.Store) (Manifest, error) {
