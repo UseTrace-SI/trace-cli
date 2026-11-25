@@ -1,4 +1,799 @@
 {
+  "broken/amp/00 setup --agent amp": {
+    "args": [
+      "setup",
+      "--agent",
+      "amp"
+    ],
+    "stdout": "Amp observer installed. Reload Amp plugins and check activation with amp plugins list.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/": "[0700] dir",
+      "home/.config/amp/": "[0700] dir",
+      "home/.config/amp/plugins/": "[0700] dir",
+      "home/.config/amp/plugins/trace.ts": "[0600] // Trace Amp global plugin. Managed by trace setup --agent amp.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\n\nexport default function (amp: any) {\n  let pending = Promise.resolve();\n  let queued = 0;\n  let workspace = \"\";\n  try {\n    if (amp.system.executor.kind === \"local\" \u0026\u0026 amp.system.workspaceRoot) {\n      const candidate = amp.helpers.filePathFromURI(amp.system.workspaceRoot);\n      if (typeof candidate === \"string\" \u0026\u0026 isAbsolute(candidate)) workspace = candidate;\n    }\n  } catch (_) { /* Ignore remote or unavailable workspace identities. */ }\n\n  function send(kind: string, sessionId: unknown, fields: Record\u003cstring, unknown\u003e = {}) {\n    if (!workspace || typeof sessionId !== \"string\" || !sessionId || queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ cwd: workspace, session_id: sessionId, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"hook\", \"amp-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n\n  amp.on(\"session.start\", (event: any) =\u003e send(\"session_start\", event.thread?.id));\n  amp.on(\"agent.start\", (event: any) =\u003e {\n    const prompt = typeof event.message === \"string\" \u0026\u0026 event.message.length \u003c= 65536 ? event.message : \"\";\n    send(\"turn_start\", event.thread?.id, { prompt });\n  });\n  amp.on(\"tool.result\", (event: any) =\u003e {\n    if (event?.status !== \"done\" || typeof event.tool !== \"string\" || event.tool.length \u003e 256) return;\n    try {\n      const files = amp.helpers.filesModifiedByToolCall(event);\n      if (!Array.isArray(files)) return;\n      const paths = files.slice(0, 64).map((file: any) =\u003e amp.helpers.filePathFromURI(file))\n        .filter((path: unknown) =\u003e typeof path === \"string\" \u0026\u0026 path.length \u003c= 4096 \u0026\u0026 isAbsolute(path));\n      if (paths.length) send(\"tool_edit\", event.thread?.id, { tool_name: event.tool, paths });\n    } catch (_) { /* The turn-end scan remains available when helpers fail. */ }\n  });\n  amp.on(\"agent.end\", (event: any) =\u003e {\n    const last = Array.isArray(event.messages) ? event.messages.at(-1) : null;\n    if (last?.role === \"assistant\" \u0026\u0026 Array.isArray(last.content)) {\n      let text = \"\";\n      for (const block of last.content) {\n        if (block?.type === \"text\" \u0026\u0026 typeof block.text === \"string\" \u0026\u0026 text.length \u003c 65536) {\n          text += (text ? \"\\n\" : \"\") + block.text.slice(0, 65536 - text.length);\n        }\n      }\n      if (text) send(\"turn_context\", event.thread?.id, { context_type: \"response\", text: text.slice(0, 65536) });\n    }\n    // Tools and shell commands may modify files without reporting their paths.\n    send(\"tool_edit\", event.thread?.id);\n    send(\"turn_end\", event.thread?.id);\n  });\n}\n"
+    }
+  },
+  "broken/amp/01 --json setup --agent amp": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "amp"
+    ],
+    "stdout": "{\"additional_setup\":\"Reload Amp plugins and check activation with amp plugins list.\",\"agents\":[\"amp\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/amp/02 setup --agent amp --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "amp",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/amp/plugins/trace.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/auggie/00 setup --agent auggie": {
+    "args": [
+      "setup",
+      "--agent",
+      "auggie"
+    ],
+    "stdout": "",
+    "stderr": "setting up auggie: parsing auggie hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "home/.trace/": "[0700] dir"
+    }
+  },
+  "broken/auggie/01 --json setup --agent auggie": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "auggie"
+    ],
+    "stdout": "",
+    "stderr": "setting up auggie: parsing auggie hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/auggie/02 setup --agent auggie --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "auggie",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up auggie: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/00 setup --agent claude-code": {
+    "args": [
+      "setup",
+      "--agent",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "setting up claude-code: parsing claude-code hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "home/.trace/": "[0700] dir"
+    }
+  },
+  "broken/claude-code/01 --json setup --agent claude-code": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "setting up claude-code: parsing claude-code hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/02 setup --agent claude-code --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "claude-code",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up claude-code: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cline/00 setup --agent cline": {
+    "args": [
+      "setup",
+      "--agent",
+      "cline"
+    ],
+    "stdout": "Automatic recording enabled.\n",
+    "exit": 0,
+    "files": {
+      "home/.cline/hooks/": "[0700] dir",
+      "home/.cline/hooks/PostToolUse": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline PostToolUse \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/SessionShutdown": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline SessionShutdown \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/TaskCancel": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline TaskCancel \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/TaskComplete": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline TaskComplete \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/TaskError": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline TaskError \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/TaskResume": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline TaskResume \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/TaskStart": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline TaskStart \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "home/.cline/hooks/UserPromptSubmit": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' hook cline UserPromptSubmit \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n"
+    }
+  },
+  "broken/cline/01 --json setup --agent cline": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "cline"
+    ],
+    "stdout": "{\"agents\":[\"cline\"],\"enabled\":true}\n",
+    "exit": 0
+  },
+  "broken/cline/02 setup --agent cline --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "cline",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "home/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "home/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "home/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "home/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "home/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "home/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "home/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/codex/00 setup --agent codex": {
+    "args": [
+      "setup",
+      "--agent",
+      "codex"
+    ],
+    "stdout": "",
+    "stderr": "setting up codex: parsing codex hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "home/.trace/": "[0700] dir"
+    }
+  },
+  "broken/codex/01 --json setup --agent codex": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "codex"
+    ],
+    "stdout": "",
+    "stderr": "setting up codex: parsing codex hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/codex/02 setup --agent codex --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "codex",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up codex: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/00 setup --agent copilot": {
+    "args": [
+      "setup",
+      "--agent",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "setting up copilot: parsing copilot-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/01 --json setup --agent copilot": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "setting up copilot: parsing copilot-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/02 setup --agent copilot --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "copilot",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up copilot: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/00 setup --agent cursor": {
+    "args": [
+      "setup",
+      "--agent",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "setting up cursor: parsing cursor-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/01 --json setup --agent cursor": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "setting up cursor: parsing cursor-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/02 setup --agent cursor --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "cursor",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up cursor: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/00 setup --agent factory": {
+    "args": [
+      "setup",
+      "--agent",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "setting up factory: parsing factory-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/01 --json setup --agent factory": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "setting up factory: parsing factory-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/02 setup --agent factory --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "factory",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up factory: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/00 setup --agent gemini": {
+    "args": [
+      "setup",
+      "--agent",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "setting up gemini: parsing gemini-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/01 --json setup --agent gemini": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "setting up gemini: parsing gemini-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/02 setup --agent gemini --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "gemini",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up gemini: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/hermes/00 setup --agent hermes": {
+    "args": [
+      "setup",
+      "--agent",
+      "hermes"
+    ],
+    "stdout": "Hermes observer installed. Enable trace-observer in Hermes and set TRACE_HERMES_REPO to the repository path.\n",
+    "exit": 0,
+    "files": {
+      "home/.hermes/": "[0700] dir",
+      "home/.hermes/plugins/": "[0700] dir",
+      "home/.hermes/plugins/trace-observer/": "[0700] dir",
+      "home/.hermes/plugins/trace-observer/__init__.py": "[0600] # Managed by Trace Hermes observer\nimport json\nimport os\nimport queue\nimport subprocess\nimport threading\n\n_TRACE = \"{{BIN}}\"\n_events = queue.Queue(maxsize=256)\n_active = set()\n_known = set()\n\ndef _worker():\n    while True:\n        name, payload, repo = _events.get()\n        try:\n            subprocess.run([_TRACE, \"hook\", \"hermes\", name], cwd=repo,\n                           input=json.dumps(payload), text=True,\n                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,\n                           timeout=2, check=False)\n        except Exception:\n            pass\n        finally:\n            _events.task_done()\n\ndef _emit(name, **kwargs):\n    try:\n        repo = os.environ.get(\"TRACE_HERMES_REPO\", \"\")\n        if not os.path.isabs(repo) or kwargs.get(\"parent_session_id\"):\n            return\n        session = kwargs.get(\"session_id\")\n        if not isinstance(session, str) or not session:\n            return\n        if name == \"pre_llm_call\":\n            _known.add(session)\n            _active.add(session)\n        elif name == \"post_tool_call\" and session not in _active:\n            return\n        elif name == \"post_llm_call\":\n            if session not in _active:\n                return\n            _active.discard(session)\n        elif name == \"on_session_end\":\n            if session not in _active or not (kwargs.get(\"interrupted\") or kwargs.get(\"failed\") is True or kwargs.get(\"completed\") is False):\n                return\n            _active.discard(session)\n        elif name == \"on_session_finalize\":\n            if session not in _known:\n                return\n            _known.discard(session)\n            _active.discard(session)\n        payload = {\"session_id\": session}\n        for key in (\"user_message\", \"assistant_response\", \"tool_name\", \"status\"):\n            value = kwargs.get(key)\n            if isinstance(value, str) and len(value) \u003c= 65536:\n                payload[key] = value\n        args = kwargs.get(\"args\")\n        if isinstance(args, dict) and isinstance(args.get(\"path\"), str) and len(args[\"path\"]) \u003c= 4096:\n            payload[\"path\"] = args[\"path\"]\n        _events.put_nowait((name, payload, repo))\n    except Exception:\n        pass\n\ndef register(ctx):\n    threading.Thread(target=_worker, daemon=True, name=\"trace-hermes\").start()\n    for name in (\"pre_llm_call\", \"post_llm_call\", \"post_tool_call\", \"on_session_end\", \"on_session_finalize\"):\n        ctx.register_hook(name, lambda _name=name, **kw: _emit(_name, **kw))\n",
+      "home/.hermes/plugins/trace-observer/plugin.yaml": "[0600] name: trace-observer\nversion: \"1.0\"\ndescription: Local Trace observer\nprovides_hooks:\n  - pre_llm_call\n  - post_llm_call\n  - post_tool_call\n  - on_session_end\n  - on_session_finalize\n"
+    }
+  },
+  "broken/hermes/01 --json setup --agent hermes": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "hermes"
+    ],
+    "stdout": "{\"additional_setup\":\"Enable trace-observer in Hermes and set TRACE_HERMES_REPO.\",\"agents\":[\"hermes\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/hermes/02 setup --agent hermes --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "hermes",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.hermes/plugins/trace-observer/__init__.py": "\u003cdeleted\u003e",
+      "home/.hermes/plugins/trace-observer/plugin.yaml": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/kilo/00 setup --agent kilo": {
+    "args": [
+      "setup",
+      "--agent",
+      "kilo"
+    ],
+    "stdout": "Kilo observer installed. Restart Kilo and confirm the Trace plugin loaded.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/": "[0700] dir",
+      "home/.config/kilo/": "[0700] dir",
+      "home/.config/kilo/plugin/": "[0700] dir",
+      "home/.config/kilo/plugin/trace-global.ts": "[0600] // Trace Kilo global plugin. Managed by trace setup.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute, resolve } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\n\nconst server = async (ctx: any) =\u003e {\n  const { directory } = ctx;\n  if (typeof directory !== \"string\" || !isAbsolute(directory)) return {};\n  let pending = Promise.resolve();\n  let queued = 0;\n  // Retain bounded completed text parts only for active turns in this workspace.\n  const turns = new Map\u003cstring, { message: string; parts: Map\u003cstring, string\u003e }\u003e();\n  function send(kind: string, sessionId: string, fields: Record\u003cstring, unknown\u003e = {}) {\n    if (!sessionId || queued \u003e= 256) return;\n    const payload = JSON.stringify({ session_id: sessionId, cwd: directory, project_loaded: ctx[Symbol.for(\"usetrace.kilo.project\")] === true, ...fields });\n    queued++;\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"hook\", \"kilo-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n  return {\n    \"tool.execute.after\": (input: any) =\u003e {\n      if (typeof input?.sessionID !== \"string\" || typeof input.tool !== \"string\") return;\n      const name = input.tool.toLowerCase();\n      const file = input.args?.filePath;\n      const base = directory;\n      const paths = typeof file === \"string\" \u0026\u0026 file.length \u003c= 4096 ? [resolve(base, file)] : [];\n      if (name === \"read\" \u0026\u0026 paths.length) send(\"file_read\", input.sessionID, { paths });\n      if ([\"edit\", \"write\", \"bash\", \"apply_patch\"].includes(name)) {\n        send(\"tool_edit\", input.sessionID, { tool_name: name, paths: name === \"edit\" || name === \"write\" ? paths : [] });\n      }\n    },\n    \"chat.message\": (input: any, output: any) =\u003e {\n      const parts = Array.isArray(output?.parts) ? output.parts : [];\n      const prompt = parts.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\");\n      if (typeof input.sessionID === \"string\" \u0026\u0026 (turns.has(input.sessionID) || turns.size \u003c 16)) {\n        turns.set(input.sessionID, { message: \"\", parts: new Map() });\n      }\n      send(\"turn_start\", input.sessionID, { prompt: prompt.length \u003c= 65536 ? prompt : \"\" });\n    },\n    event: ({ event }: any) =\u003e {\n      const props = event.properties ?? {};\n      switch (event.type) {\n        case \"session.created\": send(\"session_start\", props.info?.id); break;\n        case \"message.updated\": {\n          const info = props.info;\n          const turn = turns.get(info?.sessionID);\n          if (turn \u0026\u0026 info?.role === \"assistant\" \u0026\u0026 typeof info.id === \"string\" \u0026\u0026 turn.message !== info.id) {\n            turn.message = info.id;\n            turn.parts.clear();\n          }\n          break;\n        }\n        case \"message.part.updated\": {\n          const part = props.part;\n          const turn = turns.get(part?.sessionID);\n          if (turn \u0026\u0026 part?.messageID === turn.message \u0026\u0026 part?.type === \"text\" \u0026\u0026 !part.ignored \u0026\u0026 typeof part.id === \"string\" \u0026\u0026 typeof part.text === \"string\" \u0026\u0026 (turn.parts.has(part.id) || turn.parts.size \u003c 32)) {\n            turn.parts.set(part.id, part.text.slice(0, 4096));\n          }\n          break;\n        }\n        case \"session.idle\":\n          const turn = turns.get(props.sessionID);\n          const response = turn ? [...turn.parts.values()].join(\"\\n\").slice(0, 65536) : \"\";\n          if (response) send(\"turn_context\", props.sessionID, { context_type: \"response\", text: response });\n          turns.delete(props.sessionID);\n          send(\"tool_edit\", props.sessionID); // Unknown tools can write without a watcher event.\n          send(\"turn_end\", props.sessionID);\n          break;\n        case \"session.deleted\": {\n          const sessionId = props.info?.id ?? props.sessionID;\n          turns.delete(sessionId);\n          send(\"session_end\", sessionId);\n          break;\n        }\n      }\n    },\n  };\n};\n\nexport default { id: \"trace-global\", server };\n"
+    }
+  },
+  "broken/kilo/01 --json setup --agent kilo": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "kilo"
+    ],
+    "stdout": "{\"additional_setup\":\"Restart Kilo and confirm the Trace plugin loaded.\",\"agents\":[\"kilo\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/kilo/02 setup --agent kilo --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "kilo",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/kilo/plugin/trace-global.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/kimi/00 setup --agent kimi": {
+    "args": [
+      "setup",
+      "--agent",
+      "kimi"
+    ],
+    "stdout": "Automatic recording enabled.\n",
+    "exit": 0,
+    "files": {
+      "home/.kimi-code/": "[0700] dir",
+      "home/.kimi-code/config.toml": "[0600] # BEGIN TRACE KIMI HOOKS\n\n[[hooks]]\nevent = \"SessionStart\"\ncommand = \"{{BIN}} hook kimi SessionStart\"\n\n[[hooks]]\nevent = \"UserPromptSubmit\"\ncommand = \"{{BIN}} hook kimi UserPromptSubmit\"\n\n[[hooks]]\nevent = \"PostToolUse\"\ncommand = \"{{BIN}} hook kimi PostToolUse\"\n\n[[hooks]]\nevent = \"Stop\"\ncommand = \"{{BIN}} hook kimi Stop\"\n\n[[hooks]]\nevent = \"StopFailure\"\ncommand = \"{{BIN}} hook kimi StopFailure\"\n\n[[hooks]]\nevent = \"Interrupt\"\ncommand = \"{{BIN}} hook kimi Interrupt\"\n\n[[hooks]]\nevent = \"SessionEnd\"\ncommand = \"{{BIN}} hook kimi SessionEnd\"\n# END TRACE KIMI HOOKS\n"
+    }
+  },
+  "broken/kimi/01 --json setup --agent kimi": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "kimi"
+    ],
+    "stdout": "{\"agents\":[\"kimi\"],\"enabled\":true}\n",
+    "exit": 0
+  },
+  "broken/kimi/02 setup --agent kimi --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "kimi",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.kimi-code/config.toml": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/kiro/00 setup --agent kiro": {
+    "args": [
+      "setup",
+      "--agent",
+      "kiro"
+    ],
+    "stdout": "Kiro hooks installed. Restart Kiro and confirm hooks are active.\n",
+    "exit": 0,
+    "files": {
+      "home/.kiro/hooks/": "[0700] dir",
+      "home/.kiro/hooks/trace.json": "[0600] {\n  \"hooks\": [\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro-global SessionStart\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook SessionStart\",\n      \"trigger\": \"SessionStart\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro-global UserPromptSubmit\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook UserPromptSubmit\",\n      \"trigger\": \"UserPromptSubmit\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro-global PostToolUse\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook PostToolUse\",\n      \"trigger\": \"PostToolUse\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro-global Stop\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook Stop\",\n      \"trigger\": \"Stop\"\n    }\n  ],\n  \"version\": \"v1\"\n}\n"
+    }
+  },
+  "broken/kiro/01 --json setup --agent kiro": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "kiro"
+    ],
+    "stdout": "{\"additional_setup\":\"Restart Kiro and confirm hooks are active.\",\"agents\":[\"kiro\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/kiro/02 setup --agent kiro --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "kiro",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.kiro/hooks/trace.json": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/omp/00 setup --agent omp": {
+    "args": [
+      "setup",
+      "--agent",
+      "omp"
+    ],
+    "stdout": "omp observer installed. Restart omp and confirm the Trace extension loaded.\n",
+    "exit": 0,
+    "files": {
+      "home/.omp/": "[0700] dir",
+      "home/.omp/agent/": "[0700] dir",
+      "home/.omp/agent/extensions/": "[0700] dir",
+      "home/.omp/agent/extensions/trace-global/": "[0700] dir",
+      "home/.omp/agent/extensions/trace-global/index.ts": "[0600] // Trace Pi/Oh My Pi global extension. Managed by trace setup.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\nconst agentName = \"omp\";\n\nexport default function (pi: any) {\n  let pending = Promise.resolve();\n  let queued = 0;\n  const argsByCall = new Map\u003cstring, { name: string; args: any }\u003e();\n  function send(kind: string, ctx: any, fields: Record\u003cstring, unknown\u003e = {}) {\n    let session: string;\n    try {\n      session = ctx.sessionManager.getSessionId();\n      if (!session || !ctx.sessionManager.getSessionFile() || typeof ctx.cwd !== \"string\" || !isAbsolute(ctx.cwd)) return;\n      if ((globalThis as any)[Symbol.for(\"usetrace.project.\" + agentName)] === ctx.cwd) return;\n    } catch (_) { return; }\n    if (queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ session_id: session, cwd: ctx.cwd, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"hook\", agentName + \"-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n  pi.on(\"session_start\", (_event: any, ctx: any) =\u003e send(\"session_start\", ctx));\n  pi.on(\"before_agent_start\", (event: any, ctx: any) =\u003e {\n    if (typeof event.prompt === \"string\") send(\"turn_start\", ctx, { prompt: event.prompt.length \u003c= 65536 ? event.prompt : \"\" });\n  });\n  pi.on(\"tool_execution_start\", (event: any) =\u003e {\n    if (argsByCall.size \u003c 256) argsByCall.set(event.toolCallId, { name: event.toolName, args: event.args });\n  });\n  pi.on(\"tool_execution_end\", (event: any, ctx: any) =\u003e {\n    const call = argsByCall.get(event.toolCallId);\n    argsByCall.delete(event.toolCallId);\n    if (!call || event.isError) return;\n    const file = call.args?.path ?? call.args?.file_path;\n    const fields = { tool_name: call.name, paths: typeof file === \"string\" ? [file] : [] };\n    if ([\"write\", \"edit\", \"apply_patch\", \"bash\", \"execute\"].includes(call.name)) send(\"tool_edit\", ctx, fields);\n    if (call.name === \"read\") send(\"file_read\", ctx, fields);\n  });\n  pi.on(\"agent_end\", (event: any, ctx: any) =\u003e {\n    if (event.willContinue || event.awaitingAsyncWork) return;\n    const messages = Array.isArray(event.messages) ? event.messages : [];\n    const assistant = [...messages].reverse().find((message: any) =\u003e message?.role === \"assistant\");\n    const text = Array.isArray(assistant?.content)\n      ? assistant.content.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\")\n      : typeof assistant?.content === \"string\" ? assistant.content : \"\";\n    if (text) send(\"turn_context\", ctx, { context_type: \"response\", text: text.slice(0, 65536) });\n    send(\"tool_edit\", ctx); // Custom tools or interrupted commands may write files.\n    send(\"turn_end\", ctx);\n  });\n  pi.on(\"session_shutdown\", (_event: any, ctx: any) =\u003e send(\"session_end\", ctx));\n}\n"
+    }
+  },
+  "broken/omp/01 --json setup --agent omp": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "omp"
+    ],
+    "stdout": "{\"additional_setup\":\"Restart omp and confirm the Trace extension loaded.\",\"agents\":[\"omp\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/omp/02 setup --agent omp --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "omp",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.omp/agent/extensions/trace-global/index.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/openclaude/00 setup --agent openclaude": {
+    "args": [
+      "setup",
+      "--agent",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "setting up openclaude: parsing openclaude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "home/.openclaude/.trace/": "[0700] dir"
+    }
+  },
+  "broken/openclaude/01 --json setup --agent openclaude": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "setting up openclaude: parsing openclaude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openclaude/02 setup --agent openclaude --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "openclaude",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up openclaude: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/opencode/00 setup --agent opencode": {
+    "args": [
+      "setup",
+      "--agent",
+      "opencode"
+    ],
+    "stdout": "OpenCode observers installed. Restart OpenCode and confirm the Trace plugin loaded.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/": "[0700] dir",
+      "home/.config/opencode/": "[0700] dir",
+      "home/.config/opencode/plugins/": "[0700] dir",
+      "home/.config/opencode/plugins/usetrace-v1.ts": "[0600] // Trace OpenCode v1 global observer. Managed by trace setup.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute, resolve } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\n\nexport default async function traceObserver({ directory }: any) {\n  if (typeof directory !== \"string\" || !isAbsolute(directory)) return {};\n  const active = new Set\u003cstring\u003e();\n  let pending = Promise.resolve();\n  let queued = 0;\n  function send(kind: string, session: string, fields: Record\u003cstring, unknown\u003e = {}) {\n    if (!session || queued \u003e= 256) return;\n    const payload = JSON.stringify({ cwd: directory, session_id: session, ...fields });\n    queued++;\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((done) =\u003e {\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const finish = () =\u003e { if (!settled) { settled = true; clearTimeout(timer); done(); } };\n      try {\n        const child = spawn(traceBin, [\"hook\", \"opencode-v1-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); finish(); }, 2000);\n        child.unref(); timer.unref(); child.stdin.unref?.();\n        child.on(\"error\", finish); child.on(\"close\", finish); child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { finish(); }\n    })).finally(() =\u003e { queued--; });\n  }\n  return {\n    async \"chat.message\"(input: any, output: any) {\n      const session = input?.sessionID;\n      if (typeof session !== \"string\" || !session || active.has(session) || active.size \u003e= 128) return;\n      if (!Array.isArray(output?.parts)) return;\n      const prompt = output.parts.filter((p: any) =\u003e p?.type === \"text\" \u0026\u0026 !p.synthetic \u0026\u0026 typeof p.text === \"string\").map((p: any) =\u003e p.text).join(\"\\n\").slice(0, 65536);\n      active.add(session);\n      send(\"session_start\", session);\n      send(\"turn_start\", session, { prompt });\n    },\n    async \"tool.execute.after\"(input: any) {\n      const session = input?.sessionID;\n      if (typeof session !== \"string\" || !active.has(session) || typeof input.tool !== \"string\") return;\n      const tool = input.tool.toLowerCase();\n      const path = input.args?.filePath;\n      const paths = typeof path === \"string\" \u0026\u0026 path.length \u003c= 4096 ? [resolve(directory, path)] : [];\n      if (tool === \"read\" \u0026\u0026 paths.length) send(\"file_read\", session, { paths });\n      if ([\"edit\", \"write\", \"bash\", \"apply_patch\"].includes(tool)) send(\"tool_edit\", session, { tool_name: tool, paths: [\"edit\", \"write\"].includes(tool) ? paths : [] });\n    },\n    async event({ event }: any) {\n      const session = event?.properties?.sessionID;\n      if (typeof session !== \"string\" || !active.has(session)) return;\n      if (event.type === \"session.idle\" || (event.type === \"session.status\" \u0026\u0026 event.properties?.status?.type === \"idle\")) {\n        active.delete(session);\n        send(\"tool_edit\", session);\n        send(\"turn_end\", session);\n      }\n    },\n  };\n}\n",
+      "home/.config/opencode/plugins/usetrace/": "[0700] dir",
+      "home/.config/opencode/plugins/usetrace/index.ts": "[0600] // Trace OpenCode v2 global plugin. Managed by trace setup.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute, resolve } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\n\nexport default {\n  id: \"usetrace.observer\",\n  async setup(ctx: any) {\n    const cwd = ctx.location?.directory;\n    if (typeof cwd !== \"string\" || !isAbsolute(cwd)) return;\n    // Prompt admission proves the session belongs to this location. Enqueue\n    // and delivery events identify which user input actually reached the agent.\n    const sessions = new Map\u003cstring, { active: boolean; pending: Map\u003cstring, string\u003e; tools: Map\u003cstring, { name: string; path: string }\u003e }\u003e();\n    const controller = new AbortController();\n    let pending = Promise.resolve();\n    let queued = 0;\n    function send(kind: string, session: string, fields: Record\u003cstring, unknown\u003e = {}) {\n      if (!session || queued \u003e= 256) return;\n      const payload = JSON.stringify({ cwd, session_id: session, ...fields });\n      queued++;\n      pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n        let timer: ReturnType\u003ctypeof setTimeout\u003e;\n        let settled = false;\n        const done = () =\u003e { if (!settled) { settled = true; clearTimeout(timer); resolve(); } };\n        try {\n          const child = spawn(traceBin, [\"hook\", \"opencode-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n          timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n          child.unref(); timer.unref(); child.stdin.unref?.();\n          child.on(\"error\", done); child.on(\"close\", done); child.stdin.on(\"error\", () =\u003e {});\n          child.stdin.end(payload);\n        } catch (_) { done(); }\n      })).finally(() =\u003e { queued--; });\n    }\n    await ctx.session.hook(\"prompt\", (input: any) =\u003e {\n      const session = input?.sessionID;\n      if (typeof session !== \"string\" || !session || sessions.has(session)) return;\n      if (sessions.size \u003e= 32) {\n        const idle = [...sessions].find(([, state]) =\u003e !state.active \u0026\u0026 state.pending.size === 0);\n        if (!idle) return;\n        sessions.delete(idle[0]);\n      }\n      sessions.set(session, { active: false, pending: new Map(), tools: new Map() });\n    });\n    void (async () =\u003e {\n      try {\n        const types = [\"session.inbox.enqueued\", \"session.inbox.delivered\", \"session.inbox.cancelled\", \"session.text.ended\", \"session.reasoning.ended\", \"session.tool.input.started\", \"session.tool.called\", \"session.tool.success\", \"session.tool.failed\", \"session.execution.succeeded\", \"session.execution.failed\", \"session.execution.interrupted\", \"session.deleted\"];\n        for await (const ev of ctx.event.subscribe({ signal: controller.signal, types })) {\n          const session = ev?.data?.sessionID;\n          if (ev?.location?.directory \u0026\u0026 ev.location.directory !== cwd) continue;\n          if (typeof session !== \"string\") continue;\n          const state = sessions.get(session);\n          if (!state) continue;\n          const id = ev.data?.inboxID;\n          if (ev.type === \"session.inbox.enqueued\") {\n            const item = ev.data?.item;\n            if (typeof id === \"string\" \u0026\u0026 item?.type === \"user\" \u0026\u0026 (state.pending.has(id) || state.pending.size \u003c 16)) {\n              const text = item.payload?.text;\n              state.pending.set(id, typeof text === \"string\" \u0026\u0026 text.length \u003c= 65536 ? text : \"\");\n            }\n          } else if (ev.type === \"session.inbox.cancelled\") {\n            if (typeof id === \"string\") state.pending.delete(id);\n          } else if (ev.type === \"session.inbox.delivered\") {\n            if (typeof id !== \"string\" || !state.pending.has(id)) continue;\n            const prompt = state.pending.get(id) ?? \"\";\n            state.pending.delete(id);\n            if (state.active) { send(\"tool_edit\", session); send(\"turn_end\", session); }\n            state.tools.clear();\n            send(\"session_start\", session);\n            send(\"turn_start\", session, { prompt });\n            state.active = true;\n          } else if (state.active \u0026\u0026 (ev.type === \"session.text.ended\" || ev.type === \"session.reasoning.ended\")) {\n            if (typeof ev.data.text === \"string\" \u0026\u0026 ev.data.text) {\n              send(\"turn_context\", session, { context_type: ev.type === \"session.reasoning.ended\" ? \"thinking\" : \"response\", text: ev.data.text.slice(0, 65536) });\n            }\n          } else if (state.active \u0026\u0026 ev.type.startsWith(\"session.tool.\")) {\n            const data = ev.data;\n            if (typeof data.assistantMessageID !== \"string\" || typeof data.id !== \"string\") continue;\n            const key = JSON.stringify([data.assistantMessageID, data.id]);\n            if (ev.type === \"session.tool.input.started\") {\n              if (typeof data.name === \"string\" \u0026\u0026 data.name.length \u003c= 256 \u0026\u0026 (state.tools.has(key) || state.tools.size \u003c 128)) {\n                state.tools.set(key, { name: data.name.toLowerCase(), path: \"\" });\n              }\n            } else if (ev.type === \"session.tool.called\") {\n              const tool = state.tools.get(key);\n              const path = data.input?.filePath;\n              if (tool \u0026\u0026 typeof path === \"string\" \u0026\u0026 path.length \u003c= 4096) tool.path = resolve(cwd, path);\n            } else if (ev.type === \"session.tool.success\" || ev.type === \"session.tool.failed\") {\n              const tool = state.tools.get(key);\n              state.tools.delete(key);\n              if (ev.type !== \"session.tool.success\" || !tool) continue;\n              if (tool.name === \"read\" \u0026\u0026 tool.path) send(\"file_read\", session, { paths: [tool.path] });\n              if ([\"edit\", \"write\", \"bash\", \"apply_patch\"].includes(tool.name)) {\n                send(\"tool_edit\", session, { tool_name: tool.name, paths: [\"edit\", \"write\"].includes(tool.name) \u0026\u0026 tool.path ? [tool.path] : [] });\n              }\n            }\n          } else if ([\"session.execution.succeeded\", \"session.execution.failed\", \"session.execution.interrupted\"].includes(ev.type)) {\n            if (state.active) { send(\"tool_edit\", session); send(\"turn_end\", session); state.active = false; state.tools.clear(); }\n          } else if (ev.type === \"session.deleted\") {\n            if (state.active) { send(\"tool_edit\", session); send(\"turn_end\", session); }\n            send(\"session_end\", session);\n            sessions.delete(session);\n            continue;\n          }\n          if (!state.active \u0026\u0026 state.pending.size === 0 \u0026\u0026 ev.type !== \"session.inbox.enqueued\") sessions.delete(session);\n        }\n      } catch (_) { /* An unavailable event stream must not affect OpenCode. */ }\n    })();\n    return () =\u003e controller.abort();\n  },\n};\n"
+    }
+  },
+  "broken/opencode/01 --json setup --agent opencode": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "opencode"
+    ],
+    "stdout": "{\"additional_setup\":\"Restart OpenCode and confirm the Trace plugin loaded.\",\"agents\":[\"opencode\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/opencode/02 setup --agent opencode --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "opencode",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/opencode/plugins/usetrace-v1.ts": "\u003cdeleted\u003e",
+      "home/.config/opencode/plugins/usetrace/index.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/openhands/00 setup --agent openhands": {
+    "args": [
+      "setup",
+      "--agent",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "setting up openhands: invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/openhands/01 --json setup --agent openhands": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "setting up openhands: invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/openhands/02 setup --agent openhands --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "openhands",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up openhands: invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/pi/00 setup --agent pi": {
+    "args": [
+      "setup",
+      "--agent",
+      "pi"
+    ],
+    "stdout": "pi observer installed. Restart pi and confirm the Trace extension loaded.\n",
+    "exit": 0,
+    "files": {
+      "home/.pi/": "[0700] dir",
+      "home/.pi/agent/": "[0700] dir",
+      "home/.pi/agent/extensions/": "[0700] dir",
+      "home/.pi/agent/extensions/trace-global/": "[0700] dir",
+      "home/.pi/agent/extensions/trace-global/index.ts": "[0600] // Trace Pi/Oh My Pi global extension. Managed by trace setup.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\nconst agentName = \"pi\";\n\nexport default function (pi: any) {\n  let pending = Promise.resolve();\n  let queued = 0;\n  const argsByCall = new Map\u003cstring, { name: string; args: any }\u003e();\n  function send(kind: string, ctx: any, fields: Record\u003cstring, unknown\u003e = {}) {\n    let session: string;\n    try {\n      session = ctx.sessionManager.getSessionId();\n      if (!session || !ctx.sessionManager.getSessionFile() || typeof ctx.cwd !== \"string\" || !isAbsolute(ctx.cwd)) return;\n      if ((globalThis as any)[Symbol.for(\"usetrace.project.\" + agentName)] === ctx.cwd) return;\n    } catch (_) { return; }\n    if (queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ session_id: session, cwd: ctx.cwd, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"hook\", agentName + \"-global\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n  pi.on(\"session_start\", (_event: any, ctx: any) =\u003e send(\"session_start\", ctx));\n  pi.on(\"before_agent_start\", (event: any, ctx: any) =\u003e {\n    if (typeof event.prompt === \"string\") send(\"turn_start\", ctx, { prompt: event.prompt.length \u003c= 65536 ? event.prompt : \"\" });\n  });\n  pi.on(\"tool_execution_start\", (event: any) =\u003e {\n    if (argsByCall.size \u003c 256) argsByCall.set(event.toolCallId, { name: event.toolName, args: event.args });\n  });\n  pi.on(\"tool_execution_end\", (event: any, ctx: any) =\u003e {\n    const call = argsByCall.get(event.toolCallId);\n    argsByCall.delete(event.toolCallId);\n    if (!call || event.isError) return;\n    const file = call.args?.path ?? call.args?.file_path;\n    const fields = { tool_name: call.name, paths: typeof file === \"string\" ? [file] : [] };\n    if ([\"write\", \"edit\", \"apply_patch\", \"bash\", \"execute\"].includes(call.name)) send(\"tool_edit\", ctx, fields);\n    if (call.name === \"read\") send(\"file_read\", ctx, fields);\n  });\n  pi.on(\"agent_end\", (event: any, ctx: any) =\u003e {\n    if (event.willContinue || event.awaitingAsyncWork) return;\n    const messages = Array.isArray(event.messages) ? event.messages : [];\n    const assistant = [...messages].reverse().find((message: any) =\u003e message?.role === \"assistant\");\n    const text = Array.isArray(assistant?.content)\n      ? assistant.content.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\")\n      : typeof assistant?.content === \"string\" ? assistant.content : \"\";\n    if (text) send(\"turn_context\", ctx, { context_type: \"response\", text: text.slice(0, 65536) });\n    send(\"tool_edit\", ctx); // Custom tools or interrupted commands may write files.\n    send(\"turn_end\", ctx);\n  });\n  pi.on(\"session_shutdown\", (_event: any, ctx: any) =\u003e send(\"session_end\", ctx));\n}\n"
+    }
+  },
+  "broken/pi/01 --json setup --agent pi": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "pi"
+    ],
+    "stdout": "{\"additional_setup\":\"Restart pi and confirm the Trace extension loaded.\",\"agents\":[\"pi\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/pi/02 setup --agent pi --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "pi",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.pi/agent/extensions/trace-global/index.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/poolside/00 setup --agent poolside": {
+    "args": [
+      "setup",
+      "--agent",
+      "poolside"
+    ],
+    "stdout": "Poolside hooks installed. Poolside 1.0.16 or later is required; restart Poolside after setup.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/": "[0700] dir",
+      "home/.config/poolside/": "[0700] dir",
+      "home/.config/poolside/settings.yaml": "[0600] # BEGIN TRACE POOLSIDE HOOKS\nhooks:\n  SessionStart:\n    - name: trace-sessionstart\n      matcher: \"*\"\n      command: \"{{BIN}} hook poolside SessionStart\"\n  UserPromptSubmit:\n    - name: trace-userpromptsubmit\n      matcher: \"*\"\n      command: \"{{BIN}} hook poolside UserPromptSubmit\"\n  PostToolUse:\n    - name: trace-posttooluse\n      matcher: \"*\"\n      command: \"{{BIN}} hook poolside PostToolUse\"\n  Stop:\n    - name: trace-stop\n      matcher: \"*\"\n      command: \"{{BIN}} hook poolside Stop\"\n# END TRACE POOLSIDE HOOKS\n"
+    }
+  },
+  "broken/poolside/01 --json setup --agent poolside": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "poolside"
+    ],
+    "stdout": "{\"additional_setup\":\"Poolside 1.0.16 or later is required; restart Poolside after setup.\",\"agents\":[\"poolside\"],\"enabled\":false}\n",
+    "exit": 0
+  },
+  "broken/poolside/02 setup --agent poolside --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "poolside",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed.\n",
+    "exit": 0,
+    "files": {
+      "home/.config/poolside/settings.yaml": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/qwen/00 setup --agent qwen": {
+    "args": [
+      "setup",
+      "--agent",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "setting up qwen: parsing qwen-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/01 --json setup --agent qwen": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "setting up qwen: parsing qwen-global hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/02 setup --agent qwen --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "qwen",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up qwen: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/windsurf/00 setup --agent windsurf": {
+    "args": [
+      "setup",
+      "--agent",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "setting up windsurf: invalid Windsurf hook settings at .codeium/windsurf/hooks.json\n",
+    "exit": 1
+  },
+  "broken/windsurf/01 --json setup --agent windsurf": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "setting up windsurf: invalid Windsurf hook settings at .codeium/windsurf/hooks.json\n",
+    "exit": 1
+  },
+  "broken/windsurf/02 setup --agent windsurf --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "windsurf",
+      "--remove"
+    ],
+    "stdout": "",
+    "stderr": "setting up windsurf: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/zoo/00 setup --agent zoo": {
+    "args": [
+      "setup",
+      "--agent",
+      "zoo"
+    ],
+    "stdout": "Zoo Code observer package created. Install {{HOME}}/.trace/integrations/trace-zoo.vsix as a VSIX in your editor and reload the window.\n",
+    "exit": 0,
+    "files": {
+      "home/.trace/": "[0700] dir",
+      "home/.trace/integrations/": "[0700] dir",
+      "home/.trace/integrations/trace-zoo.vsix": "[0600] zip\n== [Content_Types].xml [0666]\n\u003c?xml version=\"1.0\" encoding=\"utf-8\"?\u003e\u003cTypes xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"\u003e\u003cDefault Extension=\"json\" ContentType=\"application/json\"/\u003e\u003cDefault Extension=\"js\" ContentType=\"application/javascript\"/\u003e\u003cDefault Extension=\"vsixmanifest\" ContentType=\"text/xml\"/\u003e\u003c/Types\u003e\n== extension.vsixmanifest [0666]\n\u003c?xml version=\"1.0\" encoding=\"utf-8\"?\u003e\u003cPackageManifest Version=\"2.0.0\" xmlns=\"http://schemas.microsoft.com/developer/vsx-schema/2011\"\u003e\u003cMetadata\u003e\u003cIdentity Language=\"en-US\" Id=\"trace-zoo\" Version=\"0.0.1\" Publisher=\"usetrace-si\"/\u003e\u003cDisplayName\u003eTrace Zoo Code Observer\u003c/DisplayName\u003e\u003cDescription xml:space=\"preserve\"\u003eLocal task observer for Trace\u003c/Description\u003e\u003cProperties\u003e\u003cProperty Id=\"Microsoft.VisualStudio.Code.Engine\" Value=\"^1.100.0\"/\u003e\u003cProperty Id=\"Microsoft.VisualStudio.Code.ExtensionDependencies\" Value=\"ZooCodeOrganization.zoo-code\"/\u003e\u003cProperty Id=\"Microsoft.VisualStudio.Code.ExecutesCode\" Value=\"true\"/\u003e\u003c/Properties\u003e\u003c/Metadata\u003e\u003cInstallation\u003e\u003cInstallationTarget Id=\"Microsoft.VisualStudio.Code\"/\u003e\u003c/Installation\u003e\u003cDependencies/\u003e\u003cAssets\u003e\u003cAsset Type=\"Microsoft.VisualStudio.Code.Manifest\" Path=\"extension/package.json\" Addressable=\"true\"/\u003e\u003c/Assets\u003e\u003c/PackageManifest\u003e\n== extension/package.json [0666]\n{\"name\":\"trace-zoo\",\"displayName\":\"Trace Zoo Code Observer\",\"publisher\":\"usetrace-si\",\"version\":\"0.0.1\",\"engines\":{\"vscode\":\"^1.100.0\"},\"main\":\"./extension.js\",\"activationEvents\":[\"onStartupFinished\"],\"extensionDependencies\":[\"ZooCodeOrganization.zoo-code\"]}\n== extension/extension.js [0666]\n// Trace Zoo Code task observer. It never changes Zoo Code's execution.\nconst vscode = require('vscode');\nconst path = require('node:path');\nconst { spawn } = require('node:child_process');\nconst TRACE = \"{{BIN}}\";\n\nlet disposeObserver = () =\u003e {};\nlet stopped = false;\n\nfunction activate() {\n  stopped = false;\n  const zoo = vscode.extensions.getExtension('ZooCodeOrganization.zoo-code');\n  if (!zoo) return;\n  // Do not hold up VS Code activation while Zoo Code starts.\n  Promise.resolve().then(() =\u003e zoo.activate()).then((api) =\u003e {\n    if (stopped || !api || typeof api.on !== 'function' || typeof api.getTaskHistoryItem !== 'function') return;\n    const active = new Map();\n    const listeners = [];\n    let pending = Promise.resolve();\n    let queued = 0;\n    let disposed = false;\n\n    function enqueue(fn) {\n      if (disposed || queued \u003e= 128) return;\n      queued++;\n      pending = pending.then(() =\u003e { if (!disposed) return fn(); }).catch(() =\u003e {}).finally(() =\u003e { queued--; });\n    }\n    function send(kind, payload) {\n      return new Promise((resolve) =\u003e {\n        let child;\n        let timer;\n        let finished = false;\n        const done = () =\u003e {\n          if (finished) return;\n          finished = true;\n          clearTimeout(timer);\n          resolve();\n        };\n        try {\n          child = spawn(TRACE, ['hook', 'zoo', kind], { stdio: ['pipe', 'ignore', 'ignore'] });\n          timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n          timer.unref();\n          child.unref();\n          child.stdin.unref?.();\n          child.on('error', done);\n          child.on('close', done);\n          child.stdin.on('error', () =\u003e {});\n          child.stdin.end(JSON.stringify(payload));\n        } catch (_) { done(); }\n      });\n    }\n    function allowedWorkspace(workspace) {\n      if (typeof workspace !== 'string' || !path.isAbsolute(workspace)) return false;\n      return (vscode.workspace.workspaceFolders || []).some(\n        (folder) =\u003e folder.uri.scheme === 'file' \u0026\u0026 path.resolve(folder.uri.fsPath) === path.resolve(workspace),\n      );\n    }\n    async function start(taskId) {\n      if (typeof taskId !== 'string' || !taskId || active.has(taskId)) return;\n      const item = await api.getTaskHistoryItem(taskId);\n      // Unknown workspace and subtasks are intentionally skipped.\n      if (!item || item.parentTaskId || !allowedWorkspace(item.workspace)) return;\n      const payload = { cwd: item.workspace, session_id: taskId };\n      active.set(taskId, { payload, phase: 'running', result: '' });\n      const prompt = typeof item.task === 'string' \u0026\u0026 item.task.length \u003c= 65536 ? item.task : '';\n      await send('turn_start', { ...payload, prompt });\n    }\n    async function endTurn(state) {\n      // Task tools may have changed files without reporting paths.\n      await send('tool_edit', state.payload);\n      await send('turn_end', { ...state.payload, text: state.result });\n      state.phase = 'idle';\n      state.result = '';\n    }\n    async function finish(taskId) {\n      const state = active.get(taskId);\n      if (!state) return;\n      if (state.phase === 'running') await endTurn(state);\n      active.delete(taskId);\n      await send('session_end', state.payload);\n    }\n    async function message(event) {\n      const state = active.get(event.taskId);\n      const msg = event.message;\n      if (!state || !msg || msg.partial === true) return;\n      if (state.phase === 'running' \u0026\u0026 msg.type === 'say' \u0026\u0026 msg.say === 'completion_result') {\n        state.result = typeof msg.text === 'string' \u0026\u0026 msg.text.length \u003c= 65536 ? msg.text : '';\n      } else if (state.phase === 'running' \u0026\u0026 msg.type === 'ask' \u0026\u0026 msg.ask === 'completion_result') {\n        // Zoo presents this ask after the assistant's completion result.\n        await endTurn(state);\n      } else if (state.phase === 'idle' \u0026\u0026 event.action === 'created' \u0026\u0026 msg.type === 'say' \u0026\u0026 msg.say === 'user_feedback') {\n        // This is feedback to the completion ask, not a tool approval.\n        state.phase = 'running';\n        const prompt = typeof msg.text === 'string' \u0026\u0026 msg.text.length \u003c= 65536 ? msg.text : '';\n        await send('turn_start', { ...state.payload, prompt });\n      }\n    }\n    function listen(name, fn) {\n      const listener = (...args) =\u003e enqueue(() =\u003e fn(...args));\n      api.on(name, listener);\n      listeners.push([name, listener]);\n    }\n    listen('taskStarted', start);\n    listen('taskCompleted', finish);\n    listen('taskAborted', finish);\n    const onMessage = (event) =\u003e {\n      const msg = event?.message;\n      if (msg \u0026\u0026 ((msg.type === 'ask' \u0026\u0026 msg.ask === 'completion_result') ||\n          (msg.type === 'say' \u0026\u0026 (msg.say === 'completion_result' || msg.say === 'user_feedback')))) {\n        enqueue(() =\u003e message(event));\n      }\n    };\n    api.on('message', onMessage);\n    listeners.push(['message', onMessage]);\n    disposeObserver = () =\u003e {\n      disposed = true;\n      for (const [name, listener] of listeners) api.removeListener(name, listener);\n    };\n  }).catch(() =\u003e {});\n}\n\nfunction deactivate() { stopped = true; disposeObserver(); }\nmodule.exports = { activate, deactivate };\n"
+    }
+  },
+  "broken/zoo/01 --json setup --agent zoo": {
+    "args": [
+      "--json",
+      "setup",
+      "--agent",
+      "zoo"
+    ],
+    "stdout": "{\"additional_setup\":\"Install the generated VSIX in your editor and reload the window.\",\"agents\":[\"zoo\"],\"enabled\":false,\"extension_package\":\"{{HOME}}/.trace/integrations/trace-zoo.vsix\"}\n",
+    "exit": 0
+  },
+  "broken/zoo/02 setup --agent zoo --remove": {
+    "args": [
+      "setup",
+      "--agent",
+      "zoo",
+      "--remove"
+    ],
+    "stdout": "Global Trace hooks removed. Uninstall the Trace Zoo Code Observer extension in your editor.\n",
+    "exit": 0,
+    "files": {
+      "home/.trace/integrations/trace-zoo.vsix": "\u003cdeleted\u003e"
+    }
+  },
   "clean/amp/00 setup --agent amp": {
     "args": [
       "setup",

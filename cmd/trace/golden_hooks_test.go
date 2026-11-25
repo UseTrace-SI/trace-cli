@@ -221,6 +221,45 @@ func TestGoldenHooks(t *testing.T) {
 		stdin := strings.ReplaceAll(tc.stdin, "{{HEAD}}", head)
 		g.add("extra/"+tc.name, s.hook(rootsFor(batch), invocation{dir: tc.dir, args: tc.args, stdin: stdin, env: tc.env}))
 	}
+	// Agent names and events are matched exactly, except the common
+	// session-start event, which also starts a stopped daemon in any case.
+	cwd := func(root string) string { return fmt.Sprintf(`{"session_id":"v1","prompt":"hi","cwd":%q}`, root) }
+	variants := []struct {
+		name, root string
+		args       []string
+		stdin      string
+	}{
+		{"agent-Claude-Code", batch, []string{"hook", "Claude-Code", "Stop"}, cwd(batch)},
+		{"agent-CURSOR", batch, []string{"hook", "CURSOR", "beforeSubmitPrompt"}, fmt.Sprintf(`{"conversation_id":"c1","prompt":"hi","workspace_roots":[%q]}`, batch)},
+		{"alias-Cursor-Global", batch, []string{"hook", "Cursor-Global", "beforeSubmitPrompt"}, fmt.Sprintf(`{"conversation_id":"c1","prompt":"hi","workspace_roots":[%q]}`, batch)},
+		{"alias-GEMINI-GLOBAL", batch, []string{"hook", "GEMINI-GLOBAL", "BeforeAgent"}, cwd(batch)},
+		{"alias-codex-global", batch, []string{"hook", "codex-global", "Stop"}, cwd(batch)},
+		{"event-codex-stop", batch, []string{"hook", "codex", "stop"}, cwd(batch)},
+		{"event-codex-STOP", batch, []string{"hook", "codex", "STOP"}, cwd(batch)},
+		{"event-agy-stop", batch, []string{"hook", "agy", "stop"}, cwd(batch)},
+		{"event-cursor-BeforeSubmitPrompt", batch, []string{"hook", "cursor", "BeforeSubmitPrompt"}, fmt.Sprintf(`{"conversation_id":"c1","prompt":"hi","workspace_roots":[%q]}`, batch)},
+		{"event-claude-userpromptsubmit", batch, []string{"hook", "claude-code", "userpromptsubmit"}, cwd(batch)},
+		{"legacy-claude-sessionstart", legacy, []string{"hook", "claude-code", "sessionstart"}, cwd(legacy)},
+		{"legacy-claude-SESSIONSTART", legacy, []string{"hook", "claude-code", "SESSIONSTART"}, cwd(legacy)},
+		{"legacy-pi-session_start", legacy, []string{"hook", "pi", "session_start"}, cwd(legacy)},
+		{"legacy-claude-userpromptsubmit", legacy, []string{"hook", "claude-code", "userpromptsubmit"}, cwd(legacy)},
+		{"legacy-gemini-beforeagent", legacy, []string{"hook", "gemini", "beforeagent"}, cwd(legacy)},
+		{"legacy-gemini-BeforeAgent", legacy, []string{"hook", "gemini", "BeforeAgent"}, cwd(legacy)},
+		{"legacy-Gemini-BeforeAgent", legacy, []string{"hook", "Gemini", "BeforeAgent"}, cwd(legacy)},
+	}
+	for _, tc := range variants {
+		g.add("case/"+tc.name, s.hook(rootsFor(tc.root), invocation{dir: tc.root, args: tc.args, stdin: tc.stdin}))
+	}
+	// Hooks read at most 4 MiB of payload: exactly 4 MiB of JSON decodes;
+	// one byte more is truncated and invalid.
+	prefix := fmt.Sprintf(`{"session_id":"big","prompt":"hi","cwd":%q,"pad":"`, batch)
+	atLimit := prefix + strings.Repeat("x", 4<<20-len(prefix)-2) + `"}`
+	overLimit := prefix + strings.Repeat("x", 4<<20-len(prefix)-1) + `"}`
+	for _, name := range []string{"claude-code", "codex", "gemini-global", "aider"} {
+		ev := map[string]string{"claude-code": "UserPromptSubmit", "codex": "UserPromptSubmit", "gemini-global": "BeforeAgent", "aider": "turn_start"}[name]
+		g.add("payload-limit/"+name+"/at", s.hook(rootsFor(batch), invocation{dir: batch, args: []string{"hook", name, ev}, stdin: atLimit}))
+		g.add("payload-limit/"+name+"/over", s.hook(rootsFor(batch), invocation{dir: batch, args: []string{"hook", name, ev}, stdin: overLimit}))
+	}
 	g.check()
 }
 
@@ -270,6 +309,76 @@ func TestGoldenGlobalHooksBesideProjectHooks(t *testing.T) {
 				g.add(key, s.hook(roots, invocation{dir: root, args: []string{"hook", name, p.Event}, stdin: stdin, env: env}))
 				if n == 0 && len(seen) == 1 {
 					g.add("repo-flag/"+key, s.hook(roots, invocation{dir: root, args: []string{"--repo", root, "hook", name, p.Event}, stdin: stdin, env: env}))
+				}
+			}
+		}
+	}
+	g.check()
+}
+
+// TestGoldenProjectHooksInSubdirectory covers agents whose project
+// configuration sits in a subdirectory of the repository, invoked from that
+// subdirectory and from the root, by their project hooks and their
+// user-level aliases.
+func TestGoldenProjectHooksInSubdirectory(t *testing.T) {
+	payloads := loadHookPayloads(t)
+	s := newSandbox(t)
+	g := newGolden(t, "hooks_subdir")
+	for _, base := range []string{"amp", "cline", "copilot", "cursor", "factory", "gemini", "kilo", "kiro", "omp", "opencode", "pi", "qwen", "windsurf"} {
+		root := s.repo("subdir-" + base)
+		holdFakeDaemon(t, root)
+		if r := s.run(invocation{dir: root, args: []string{"init", "--agent", base}}); r.Exit != 0 {
+			t.Fatalf("init --agent %s: %+v", base, r)
+		}
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var moved []string
+		for _, entry := range entries {
+			if name := entry.Name(); strings.HasPrefix(name, ".") && name != ".git" && name != ".trace" {
+				if err := os.Rename(filepath.Join(root, name), filepath.Join(root, "sub", name)); err != nil {
+					t.Fatal(err)
+				}
+				moved = append(moved, name)
+			}
+		}
+		if len(moved) == 0 {
+			t.Fatalf("%s: no project configuration to move", base)
+		}
+		sub := filepath.Join(root, "sub")
+		roots := map[string]string{"root": root, "home": s.home, "trace_home": s.traceHome}
+		var first *hookPayload
+		for i := range payloads {
+			if payloads[i].Agent == base {
+				first = &payloads[i]
+				break
+			}
+		}
+		for _, name := range append([]string{base}, hookAliases[base]...) {
+			events := []string{first.Event}
+			for _, ev := range []string{"SessionStart", "Stop"} {
+				if ev != first.Event {
+					events = append(events, ev)
+				}
+			}
+			for _, ev := range events {
+				stdin := first.Stdin
+				if ev != first.Event {
+					stdin = `{"session_id":"sub-1","cwd":"{{ROOT}}"}`
+				}
+				for _, dir := range []string{"sub", "root"} {
+					cwd, payloadRoot := sub, sub
+					if dir == "root" {
+						cwd = root
+					}
+					env := map[string]string{}
+					for k, v := range first.Env {
+						env[k] = strings.ReplaceAll(s.expand(v), "{{ROOT}}", payloadRoot)
+					}
+					in := strings.ReplaceAll(s.expand(stdin), "{{ROOT}}", payloadRoot)
+					key := fmt.Sprintf("%s/%s/cwd-%s", name, ev, dir)
+					g.add(key, s.hook(roots, invocation{dir: cwd, args: []string{"hook", name, ev}, stdin: in, env: env}))
 				}
 			}
 		}

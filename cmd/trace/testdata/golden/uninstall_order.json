@@ -1,0 +1,555 @@
+{
+  ".agents/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "parsing Antigravity hooks: invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".agents/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "parsing Antigravity hooks: invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".agents/plugins/trace/hooks/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.factory/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.grok/hooks/trace.json": "\u003cdeleted\u003e",
+      "root/.omp/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.pi/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"
+    }
+  },
+  ".agents/plugins/trace/hooks/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".claude/settings.local.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".claude/settings.local.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".cursor/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".cursor/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".devin/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".devin/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".factory/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"
+    }
+  },
+  ".factory/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".factory/settings.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.factory/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"
+    }
+  },
+  ".factory/settings.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".gemini/settings.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".gemini/settings.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".github/hooks/usetrace.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".github/hooks/usetrace.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".grok/hooks/trace.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.factory/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.omp/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.pi/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"
+    }
+  },
+  ".grok/hooks/trace.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".mcp.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.agents/plugins/trace/hooks/hooks.json": "\u003cdeleted\u003e",
+      "root/.agents/plugins/trace/plugin.json": "\u003cdeleted\u003e",
+      "root/.amp/plugins/trace.ts": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.factory/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.grok/hooks/trace.json": "\u003cdeleted\u003e",
+      "root/.kilo/plugin/trace.ts": "\u003cdeleted\u003e",
+      "root/.kiro/hooks/trace.json": "\u003cdeleted\u003e",
+      "root/.omp/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.pi/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.trace/integrations/trace_aider.py": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_codebuff.mjs": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_crewai.py": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_langgraph.py": "\u003cdeleted\u003e"
+    }
+  },
+  ".mcp.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".openclaude/settings.local.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e"
+    }
+  },
+  ".openclaude/settings.local.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".openhands/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid OpenHands hooks configuration\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n"
+    }
+  },
+  ".openhands/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  ".qwen/settings.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".qwen/settings.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  ".windsurf/hooks.json/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n"
+    }
+  },
+  ".windsurf/hooks.json/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "invalid character 'b' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "intact/00 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "Trace hooks removed\n",
+    "exit": 0,
+    "files": {
+      "root/.agents/hooks.json": "\u003cdeleted\u003e",
+      "root/.agents/plugins/trace/hooks/hooks.json": "\u003cdeleted\u003e",
+      "root/.agents/plugins/trace/plugin.json": "\u003cdeleted\u003e",
+      "root/.amp/plugins/trace.ts": "\u003cdeleted\u003e",
+      "root/.claude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e",
+      "root/.cursor/hooks.json": "[0644] {\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"echo user-stop\"\n      }\n    ]\n  },\n  \"version\": 1\n}\n",
+      "root/.devin/hooks.json": "\u003cdeleted\u003e",
+      "root/.factory/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.git/hooks/post-commit": "[0755] #!/bin/sh\necho user-hook\n",
+      "root/.git/hooks/post-rewrite": "\u003cdeleted\u003e",
+      "root/.github/hooks/usetrace.json": "[0600] {\n  \"version\": 1\n}\n",
+      "root/.grok/hooks/trace.json": "\u003cdeleted\u003e",
+      "root/.kilo/plugin/trace.ts": "\u003cdeleted\u003e",
+      "root/.kiro/hooks/trace.json": "\u003cdeleted\u003e",
+      "root/.mcp.json": "[0644] {\n  \"mcpServers\": {\n    \"user\": {\n      \"command\": \"user-mcp\"\n    }\n  }\n}\n",
+      "root/.omp/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.openclaude/settings.local.json": "[0644] {\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  }\n}\n",
+      "root/.openhands/hooks.json": "[0644] {\n  \"Stop\": [\n    {\n      \"hooks\": [\n        {\n          \"command\": \"echo user\",\n          \"type\": \"command\"\n        }\n      ]\n    }\n  ]\n}\n",
+      "root/.pi/extensions/trace/index.ts": "\u003cdeleted\u003e",
+      "root/.qwen/settings.json": "[0644] {\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n",
+      "root/.trace/codex.enabled": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_aider.py": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_codebuff.mjs": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_crewai.py": "\u003cdeleted\u003e",
+      "root/.trace/integrations/trace_langgraph.py": "\u003cdeleted\u003e"
+    }
+  },
+  "intact/01 --json uninstall": {
+    "args": [
+      "--json",
+      "uninstall"
+    ],
+    "stdout": "{\"purged\":false,\"uninstalled\":true}\n",
+    "exit": 0
+  }
+}

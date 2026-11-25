@@ -65,12 +65,23 @@ func seed(t *testing.T, root string, files map[string]string) {
 // it changed under roots. The first step records the complete tree.
 func (s *sandbox) steps(g *golden, prefix string, roots map[string]string, dir string, env map[string]string, commands ...[]string) {
 	s.t.Helper()
+	s.recordSteps(g, prefix, roots, dir, env, true, commands...)
+}
+
+// changedSteps is steps, recording only changed files from the first step.
+func (s *sandbox) changedSteps(g *golden, prefix string, roots map[string]string, dir string, env map[string]string, commands ...[]string) {
+	s.t.Helper()
+	s.recordSteps(g, prefix, roots, dir, env, false, commands...)
+}
+
+func (s *sandbox) recordSteps(g *golden, prefix string, roots map[string]string, dir string, env map[string]string, fullFirst bool, commands ...[]string) {
+	s.t.Helper()
 	before := s.tree(roots, time.Now())
 	for i, args := range commands {
 		started := time.Now()
 		r := s.run(invocation{dir: dir, args: args, env: env})
 		after := s.tree(roots, started)
-		if i == 0 {
+		if i == 0 && fullFirst {
 			r.Files = after
 		} else {
 			r.Files = changes(before, after)
@@ -78,6 +89,30 @@ func (s *sandbox) steps(g *golden, prefix string, roots map[string]string, dir s
 		before = after
 		g.add(fmt.Sprintf("%s/%02d %s", prefix, i, strings.Join(args, " ")), r)
 	}
+}
+
+// brokenProjectFiles are project configuration files that Trace merges
+// into; seeded with invalid JSON they exercise the error paths.
+var brokenProjectFiles = []string{
+	".claude/settings.local.json", ".openclaude/settings.local.json", ".cursor/hooks.json", ".gemini/settings.json",
+	".qwen/settings.json", ".factory/hooks.json", ".factory/settings.json", ".windsurf/hooks.json", ".devin/hooks.json",
+	".github/hooks/usetrace.json", ".openhands/hooks.json", ".agents/hooks.json", ".grok/hooks/trace.json",
+	".agents/plugins/trace/hooks/hooks.json", ".mcp.json",
+}
+
+// brokenGlobalFiles are the user-level counterparts.
+var brokenGlobalFiles = []string{
+	".claude/settings.json", ".codex/hooks.json", ".cursor/hooks.json", ".gemini/settings.json", ".qwen/settings.json",
+	".factory/hooks.json", ".openhands/hooks.json", ".openclaude/settings.json", ".augment/settings.json",
+	".codeium/windsurf/hooks.json", ".copilot/hooks/usetrace.json", ".kiro/settings/hooks.json", ".cline/data/settings.json",
+}
+
+func brokenSeeds(paths []string) map[string]string {
+	out := map[string]string{}
+	for _, path := range paths {
+		out[path] = "{not json"
+	}
+	return out
 }
 
 func TestGoldenProjectInstall(t *testing.T) {
@@ -123,7 +158,66 @@ func TestGoldenProjectInstall(t *testing.T) {
 		[]string{"agent", "add", "zoo"},
 		[]string{"agent", "add"},
 		[]string{"--json", "agent", "add", "hermes"},
+		[]string{"init", "--agent", "git"},
+		[]string{"agent", "add", "git"},
+		[]string{"agent", "remove", "git"},
+		[]string{"--json", "agent", "add", "git"},
+		[]string{"agent", "add", "Claude-Code"},
+		[]string{"init", "--agent", "CODEX"},
+		[]string{"agent", "add", "cursor-global"},
 	)
+	// Invalid JSON in every configuration file Trace merges into.
+	for _, agent := range projectAgents {
+		s := newSandbox(t)
+		root := s.repo("repo")
+		seed(t, root, brokenSeeds(brokenProjectFiles))
+		holdFakeDaemon(t, root)
+		roots := map[string]string{"root": root, "home": s.home, "trace_home": s.traceHome}
+		s.changedSteps(g, "broken/"+agent, roots, root, nil,
+			[]string{"init", "--agent", agent},
+			[]string{"--json", "init", "--agent", agent},
+			[]string{"agent", "add", agent},
+			[]string{"agent", "remove", agent},
+			[]string{"uninstall"},
+		)
+	}
+	g.check()
+}
+
+// TestGoldenUninstallOrder covers trace uninstall stopping at the first
+// agent whose configuration it cannot update: the agents before it are
+// removed, the ones after it are not.
+func TestGoldenUninstallOrder(t *testing.T) {
+	g := newGolden(t, "uninstall_order")
+	for _, path := range append([]string{""}, brokenProjectFiles...) {
+		s := newSandbox(t)
+		root := s.repo("repo")
+		for _, files := range projectSeeds {
+			seed(t, root, files)
+		}
+		// OpenHands adds Trace only to existing project hooks.
+		seed(t, root, map[string]string{".openhands/hooks.json": `{"Stop":[{"hooks":[{"type":"command","command":"echo user"}]}]}`})
+		holdFakeDaemon(t, root)
+		for i, agent := range projectAgents {
+			args := []string{"agent", "add", agent}
+			if i == 0 {
+				args = []string{"init", "--agent", agent}
+			}
+			if r := s.run(invocation{dir: root, args: args}); r.Exit != 0 {
+				t.Fatalf("%v: %+v", args, r)
+			}
+		}
+		name := "intact"
+		if path != "" {
+			name = path
+			writeFile(t, filepath.Join(root, filepath.FromSlash(path)), "{broken")
+		}
+		roots := map[string]string{"root": root, "home": s.home, "trace_home": s.traceHome}
+		s.changedSteps(g, name, roots, root, nil,
+			[]string{"uninstall"},
+			[]string{"--json", "uninstall"},
+		)
+	}
 	g.check()
 }
 
@@ -151,6 +245,17 @@ func TestGoldenGlobalSetup(t *testing.T) {
 				[]string{"enable", "--agent", agent},
 			)
 		}
+	}
+	// Invalid JSON in every user-level configuration file.
+	for _, agent := range globalAgents {
+		s := newSandbox(t)
+		seed(t, s.home, brokenSeeds(brokenGlobalFiles))
+		roots := map[string]string{"home": s.home, "trace_home": s.traceHome}
+		s.changedSteps(g, "broken/"+agent, roots, s.home, nil,
+			[]string{"setup", "--agent", agent},
+			[]string{"--json", "setup", "--agent", agent},
+			[]string{"setup", "--agent", agent, "--remove"},
+		)
 	}
 	// Combinations, defaults, configuration directories and errors.
 	combos := [][]string{

@@ -5,14 +5,21 @@ package main
 // The golden tests run the real trace binary as agents and users do and
 // compare what it prints, its exit status and every file it writes with
 // recorded results in testdata/golden. They pin the observable behaviour of
-// each agent integration: hook responses, spool frames, daemon start-up and
-// the configuration written by init, agent add/remove, uninstall and setup.
+// each agent integration: hook responses, spool frames, daemon start-up,
+// the configuration written by init, agent add/remove, uninstall and setup
+// (including invalid configuration files and the uninstall order), the
+// programs and arguments that run, review, fork and resume start, and the
+// help text generated from the agent registry. TestGoldenAgentListsMatchRegistry
+// fails when a registered agent is missing from the lists the tests iterate.
 //
 // Regenerate after an intended behaviour change with
 //
 //	go test ./cmd/trace -run Golden -update-golden
 //
-// and review the diff of testdata/golden like any other change.
+// and review the diff of testdata/golden like any other change. To show that
+// a refactoring changes nothing, record new cases with the binary built from
+// the commit before it (copy these files into that checkout and run
+// -update-golden there) and check them against the new code.
 
 import (
 	"archive/zip"
@@ -565,5 +572,22 @@ func waitForDaemons(t *testing.T, root string, stop bool) {
 			t.Fatalf("a Trace daemon for %q is still running", root)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// stubAgent puts a program on PATH that appends its name, arguments and
+// standard input to $TRACE_STUB_DIR/<name>.log and prints one line. It
+// uses only shell builtins, since PATH holds nothing else.
+func (s *sandbox) stubAgent(name string) {
+	s.t.Helper()
+	script := "#!/bin/sh\n{\n\tprintf '%s\\n' '" + name + "' \"$@\"\n" +
+		"\twhile IFS= read -r line; do printf '%s\\n' \"$line\"; done\n" +
+		"\t[ -z \"$line\" ] || printf '%s\\n' \"$line\"\n" +
+		"} >> \"$TRACE_STUB_DIR/" + name + ".log\"\n" +
+		"printf '%s\\n' 'stub " + name + " output'\n"
+	path := filepath.Join(s.pathDir, name)
+	writeFile(s.t, path, script)
+	if err := os.Chmod(path, 0755); err != nil {
+		s.t.Fatal(err)
 	}
 }

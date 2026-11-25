@@ -2284,5 +2284,77 @@
   "event": "turn_start",
   "stdin": "{\"session_id\":\"s1\",\"prompt\":",
   "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records continue turns in-process)"
+ },
+ {
+  "agent": "continue",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records vibe turns in-process)"
+ },
+ {
+  "agent": "vibe",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records crush turns in-process)"
+ },
+ {
+  "agent": "crush",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
  }
 ]

@@ -1,4 +1,1405 @@
 {
+  "broken/agy/00 init --agent agy": {
+    "args": [
+      "init",
+      "--agent",
+      "agy"
+    ],
+    "stdout": "",
+    "stderr": "parsing Antigravity hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/agy/01 --json init --agent agy": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "agy"
+    ],
+    "stdout": "",
+    "stderr": "parsing Antigravity hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/agy/02 agent add agy": {
+    "args": [
+      "agent",
+      "add",
+      "agy"
+    ],
+    "stdout": "",
+    "stderr": "parsing Antigravity hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/agy/03 agent remove agy": {
+    "args": [
+      "agent",
+      "remove",
+      "agy"
+    ],
+    "stdout": "",
+    "stderr": "removing agent agy: parsing Antigravity hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/agy/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/aider/00 init --agent aider": {
+    "args": [
+      "init",
+      "--agent",
+      "aider"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/integrations/": "[0700] dir",
+      "root/.trace/integrations/trace_aider.py": "[0600] # Trace Aider bridge. Managed by trace agent add/remove.\nimport json\nimport queue\nimport subprocess\nimport threading\nimport time\nimport uuid\n\nTRACE = \"{{BIN}}\"\nROOT = \"{{BASE}}/repo\"\n\n\nclass TraceAider:\n    \"\"\"Wrap explicit Coder.run(message) calls; interactive chat is not covered.\"\"\"\n\n    def __init__(self, coder):\n        self.coder = coder\n        self.session_id = str(uuid.uuid4())\n        self._events = queue.Queue(maxsize=256)\n        self._run_lock = threading.Lock()\n        threading.Thread(target=self._worker, daemon=True, name=\"trace-aider\").start()\n\n    def _worker(self):\n        while True:\n            batch = self._events.get()\n            try:\n                for name, payload in batch:\n                    try:\n                        subprocess.run([TRACE, \"--repo\", ROOT, \"hook\", \"aider\", name],\n                                       input=json.dumps(payload), text=True, timeout=2,\n                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)\n                    except (OSError, subprocess.SubprocessError):\n                        pass\n            finally:\n                self._events.task_done()\n\n    def _send(self, batch):\n        try:\n            self._events.put_nowait(batch)\n            return True\n        except queue.Full:\n            return False\n\n    def run(self, *args, **kwargs):\n        # Keep the bridge's original message= spelling as an alias while also\n        # accepting Aider's native with_message= calling convention.\n        if not args and \"message\" in kwargs and \"with_message\" not in kwargs:\n            kwargs = dict(kwargs)\n            args = (kwargs.pop(\"message\"),)\n        message = args[0] if args else kwargs.get(\"with_message\")\n        if not isinstance(message, str) or not message:\n            return self.coder.run(*args, **kwargs)\n        stripped = message.lstrip()\n        preproc = args[1] if len(args) \u003e 1 else kwargs.get(\"preproc\", True)\n        if preproc and stripped.startswith((\"/\", \"!\")):\n            parts = stripped.split(None, 1)\n            if len(parts) != 2 or parts[0] not in (\"/ask\", \"/code\", \"/architect\", \"/context\") or not parts[1].strip():\n                return self.coder.run(*args, **kwargs)\n        # A session has only one active Trace turn. Preserve concurrent coder\n        # calls without creating a competing turn; overlapping edits may still\n        # be included in the first invocation's repository snapshot.\n        if not self._run_lock.acquire(blocking=False):\n            return self.coder.run(*args, **kwargs)\n        try:\n            payload = {\"session_id\": self.session_id}\n            prompt = message if len(message) \u003c= 65536 else \"\"\n            # Reserve queue capacity for the matching end batch. Only the\n            # holder of _run_lock may add lifecycle events.\n            recorded = self._events.qsize() \u003c= self._events.maxsize - 2 and self._send(\n                [(\"turn_start\", {**payload, \"prompt\": prompt})]\n            )\n            response = None\n            try:\n                response = self.coder.run(*args, **kwargs)\n                return response\n            finally:\n                if recorded:\n                    # Aider can change files without reporting each path.\n                    batch = [(\"tool_edit\", payload)]\n                    if isinstance(response, str) and response and len(response) \u003c= 65536:\n                        batch.append((\"turn_context\", {**payload, \"context_type\": \"response\", \"text\": response}))\n                    batch.append((\"turn_end\", payload))\n                    self._send(batch)\n        finally:\n            self._run_lock.release()\n\n    def finish(self):\n        if self._run_lock.acquire(blocking=False):\n            try:\n                self._send([(\"session_end\", {\"session_id\": self.session_id})])\n            finally:\n                self._run_lock.release()\n\n    def flush(self, timeout=5):\n        \"\"\"Wait up to timeout seconds for queued events; return whether drained.\"\"\"\n        deadline = time.monotonic() + max(0, timeout)\n        with self._events.all_tasks_done:\n            while self._events.unfinished_tasks:\n                remaining = deadline - time.monotonic()\n                if remaining \u003c= 0:\n                    return False\n                self._events.all_tasks_done.wait(remaining)\n        return True\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/aider/01 --json init --agent aider": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "aider"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/aider/02 agent add aider": {
+    "args": [
+      "agent",
+      "add",
+      "aider"
+    ],
+    "stdout": "Added agent aider.\n",
+    "exit": 0
+  },
+  "broken/aider/03 agent remove aider": {
+    "args": [
+      "agent",
+      "remove",
+      "aider"
+    ],
+    "stdout": "Removed agent aider.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/integrations/trace_aider.py": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/aider/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/amp/00 init --agent amp": {
+    "args": [
+      "init",
+      "--agent",
+      "amp"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.amp/": "[0700] dir",
+      "root/.amp/plugins/": "[0700] dir",
+      "root/.amp/plugins/trace.ts": "[0600] // Trace Amp plugin. Managed by trace agent add/remove.\nimport { spawn } from \"node:child_process\";\nimport { isAbsolute } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\nconst repoRoot = \"{{BASE}}/repo\";\n\nexport default function (amp: any) {\n  let pending = Promise.resolve();\n  let queued = 0;\n  function send(kind: string, sessionId: unknown, fields: Record\u003cstring, unknown\u003e = {}) {\n    if (typeof sessionId !== \"string\" || !sessionId || queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ session_id: sessionId, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"--repo\", repoRoot, \"hook\", \"amp\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n\n  amp.on(\"session.start\", (event: any) =\u003e send(\"session_start\", event.thread?.id));\n  amp.on(\"agent.start\", (event: any) =\u003e {\n    const prompt = typeof event.message === \"string\" \u0026\u0026 event.message.length \u003c= 65536 ? event.message : \"\";\n    send(\"turn_start\", event.thread?.id, { prompt });\n  });\n  amp.on(\"tool.result\", (event: any) =\u003e {\n    if (event?.status !== \"done\" || typeof event.tool !== \"string\" || event.tool.length \u003e 256) return;\n    try {\n      const files = amp.helpers.filesModifiedByToolCall(event);\n      if (!Array.isArray(files)) return;\n      const paths = files.slice(0, 64).map((file: any) =\u003e amp.helpers.filePathFromURI(file))\n        .filter((path: unknown) =\u003e typeof path === \"string\" \u0026\u0026 path.length \u003c= 4096 \u0026\u0026 isAbsolute(path));\n      if (paths.length) send(\"tool_edit\", event.thread?.id, { tool_name: event.tool, paths });\n    } catch (_) { /* The turn-end scan remains available when helpers fail. */ }\n  });\n  amp.on(\"agent.end\", (event: any) =\u003e {\n    const last = Array.isArray(event.messages) ? event.messages.at(-1) : null;\n    if (last?.role === \"assistant\" \u0026\u0026 Array.isArray(last.content)) {\n      let text = \"\";\n      for (const block of last.content) {\n        if (block?.type === \"text\" \u0026\u0026 typeof block.text === \"string\" \u0026\u0026 text.length \u003c 65536) {\n          text += (text ? \"\\n\" : \"\") + block.text.slice(0, 65536 - text.length);\n        }\n      }\n      if (text) send(\"turn_context\", event.thread?.id, { context_type: \"response\", text: text.slice(0, 65536) });\n    }\n    send(\"tool_edit\", event.thread?.id);\n    send(\"turn_end\", event.thread?.id);\n  });\n}\n",
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/amp/01 --json init --agent amp": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "amp"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/amp/02 agent add amp": {
+    "args": [
+      "agent",
+      "add",
+      "amp"
+    ],
+    "stdout": "Added agent amp.\n",
+    "exit": 0
+  },
+  "broken/amp/03 agent remove amp": {
+    "args": [
+      "agent",
+      "remove",
+      "amp"
+    ],
+    "stdout": "Removed agent amp.\n",
+    "exit": 0,
+    "files": {
+      "root/.amp/plugins/trace.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/amp/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/00 init --agent claude-code": {
+    "args": [
+      "init",
+      "--agent",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "installing Claude hooks: parsing claude-code hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/claude-code/01 --json init --agent claude-code": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "installing Claude hooks: parsing claude-code hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/02 agent add claude-code": {
+    "args": [
+      "agent",
+      "add",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "installing Claude hooks: parsing claude-code hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/03 agent remove claude-code": {
+    "args": [
+      "agent",
+      "remove",
+      "claude-code"
+    ],
+    "stdout": "",
+    "stderr": "removing agent claude-code: removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/claude-code/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cline/00 init --agent cline": {
+    "args": [
+      "init",
+      "--agent",
+      "cline"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.cline/": "[0700] dir",
+      "root/.cline/hooks/": "[0700] dir",
+      "root/.cline/hooks/PostToolUse": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline PostToolUse \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/SessionShutdown": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline SessionShutdown \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/TaskCancel": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline TaskCancel \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/TaskComplete": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline TaskComplete \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/TaskError": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline TaskError \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/TaskResume": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline TaskResume \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/TaskStart": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline TaskStart \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.cline/hooks/UserPromptSubmit": "[0700] #!/bin/sh\n# Trace Cline CLI hook. Managed by trace agent add/remove.\n'{{BIN}}' --repo '{{BASE}}/repo' hook cline UserPromptSubmit \u003e/dev/null 2\u003e\u00261\nprintf '%s\\n' '{\"cancel\":false}'\n",
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/cline/01 --json init --agent cline": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "cline"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cline/02 agent add cline": {
+    "args": [
+      "agent",
+      "add",
+      "cline"
+    ],
+    "stdout": "Added agent cline.\n",
+    "exit": 0
+  },
+  "broken/cline/03 agent remove cline": {
+    "args": [
+      "agent",
+      "remove",
+      "cline"
+    ],
+    "stdout": "Removed agent cline.\n",
+    "exit": 0,
+    "files": {
+      "root/.cline/hooks/PostToolUse": "\u003cdeleted\u003e",
+      "root/.cline/hooks/SessionShutdown": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskCancel": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskComplete": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskError": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskResume": "\u003cdeleted\u003e",
+      "root/.cline/hooks/TaskStart": "\u003cdeleted\u003e",
+      "root/.cline/hooks/UserPromptSubmit": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/cline/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/codebuff/00 init --agent codebuff": {
+    "args": [
+      "init",
+      "--agent",
+      "codebuff"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/integrations/": "[0700] dir",
+      "root/.trace/integrations/trace_codebuff.mjs": "[0600] // Trace Codebuff SDK bridge. Managed by trace agent add/remove.\nimport { spawn } from \"node:child_process\";\nimport { randomUUID } from \"node:crypto\";\n\nconst TRACE = \"{{BIN}}\";\nconst ROOT = \"{{BASE}}/repo\";\n\n// Wrap explicit SDK client.run calls; the interactive CLI is not covered.\nexport function traceCodebuff(client) {\n  const session = randomUUID();\n  let pending = Promise.resolve();\n  let queued = 0;\n  let running = false;\n  let flushers = 0;\n  let current;\n\n  function keepAlive(keep) {\n    if (!current) return;\n    const method = keep ? \"ref\" : \"unref\";\n    current.child[method]();\n    current.child.stdin[method]?.();\n    current.timer[method]();\n  }\n\n  function send(kind, fields = {}) {\n    if (queued \u003e= 256) return false;\n    queued++;\n    pending = pending.then(() =\u003e new Promise((resolve) =\u003e {\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        if (current?.child === child) current = undefined;\n        resolve();\n      };\n      let child;\n      let timer;\n      try {\n        child = spawn(TRACE, [\"--repo\", ROOT, \"hook\", \"codebuff\", kind],\n          { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        current = { child, timer };\n        if (!flushers) keepAlive(false);\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(JSON.stringify({ session_id: session, ...fields }));\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n    return true;\n  }\n\n  return {\n    async run(options) {\n      // A Trace session has one open turn. Leave concurrent SDK calls intact\n      // but do not assign them to the wrong turn.\n      if (running || queued \u003e 253 || typeof options?.prompt !== \"string\") {\n        return client.run(options);\n      }\n      running = true;\n      const prompt = options.prompt.length \u003c= 65536 ? options.prompt : \"\";\n      const recorded = send(\"turn_start\", { prompt });\n      try {\n        return await client.run(options);\n      } finally {\n        if (recorded) {\n          send(\"tool_edit\"); // The SDK can modify files through custom tools.\n          send(\"turn_end\");\n        }\n        running = false;\n      }\n    },\n    finish() {\n      if (!running) send(\"session_end\");\n    },\n    // Wait for events queued so far. Unlike the default fire-and-forget path,\n    // this keeps Node alive while each hook process finishes or times out.\n    flush() {\n      flushers++;\n      keepAlive(true);\n      return pending.finally(() =\u003e {\n        flushers--;\n        if (!flushers) keepAlive(false);\n      });\n    },\n  };\n}\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/codebuff/01 --json init --agent codebuff": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "codebuff"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/codebuff/02 agent add codebuff": {
+    "args": [
+      "agent",
+      "add",
+      "codebuff"
+    ],
+    "stdout": "Added agent codebuff.\n",
+    "exit": 0
+  },
+  "broken/codebuff/03 agent remove codebuff": {
+    "args": [
+      "agent",
+      "remove",
+      "codebuff"
+    ],
+    "stdout": "Removed agent codebuff.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/integrations/trace_codebuff.mjs": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/codebuff/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/codex/00 init --agent codex": {
+    "args": [
+      "init",
+      "--agent",
+      "codex"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/codex.enabled": "[0600] 1\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/codex/01 --json init --agent codex": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "codex"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/codex/02 agent add codex": {
+    "args": [
+      "agent",
+      "add",
+      "codex"
+    ],
+    "stdout": "Added agent codex.\n",
+    "exit": 0
+  },
+  "broken/codex/03 agent remove codex": {
+    "args": [
+      "agent",
+      "remove",
+      "codex"
+    ],
+    "stdout": "Removed agent codex.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/codex.enabled": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/codex/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/00 init --agent copilot": {
+    "args": [
+      "init",
+      "--agent",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "parsing copilot hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/copilot/01 --json init --agent copilot": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "parsing copilot hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/02 agent add copilot": {
+    "args": [
+      "agent",
+      "add",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "parsing copilot hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/03 agent remove copilot": {
+    "args": [
+      "agent",
+      "remove",
+      "copilot"
+    ],
+    "stdout": "",
+    "stderr": "removing agent copilot: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/copilot/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/crewai/00 init --agent crewai": {
+    "args": [
+      "init",
+      "--agent",
+      "crewai"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/integrations/": "[0700] dir",
+      "root/.trace/integrations/trace_crewai.py": "[0600] # Trace CrewAI bridge. Managed by trace agent add/remove.\nimport json\nimport queue\nimport subprocess\nimport threading\n\nfrom crewai.events import BaseEventListener, CrewKickoffStartedEvent, CrewKickoffCompletedEvent, CrewKickoffFailedEvent\n\nTRACE = \"{{BIN}}\"\nROOT = \"{{BASE}}/repo\"\n\n\nclass TraceCrewListener(BaseEventListener):\n    \"\"\"Record correlated crew kickoffs; instantiate once before kickoff.\"\"\"\n\n    def __init__(self):\n        self._runs = set()\n        self._lock = threading.Lock()\n        self._events = queue.Queue(maxsize=256)\n        threading.Thread(target=self._worker, daemon=True, name=\"trace-crewai\").start()\n        super().__init__()\n\n    def _worker(self):\n        while True:\n            batch = self._events.get()\n            try:\n                for kind, payload in batch:\n                    try:\n                        subprocess.run([TRACE, \"--repo\", ROOT, \"hook\", \"crewai\", kind],\n                                       input=json.dumps(payload), text=True, timeout=2,\n                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)\n                    except (OSError, subprocess.SubprocessError):\n                        pass\n            finally:\n                self._events.task_done()\n\n    def _start(self, event):\n        run_id = getattr(event, \"event_id\", None)\n        if not isinstance(run_id, str) or not run_id:\n            return\n        inputs = getattr(event, \"inputs\", None)\n        prompt = \"\"\n        if isinstance(inputs, dict):\n            value = inputs.get(\"prompt\", inputs.get(\"input\", \"\"))\n            if isinstance(value, str) and len(value) \u003c= 65536:\n                prompt = value\n        batch = [(\"session_start\", {\"session_id\": run_id}),\n                 (\"turn_start\", {\"session_id\": run_id, \"prompt\": prompt})]\n        with self._lock:\n            if run_id in self._runs:\n                return\n            try:\n                self._events.put_nowait(batch)\n            except queue.Full:\n                return\n            self._runs.add(run_id)\n\n    def _finish(self, event):\n        run_id = getattr(event, \"started_event_id\", None)\n        if not isinstance(run_id, str) or not run_id:\n            return\n        with self._lock:\n            if run_id not in self._runs:\n                return\n            try:\n                # A crew may edit files through arbitrary tools. Signal an\n                # unknown side effect so Trace can scan when the watcher has\n                # not observed changes before the completion event arrives.\n                self._events.put_nowait([(\"tool_edit\", {\"session_id\": run_id}),\n                                         (\"turn_end\", {\"session_id\": run_id}),\n                                         (\"session_end\", {\"session_id\": run_id})])\n            except queue.Full:\n                return\n            self._runs.remove(run_id)\n\n    def setup_listeners(self, bus):\n        @bus.on(CrewKickoffStartedEvent)\n        def start(source, event):\n            self._start(event)\n\n        @bus.on(CrewKickoffCompletedEvent)\n        def finish(source, event):\n            self._finish(event)\n\n        @bus.on(CrewKickoffFailedEvent)\n        def failed(source, event):\n            self._finish(event)\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/crewai/01 --json init --agent crewai": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "crewai"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/crewai/02 agent add crewai": {
+    "args": [
+      "agent",
+      "add",
+      "crewai"
+    ],
+    "stdout": "Added agent crewai.\n",
+    "exit": 0
+  },
+  "broken/crewai/03 agent remove crewai": {
+    "args": [
+      "agent",
+      "remove",
+      "crewai"
+    ],
+    "stdout": "Removed agent crewai.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/integrations/trace_crewai.py": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/crewai/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/00 init --agent cursor": {
+    "args": [
+      "init",
+      "--agent",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "parsing cursor hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/cursor/01 --json init --agent cursor": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "parsing cursor hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/02 agent add cursor": {
+    "args": [
+      "agent",
+      "add",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "parsing cursor hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/03 agent remove cursor": {
+    "args": [
+      "agent",
+      "remove",
+      "cursor"
+    ],
+    "stdout": "",
+    "stderr": "removing agent cursor: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/cursor/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/00 init --agent factory": {
+    "args": [
+      "init",
+      "--agent",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "parsing factory hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/factory/01 --json init --agent factory": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "parsing factory hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/02 agent add factory": {
+    "args": [
+      "agent",
+      "add",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "parsing factory hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/03 agent remove factory": {
+    "args": [
+      "agent",
+      "remove",
+      "factory"
+    ],
+    "stdout": "",
+    "stderr": "removing agent factory: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/factory/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/00 init --agent gemini": {
+    "args": [
+      "init",
+      "--agent",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "parsing gemini hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/gemini/01 --json init --agent gemini": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "parsing gemini hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/02 agent add gemini": {
+    "args": [
+      "agent",
+      "add",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "parsing gemini hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/03 agent remove gemini": {
+    "args": [
+      "agent",
+      "remove",
+      "gemini"
+    ],
+    "stdout": "",
+    "stderr": "removing agent gemini: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/gemini/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/goose/00 init --agent goose": {
+    "args": [
+      "init",
+      "--agent",
+      "goose"
+    ],
+    "stdout": "",
+    "stderr": "parsing goose hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.agents/plugins/trace/plugin.json": "[0600] {\n  \"name\": \"trace\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Trace hook bridge for goose\"\n}\n",
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/goose/01 --json init --agent goose": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "goose"
+    ],
+    "stdout": "",
+    "stderr": "parsing goose hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/goose/02 agent add goose": {
+    "args": [
+      "agent",
+      "add",
+      "goose"
+    ],
+    "stdout": "",
+    "stderr": "parsing goose hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/goose/03 agent remove goose": {
+    "args": [
+      "agent",
+      "remove",
+      "goose"
+    ],
+    "stdout": "",
+    "stderr": "removing agent goose: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/goose/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/grok/00 init --agent grok": {
+    "args": [
+      "init",
+      "--agent",
+      "grok"
+    ],
+    "stdout": "",
+    "stderr": "parsing grok hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/grok/01 --json init --agent grok": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "grok"
+    ],
+    "stdout": "",
+    "stderr": "parsing grok hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/grok/02 agent add grok": {
+    "args": [
+      "agent",
+      "add",
+      "grok"
+    ],
+    "stdout": "",
+    "stderr": "parsing grok hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/grok/03 agent remove grok": {
+    "args": [
+      "agent",
+      "remove",
+      "grok"
+    ],
+    "stdout": "",
+    "stderr": "removing agent grok: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/grok/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/kilo/00 init --agent kilo": {
+    "args": [
+      "init",
+      "--agent",
+      "kilo"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.kilo/": "[0700] dir",
+      "root/.kilo/plugin/": "[0700] dir",
+      "root/.kilo/plugin/trace.ts": "[0600] // Trace Kilo plugin. Managed by trace agent add/remove.\nimport { spawn } from \"node:child_process\";\nimport { realpathSync } from \"node:fs\";\nimport { isAbsolute, resolve } from \"node:path\";\n\nconst traceBin = \"{{BIN}}\";\nconst repoRoot = \"{{BASE}}/repo\";\n\nconst server = async (ctx: any = {}) =\u003e {\n  // Kilo can load primary-checkout plugins in a linked worktree. A plugin\n  // pinned to a different repository must not claim that worktree's events.\n  if (typeof ctx.worktree === \"string\") {\n    try {\n      if (realpathSync(ctx.worktree) !== realpathSync(repoRoot)) return {};\n    } catch (_) { return {}; }\n  }\n  ctx[Symbol.for(\"usetrace.kilo.project\")] = true;\n  let pending = Promise.resolve();\n  let queued = 0;\n  // Retain bounded completed text parts only for active turns in this workspace.\n  const turns = new Map\u003cstring, { message: string; parts: Map\u003cstring, string\u003e }\u003e();\n  function send(kind: string, sessionId: string, fields: Record\u003cstring, unknown\u003e = {}) {\n    if (!sessionId || queued \u003e= 256) return;\n    const payload = JSON.stringify({ session_id: sessionId, ...fields });\n    queued++;\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"--repo\", repoRoot, \"hook\", \"kilo\", kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n  return {\n    \"tool.execute.after\": (input: any) =\u003e {\n      if (typeof input?.sessionID !== \"string\" || typeof input.tool !== \"string\") return;\n      const name = input.tool.toLowerCase();\n      const file = input.args?.filePath;\n      const base = (typeof ctx.directory === \"string\" \u0026\u0026 isAbsolute(ctx.directory) ? ctx.directory : repoRoot);\n      const paths = typeof file === \"string\" \u0026\u0026 file.length \u003c= 4096 ? [resolve(base, file)] : [];\n      if (name === \"read\" \u0026\u0026 paths.length) send(\"file_read\", input.sessionID, { paths });\n      if ([\"edit\", \"write\", \"bash\", \"apply_patch\"].includes(name)) {\n        send(\"tool_edit\", input.sessionID, { tool_name: name, paths: name === \"edit\" || name === \"write\" ? paths : [] });\n      }\n    },\n    \"chat.message\": (input: any, output: any) =\u003e {\n      const parts = Array.isArray(output?.parts) ? output.parts : [];\n      const prompt = parts.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\");\n      if (typeof input.sessionID === \"string\" \u0026\u0026 (turns.has(input.sessionID) || turns.size \u003c 16)) {\n        turns.set(input.sessionID, { message: \"\", parts: new Map() });\n      }\n      send(\"turn_start\", input.sessionID, { prompt: prompt.length \u003c= 65536 ? prompt : \"\" });\n    },\n    event: ({ event }: any) =\u003e {\n      const props = event.properties ?? {};\n      switch (event.type) {\n        case \"session.created\": send(\"session_start\", props.info?.id); break;\n        case \"message.updated\": {\n          const info = props.info;\n          const turn = turns.get(info?.sessionID);\n          if (turn \u0026\u0026 info?.role === \"assistant\" \u0026\u0026 typeof info.id === \"string\" \u0026\u0026 turn.message !== info.id) {\n            turn.message = info.id;\n            turn.parts.clear();\n          }\n          break;\n        }\n        case \"message.part.updated\": {\n          const part = props.part;\n          const turn = turns.get(part?.sessionID);\n          if (turn \u0026\u0026 part?.messageID === turn.message \u0026\u0026 part?.type === \"text\" \u0026\u0026 !part.ignored \u0026\u0026 typeof part.id === \"string\" \u0026\u0026 typeof part.text === \"string\" \u0026\u0026 (turn.parts.has(part.id) || turn.parts.size \u003c 32)) {\n            turn.parts.set(part.id, part.text.slice(0, 4096));\n          }\n          break;\n        }\n        case \"session.idle\":\n          const turn = turns.get(props.sessionID);\n          const response = turn ? [...turn.parts.values()].join(\"\\n\").slice(0, 65536) : \"\";\n          if (response) send(\"turn_context\", props.sessionID, { context_type: \"response\", text: response });\n          turns.delete(props.sessionID);\n          send(\"tool_edit\", props.sessionID); // Unknown tools can write without a watcher event.\n          send(\"turn_end\", props.sessionID);\n          break;\n        case \"session.deleted\": {\n          const sessionId = props.info?.id ?? props.sessionID;\n          turns.delete(sessionId);\n          send(\"session_end\", sessionId);\n          break;\n        }\n      }\n    },\n  };\n};\n\nexport default { id: \"trace\", server };\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/kilo/01 --json init --agent kilo": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "kilo"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/kilo/02 agent add kilo": {
+    "args": [
+      "agent",
+      "add",
+      "kilo"
+    ],
+    "stdout": "Added agent kilo.\n",
+    "exit": 0
+  },
+  "broken/kilo/03 agent remove kilo": {
+    "args": [
+      "agent",
+      "remove",
+      "kilo"
+    ],
+    "stdout": "Removed agent kilo.\n",
+    "exit": 0,
+    "files": {
+      "root/.kilo/plugin/trace.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/kilo/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/kiro/00 init --agent kiro": {
+    "args": [
+      "init",
+      "--agent",
+      "kiro"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.kiro/": "[0700] dir",
+      "root/.kiro/hooks/": "[0700] dir",
+      "root/.kiro/hooks/trace.json": "[0600] {\n  \"hooks\": [\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro SessionStart\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook SessionStart\",\n      \"trigger\": \"SessionStart\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro UserPromptSubmit\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook UserPromptSubmit\",\n      \"trigger\": \"UserPromptSubmit\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro PostToolUse\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook PostToolUse\",\n      \"trigger\": \"PostToolUse\"\n    },\n    {\n      \"action\": {\n        \"command\": \"{{BIN}} hook kiro Stop\",\n        \"type\": \"command\"\n      },\n      \"name\": \"Trace managed hook Stop\",\n      \"trigger\": \"Stop\"\n    }\n  ],\n  \"version\": \"v1\"\n}\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/kiro/01 --json init --agent kiro": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "kiro"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/kiro/02 agent add kiro": {
+    "args": [
+      "agent",
+      "add",
+      "kiro"
+    ],
+    "stdout": "Added agent kiro.\n",
+    "exit": 0
+  },
+  "broken/kiro/03 agent remove kiro": {
+    "args": [
+      "agent",
+      "remove",
+      "kiro"
+    ],
+    "stdout": "Removed agent kiro.\n",
+    "exit": 0,
+    "files": {
+      "root/.kiro/hooks/trace.json": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/kiro/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/langgraph/00 init --agent langgraph": {
+    "args": [
+      "init",
+      "--agent",
+      "langgraph"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/integrations/": "[0700] dir",
+      "root/.trace/integrations/trace_langgraph.py": "[0600] # Trace LangGraph bridge. Managed by trace agent add/remove.\nimport json\nimport queue\nimport subprocess\nimport threading\n\nfrom langchain_core.callbacks import BaseCallbackHandler\n\nTRACE = \"{{BIN}}\"\nROOT = \"{{BASE}}/repo\"\n\n\nclass TraceCallbackHandler(BaseCallbackHandler):\n    \"\"\"Record root graph invocations; pass an instance in config['callbacks'].\"\"\"\n\n    def __init__(self):\n        super().__init__()\n        self._runs = set()\n        self._lock = threading.Lock()\n        self._queue = queue.SimpleQueue()\n        threading.Thread(target=self._worker, daemon=True).start()\n\n    def _worker(self):\n        while True:\n            kind, payload = self._queue.get()\n            try:\n                subprocess.run(\n                    [TRACE, \"--repo\", ROOT, \"hook\", \"langgraph\", kind],\n                    input=json.dumps(payload).encode(),\n                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,\n                    timeout=2, check=False,\n                )\n            except (OSError, subprocess.SubprocessError):\n                pass\n\n    def _send(self, kind, run_id, **fields):\n        self._queue.put((kind, {\"session_id\": str(run_id), **fields}))\n\n    def on_chain_start(self, serialized, inputs, *, run_id, parent_run_id=None, **kwargs):\n        if parent_run_id is not None:\n            return\n        with self._lock:\n            self._runs.add(run_id)\n        prompt = inputs if isinstance(inputs, str) else \"\"\n        if isinstance(inputs, dict):\n            value = inputs.get(\"input\", inputs.get(\"prompt\", \"\"))\n            prompt = value if isinstance(value, str) else \"\"\n        self._send(\"session_start\", run_id)\n        self._send(\"turn_start\", run_id, prompt=prompt)\n\n    def _finish(self, run_id, parent_run_id):\n        if parent_run_id is not None:\n            return\n        with self._lock:\n            if run_id not in self._runs:\n                return\n            self._runs.remove(run_id)\n        self._send(\"turn_end\", run_id)\n        self._send(\"session_end\", run_id)\n\n    def on_chain_end(self, outputs, *, run_id, parent_run_id=None, **kwargs):\n        self._finish(run_id, parent_run_id)\n\n    def on_chain_error(self, error, *, run_id, parent_run_id=None, **kwargs):\n        self._finish(run_id, parent_run_id)\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/langgraph/01 --json init --agent langgraph": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "langgraph"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/langgraph/02 agent add langgraph": {
+    "args": [
+      "agent",
+      "add",
+      "langgraph"
+    ],
+    "stdout": "Added agent langgraph.\n",
+    "exit": 0
+  },
+  "broken/langgraph/03 agent remove langgraph": {
+    "args": [
+      "agent",
+      "remove",
+      "langgraph"
+    ],
+    "stdout": "Removed agent langgraph.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/integrations/trace_langgraph.py": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/langgraph/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/omp/00 init --agent omp": {
+    "args": [
+      "init",
+      "--agent",
+      "omp"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.omp/": "[0700] dir",
+      "root/.omp/extensions/": "[0700] dir",
+      "root/.omp/extensions/trace/": "[0700] dir",
+      "root/.omp/extensions/trace/index.ts": "[0600] // Trace coding-agent extension. Managed by trace agent add/remove.\nimport { spawn } from \"node:child_process\";\n\nconst traceBin = \"{{BIN}}\";\nconst repoRoot = \"{{BASE}}/repo\";\nconst agentName = \"omp\";\n\nexport default function (pi: any) {\n  (globalThis as any)[Symbol.for(\"usetrace.project.\" + agentName)] = repoRoot;\n  let pending = Promise.resolve();\n  let queued = 0;\n  const argsByCall = new Map\u003cstring, { name: string; args: any }\u003e();\n  function send(kind: string, ctx: any, fields: Record\u003cstring, unknown\u003e = {}) {\n    let session: string;\n    try {\n      session = ctx.sessionManager.getSessionId();\n      if (!session || !ctx.sessionManager.getSessionFile()) return;\n    } catch (_) { return; }\n    if (queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ session_id: session, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"--repo\", repoRoot, \"hook\", agentName, kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n\n  pi.on(\"session_start\", (_event: any, ctx: any) =\u003e send(\"session_start\", ctx));\n  pi.on(\"before_agent_start\", (event: any, ctx: any) =\u003e {\n    if (typeof event.prompt === \"string\") send(\"turn_start\", ctx, { prompt: event.prompt.length \u003c= 65536 ? event.prompt : \"\" });\n  });\n  pi.on(\"tool_execution_start\", (event: any) =\u003e {\n    if (argsByCall.size \u003c 256) argsByCall.set(event.toolCallId, { name: event.toolName, args: event.args });\n  });\n  pi.on(\"tool_execution_end\", (event: any, ctx: any) =\u003e {\n    const call = argsByCall.get(event.toolCallId);\n    argsByCall.delete(event.toolCallId);\n    if (!call || event.isError) return;\n    const path = call.args?.path ?? call.args?.file_path;\n    const fields = { tool_name: call.name, paths: typeof path === \"string\" ? [path] : [] };\n    if ([\"write\", \"edit\", \"apply_patch\", \"bash\", \"execute\"].includes(call.name)) send(\"tool_edit\", ctx, fields);\n    if (call.name === \"read\") send(\"file_read\", ctx, fields);\n  });\n  pi.on(\"agent_end\", (event: any, ctx: any) =\u003e {\n    if (event.willContinue || event.awaitingAsyncWork) return;\n    const messages = Array.isArray(event.messages) ? event.messages : [];\n    const assistant = [...messages].reverse().find((message: any) =\u003e message?.role === \"assistant\");\n    const text = Array.isArray(assistant?.content)\n      ? assistant.content.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\")\n      : typeof assistant?.content === \"string\" ? assistant.content : \"\";\n    if (text) send(\"turn_context\", ctx, { context_type: \"response\", text: text.slice(0, 65536) });\n    send(\"tool_edit\", ctx); // Custom tools or interrupted commands may write files.\n    send(\"turn_end\", ctx);\n  });\n  pi.on(\"session_shutdown\", (_event: any, ctx: any) =\u003e {\n    send(\"session_end\", ctx);\n    const key = Symbol.for(\"usetrace.project.\" + agentName);\n    if ((globalThis as any)[key] === repoRoot) delete (globalThis as any)[key];\n  });\n}\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/omp/01 --json init --agent omp": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "omp"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/omp/02 agent add omp": {
+    "args": [
+      "agent",
+      "add",
+      "omp"
+    ],
+    "stdout": "Added agent omp.\n",
+    "exit": 0
+  },
+  "broken/omp/03 agent remove omp": {
+    "args": [
+      "agent",
+      "remove",
+      "omp"
+    ],
+    "stdout": "Removed agent omp.\n",
+    "exit": 0,
+    "files": {
+      "root/.omp/extensions/trace/index.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/omp/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openclaude/00 init --agent openclaude": {
+    "args": [
+      "init",
+      "--agent",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "parsing openclaude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/openclaude/01 --json init --agent openclaude": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "parsing openclaude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openclaude/02 agent add openclaude": {
+    "args": [
+      "agent",
+      "add",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "parsing openclaude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openclaude/03 agent remove openclaude": {
+    "args": [
+      "agent",
+      "remove",
+      "openclaude"
+    ],
+    "stdout": "",
+    "stderr": "removing agent openclaude: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openclaude/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/opencode/00 init --agent opencode": {
+    "args": [
+      "init",
+      "--agent",
+      "opencode"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/opencode.enabled": "[0600] 1\n",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/opencode/01 --json init --agent opencode": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "opencode"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/opencode/02 agent add opencode": {
+    "args": [
+      "agent",
+      "add",
+      "opencode"
+    ],
+    "stdout": "Added agent opencode.\n",
+    "exit": 0
+  },
+  "broken/opencode/03 agent remove opencode": {
+    "args": [
+      "agent",
+      "remove",
+      "opencode"
+    ],
+    "stdout": "Removed agent opencode.\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/opencode.enabled": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/opencode/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/openhands/00 init --agent openhands": {
+    "args": [
+      "init",
+      "--agent",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "invalid OpenHands hooks configuration\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/openhands/01 --json init --agent openhands": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/openhands/02 agent add openhands": {
+    "args": [
+      "agent",
+      "add",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/openhands/03 agent remove openhands": {
+    "args": [
+      "agent",
+      "remove",
+      "openhands"
+    ],
+    "stdout": "",
+    "stderr": "removing agent openhands: invalid OpenHands hooks configuration\n",
+    "exit": 1
+  },
+  "broken/openhands/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/pi/00 init --agent pi": {
+    "args": [
+      "init",
+      "--agent",
+      "pi"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.pi/": "[0700] dir",
+      "root/.pi/extensions/": "[0700] dir",
+      "root/.pi/extensions/trace/": "[0700] dir",
+      "root/.pi/extensions/trace/index.ts": "[0600] // Trace coding-agent extension. Managed by trace agent add/remove.\nimport { spawn } from \"node:child_process\";\n\nconst traceBin = \"{{BIN}}\";\nconst repoRoot = \"{{BASE}}/repo\";\nconst agentName = \"pi\";\n\nexport default function (pi: any) {\n  (globalThis as any)[Symbol.for(\"usetrace.project.\" + agentName)] = repoRoot;\n  let pending = Promise.resolve();\n  let queued = 0;\n  const argsByCall = new Map\u003cstring, { name: string; args: any }\u003e();\n  function send(kind: string, ctx: any, fields: Record\u003cstring, unknown\u003e = {}) {\n    let session: string;\n    try {\n      session = ctx.sessionManager.getSessionId();\n      if (!session || !ctx.sessionManager.getSessionFile()) return;\n    } catch (_) { return; }\n    if (queued \u003e= 256) return;\n    queued++;\n    const payload = JSON.stringify({ session_id: session, ...fields });\n    pending = pending.then(() =\u003e new Promise\u003cvoid\u003e((resolve) =\u003e {\n      let child: ReturnType\u003ctypeof spawn\u003e;\n      let timer: ReturnType\u003ctypeof setTimeout\u003e;\n      let settled = false;\n      const done = () =\u003e {\n        if (settled) return;\n        settled = true;\n        clearTimeout(timer);\n        resolve();\n      };\n      try {\n        child = spawn(traceBin, [\"--repo\", repoRoot, \"hook\", agentName, kind], { stdio: [\"pipe\", \"ignore\", \"ignore\"] });\n        timer = setTimeout(() =\u003e { child.kill(); done(); }, 2000);\n        child.unref();\n        timer.unref();\n        child.stdin.unref?.();\n        child.on(\"error\", done);\n        child.on(\"close\", done);\n        child.stdin.on(\"error\", () =\u003e {});\n        child.stdin.end(payload);\n      } catch (_) { done(); }\n    })).finally(() =\u003e { queued--; });\n  }\n\n  pi.on(\"session_start\", (_event: any, ctx: any) =\u003e send(\"session_start\", ctx));\n  pi.on(\"before_agent_start\", (event: any, ctx: any) =\u003e {\n    if (typeof event.prompt === \"string\") send(\"turn_start\", ctx, { prompt: event.prompt.length \u003c= 65536 ? event.prompt : \"\" });\n  });\n  pi.on(\"tool_execution_start\", (event: any) =\u003e {\n    if (argsByCall.size \u003c 256) argsByCall.set(event.toolCallId, { name: event.toolName, args: event.args });\n  });\n  pi.on(\"tool_execution_end\", (event: any, ctx: any) =\u003e {\n    const call = argsByCall.get(event.toolCallId);\n    argsByCall.delete(event.toolCallId);\n    if (!call || event.isError) return;\n    const path = call.args?.path ?? call.args?.file_path;\n    const fields = { tool_name: call.name, paths: typeof path === \"string\" ? [path] : [] };\n    if ([\"write\", \"edit\", \"apply_patch\", \"bash\", \"execute\"].includes(call.name)) send(\"tool_edit\", ctx, fields);\n    if (call.name === \"read\") send(\"file_read\", ctx, fields);\n  });\n  pi.on(\"agent_end\", (event: any, ctx: any) =\u003e {\n    if (event.willContinue || event.awaitingAsyncWork) return;\n    const messages = Array.isArray(event.messages) ? event.messages : [];\n    const assistant = [...messages].reverse().find((message: any) =\u003e message?.role === \"assistant\");\n    const text = Array.isArray(assistant?.content)\n      ? assistant.content.filter((part: any) =\u003e part?.type === \"text\").map((part: any) =\u003e part.text).join(\"\\n\")\n      : typeof assistant?.content === \"string\" ? assistant.content : \"\";\n    if (text) send(\"turn_context\", ctx, { context_type: \"response\", text: text.slice(0, 65536) });\n    send(\"tool_edit\", ctx); // Custom tools or interrupted commands may write files.\n    send(\"turn_end\", ctx);\n  });\n  pi.on(\"session_shutdown\", (_event: any, ctx: any) =\u003e {\n    send(\"session_end\", ctx);\n    const key = Symbol.for(\"usetrace.project.\" + agentName);\n    if ((globalThis as any)[key] === repoRoot) delete (globalThis as any)[key];\n  });\n}\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/pi/01 --json init --agent pi": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "pi"
+    ],
+    "stdout": "",
+    "stderr": "parsing MCP config: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/pi/02 agent add pi": {
+    "args": [
+      "agent",
+      "add",
+      "pi"
+    ],
+    "stdout": "Added agent pi.\n",
+    "exit": 0
+  },
+  "broken/pi/03 agent remove pi": {
+    "args": [
+      "agent",
+      "remove",
+      "pi"
+    ],
+    "stdout": "Removed agent pi.\n",
+    "exit": 0,
+    "files": {
+      "root/.pi/extensions/trace/index.ts": "\u003cdeleted\u003e"
+    }
+  },
+  "broken/pi/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/00 init --agent qwen": {
+    "args": [
+      "init",
+      "--agent",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "parsing qwen hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/qwen/01 --json init --agent qwen": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "parsing qwen hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/02 agent add qwen": {
+    "args": [
+      "agent",
+      "add",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "parsing qwen hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/03 agent remove qwen": {
+    "args": [
+      "agent",
+      "remove",
+      "qwen"
+    ],
+    "stdout": "",
+    "stderr": "removing agent qwen: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/qwen/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/windsurf/00 init --agent windsurf": {
+    "args": [
+      "init",
+      "--agent",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "parsing windsurf hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1,
+    "files": {
+      "root/.git/info/exclude": "[0664] # git ls-files --others --exclude-from=.git/info/exclude\n# Lines that start with '#' are comments.\n# For a project mostly in C, the following would be a good set of\n# exclude patterns (uncomment them if you want to use them):\n# *.[oa]\n# *~\n.trace/\n",
+      "root/.trace/objects": "{{OBJECTS}}",
+      "root/.trace/trace.db": "{{DATABASE}}",
+      "trace_home/redaction.key": "{{KEY}}",
+      "trace_home/redaction.key.lock": "{{KEY}}"
+    }
+  },
+  "broken/windsurf/01 --json init --agent windsurf": {
+    "args": [
+      "--json",
+      "init",
+      "--agent",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "parsing windsurf hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/windsurf/02 agent add windsurf": {
+    "args": [
+      "agent",
+      "add",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "parsing windsurf hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/windsurf/03 agent remove windsurf": {
+    "args": [
+      "agent",
+      "remove",
+      "windsurf"
+    ],
+    "stdout": "",
+    "stderr": "removing agent windsurf: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
+  "broken/windsurf/04 uninstall": {
+    "args": [
+      "uninstall"
+    ],
+    "stdout": "",
+    "stderr": "removing Claude hooks: invalid character 'n' looking for beginning of object key string\n",
+    "exit": 1
+  },
   "clean/agy/00 init --agent agy": {
     "args": [
       "init",
@@ -3133,6 +4534,77 @@
     ],
     "stdout": "",
     "stderr": "unsupported agent \"hermes\"\n",
+    "exit": 1
+  },
+  "default/06 init --agent git": {
+    "args": [
+      "init",
+      "--agent",
+      "git"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"git\"\n",
+    "exit": 1
+  },
+  "default/07 agent add git": {
+    "args": [
+      "agent",
+      "add",
+      "git"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"git\"\n",
+    "exit": 1
+  },
+  "default/08 agent remove git": {
+    "args": [
+      "agent",
+      "remove",
+      "git"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"git\"\n",
+    "exit": 1
+  },
+  "default/09 --json agent add git": {
+    "args": [
+      "--json",
+      "agent",
+      "add",
+      "git"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"git\"\n",
+    "exit": 1
+  },
+  "default/10 agent add Claude-Code": {
+    "args": [
+      "agent",
+      "add",
+      "Claude-Code"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"Claude-Code\"\n",
+    "exit": 1
+  },
+  "default/11 init --agent CODEX": {
+    "args": [
+      "init",
+      "--agent",
+      "CODEX"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"CODEX\"\n",
+    "exit": 1
+  },
+  "default/12 agent add cursor-global": {
+    "args": [
+      "agent",
+      "add",
+      "cursor-global"
+    ],
+    "stdout": "",
+    "stderr": "unsupported agent \"cursor-global\"\n",
     "exit": 1
   },
   "errors/00 agent add cursor": {

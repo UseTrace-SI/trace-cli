@@ -80,6 +80,15 @@
     "stdout": "",
     "exit": 0
   },
+  "agent-disabled/continue/turn_start": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
   "agent-disabled/copilot-global/sessionStart": {
     "args": [
       "hook",
@@ -103,6 +112,15 @@
       "hook",
       "crewai",
       "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "agent-disabled/crush/turn_start": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
     ],
     "stdout": "",
     "exit": 0
@@ -368,6 +386,15 @@
     "stdout": "{}\n",
     "exit": 0
   },
+  "agent-disabled/vibe/turn_start": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
   "agent-disabled/windsurf-global/pre_user_prompt": {
     "args": [
       "hook",
@@ -476,6 +503,15 @@
     "stdout": "",
     "exit": 0
   },
+  "all-disabled/continue/turn_start": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
   "all-disabled/copilot-global/sessionStart": {
     "args": [
       "hook",
@@ -499,6 +535,15 @@
       "hook",
       "crewai",
       "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "all-disabled/crush/turn_start": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
     ],
     "stdout": "",
     "exit": 0
@@ -762,6 +807,15 @@
       "SessionStart"
     ],
     "stdout": "{}\n",
+    "exit": 0
+  },
+  "all-disabled/vibe/turn_start": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
     "exit": 0
   },
   "all-disabled/windsurf-global/pre_user_prompt": {
@@ -1996,6 +2050,56 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"codex\",\"agent_session_id\":\"cx-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"do it\",\"transcript_path\":\"{{BASE}}/batch/.codex-rollout.jsonl\"}\n"
     }
   },
+  "batch/continue/tool_edit#0": {
+    "args": [
+      "hook",
+      "continue",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
+  },
+  "batch/continue/turn_end#0": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "batch/continue/turn_start#0": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "batch/continue/turn_start#1": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
   "batch/copilot-global/agentStop#0": {
     "args": [
       "hook",
@@ -2369,6 +2473,56 @@
     "args": [
       "hook",
       "crewai",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
+  "batch/crush/tool_edit#0": {
+    "args": [
+      "hook",
+      "crush",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
+  },
+  "batch/crush/turn_end#0": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "batch/crush/turn_start#0": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "batch/crush/turn_start#1": {
+    "args": [
+      "hook",
+      "crush",
       "turn_start"
     ],
     "stdout": "",
@@ -6661,6 +6815,56 @@
       "root/.trace/daemon.lock": "[0600] "
     }
   },
+  "batch/vibe/tool_edit#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
+  },
+  "batch/vibe/turn_end#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "batch/vibe/turn_start#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "batch/vibe/turn_start#1": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
   "batch/windsurf-global/other#0": {
     "args": [
       "hook",
@@ -6926,6 +7130,177 @@
     "stdout": "",
     "exit": 0
   },
+  "case/agent-CURSOR": {
+    "args": [
+      "hook",
+      "CURSOR",
+      "beforeSubmitPrompt"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/agent-Claude-Code": {
+    "args": [
+      "hook",
+      "Claude-Code",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/alias-Cursor-Global": {
+    "args": [
+      "hook",
+      "Cursor-Global",
+      "beforeSubmitPrompt"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/alias-GEMINI-GLOBAL": {
+    "args": [
+      "hook",
+      "GEMINI-GLOBAL",
+      "BeforeAgent"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/alias-codex-global": {
+    "args": [
+      "hook",
+      "codex-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"codex-global\",\"agent_session_id\":\"v1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "case/event-agy-stop": {
+    "args": [
+      "hook",
+      "agy",
+      "stop"
+    ],
+    "stdout": "{}\n",
+    "stderr": "trace hook: invalid Antigravity payload\n",
+    "exit": 0
+  },
+  "case/event-claude-userpromptsubmit": {
+    "args": [
+      "hook",
+      "claude-code",
+      "userpromptsubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/event-codex-STOP": {
+    "args": [
+      "hook",
+      "codex",
+      "STOP"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/event-codex-stop": {
+    "args": [
+      "hook",
+      "codex",
+      "stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/event-cursor-BeforeSubmitPrompt": {
+    "args": [
+      "hook",
+      "cursor",
+      "BeforeSubmitPrompt"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "case/legacy-Gemini-BeforeAgent": {
+    "args": [
+      "hook",
+      "Gemini",
+      "BeforeAgent"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/legacy-claude-SESSIONSTART": {
+    "args": [
+      "hook",
+      "claude-code",
+      "SESSIONSTART"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
+  "case/legacy-claude-sessionstart": {
+    "args": [
+      "hook",
+      "claude-code",
+      "sessionstart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
+  "case/legacy-claude-userpromptsubmit": {
+    "args": [
+      "hook",
+      "claude-code",
+      "userpromptsubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "case/legacy-gemini-BeforeAgent": {
+    "args": [
+      "hook",
+      "gemini",
+      "BeforeAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"gemini\",\"agent_session_id\":\"v1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "case/legacy-gemini-beforeagent": {
+    "args": [
+      "hook",
+      "gemini",
+      "beforeagent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "case/legacy-pi-session_start": {
+    "args": [
+      "hook",
+      "pi",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"v1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
   "cwd-outside/agy/SessionStart": {
     "args": [
       "hook",
@@ -7027,6 +7402,15 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"codex\",\"agent_session_id\":\"cx-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/batch/.codex-rollout.jsonl\"}\n"
     }
   },
+  "cwd-outside/continue/turn_start": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
   "cwd-outside/copilot-global/sessionStart": {
     "args": [
       "hook",
@@ -7054,6 +7438,15 @@
       "hook",
       "crewai",
       "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cwd-outside/crush/turn_start": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
     ],
     "stdout": "",
     "exit": 0
@@ -7399,6 +7792,15 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
     }
   },
+  "cwd-outside/vibe/turn_start": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
   "cwd-outside/windsurf-global/pre_user_prompt": {
     "args": [
       "hook",
@@ -7547,6 +7949,19 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"codex\",\"agent_session_id\":\"cx-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/batch/.codex-rollout.jsonl\"}\n"
     }
   },
+  "cwd-sub/continue/turn_start": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
   "cwd-sub/copilot-global/sessionStart": {
     "args": [
       "hook",
@@ -7584,6 +7999,19 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"crewai\",\"agent_session_id\":\"crew-run-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "cwd-sub/crush/turn_start": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
     }
   },
   "cwd-sub/cursor-global/sessionStart": {
@@ -7962,6 +8390,19 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
     }
   },
+  "cwd-sub/vibe/turn_start": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
   "cwd-sub/windsurf-global/pre_user_prompt": {
     "args": [
       "hook",
@@ -8098,6 +8539,19 @@
     "stdout": "",
     "exit": 0
   },
+  "empty-stdin/continue/turn_start": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"continue\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
   "empty-stdin/copilot-global/sessionStart": {
     "args": [
       "hook",
@@ -8130,6 +8584,19 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"crewai\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "empty-stdin/crush/turn_start": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"crush\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
     }
   },
   "empty-stdin/cursor-global/sessionStart": {
@@ -8425,6 +8892,19 @@
     ],
     "stdout": "{}\n",
     "exit": 0
+  },
+  "empty-stdin/vibe/turn_start": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"vibe\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
   },
   "empty-stdin/windsurf-global/pre_user_prompt": {
     "args": [
@@ -9878,6 +10358,56 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"codex\",\"agent_session_id\":\"cx-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"do it\",\"transcript_path\":\"{{BASE}}/legacy/.codex-rollout.jsonl\"}\n"
     }
   },
+  "legacy/continue/tool_edit#0": {
+    "args": [
+      "hook",
+      "continue",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/legacy/a.go\"]}\n"
+    }
+  },
+  "legacy/continue/turn_end#0": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "legacy/continue/turn_start#0": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "legacy/continue/turn_start#1": {
+    "args": [
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
   "legacy/copilot/agentStop#0": {
     "args": [
       "hook",
@@ -10105,6 +10635,56 @@
     "args": [
       "hook",
       "crewai",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
+  "legacy/crush/tool_edit#0": {
+    "args": [
+      "hook",
+      "crush",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/legacy/a.go\"]}\n"
+    }
+  },
+  "legacy/crush/turn_end#0": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "legacy/crush/turn_start#0": {
+    "args": [
+      "hook",
+      "crush",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "legacy/crush/turn_start#1": {
+    "args": [
+      "hook",
+      "crush",
       "turn_start"
     ],
     "stdout": "",
@@ -12847,6 +13427,56 @@
       "root/.trace/daemon.lock": "[0600] "
     }
   },
+  "legacy/vibe/tool_edit#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/legacy/a.go\"]}\n"
+    }
+  },
+  "legacy/vibe/turn_end#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "legacy/vibe/turn_start#0": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
+  "legacy/vibe/turn_start#1": {
+    "args": [
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
   "legacy/windsurf/other#0": {
     "args": [
       "hook",
@@ -13021,6 +13651,98 @@
     "stdout": "",
     "exit": 0
   },
+  "payload-limit/aider/at": {
+    "args": [
+      "hook",
+      "aider",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"aider\",\"agent_session_id\":\"big\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "payload-limit/aider/over": {
+    "args": [
+      "hook",
+      "aider",
+      "turn_start"
+    ],
+    "stdout": "",
+    "stderr": "trace hook: invalid payload\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] "
+    }
+  },
+  "payload-limit/claude-code/at": {
+    "args": [
+      "hook",
+      "claude-code",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"claude-code\",\"agent_session_id\":\"big\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "payload-limit/claude-code/over": {
+    "args": [
+      "hook",
+      "claude-code",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "payload-limit/codex/at": {
+    "args": [
+      "hook",
+      "codex",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"codex\",\"agent_session_id\":\"big\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "payload-limit/codex/over": {
+    "args": [
+      "hook",
+      "codex",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "payload-limit/gemini-global/at": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "BeforeAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"gemini\",\"agent_session_id\":\"big\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hi\"}\n"
+    }
+  },
+  "payload-limit/gemini-global/over": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "BeforeAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
   "repo-flag/agy/SessionStart": {
     "args": [
       "--repo",
@@ -13156,6 +13878,21 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"codex\",\"agent_session_id\":\"cx-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/batch/.codex-rollout.jsonl\"}\n"
     }
   },
+  "repo-flag/continue/turn_start": {
+    "args": [
+      "--repo",
+      "{{BASE}}/batch",
+      "hook",
+      "continue",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"continue\",\"agent_session_id\":\"continue-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
+    }
+  },
   "repo-flag/copilot-global/sessionStart": {
     "args": [
       "--repo",
@@ -13199,6 +13936,21 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"crewai\",\"agent_session_id\":\"crew-run-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/crush/turn_start": {
+    "args": [
+      "--repo",
+      "{{BASE}}/batch",
+      "hook",
+      "crush",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"crush\",\"agent_session_id\":\"crush-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
     }
   },
   "repo-flag/cursor-global/sessionStart": {
@@ -13633,6 +14385,21 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/vibe/turn_start": {
+    "args": [
+      "--repo",
+      "{{BASE}}/batch",
+      "hook",
+      "vibe",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"vibe\",\"agent_session_id\":\"vibe-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"prompt\":\"hello\"}\n"
     }
   },
   "repo-flag/windsurf-global/pre_user_prompt": {
