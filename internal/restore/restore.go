@@ -40,8 +40,15 @@ func safePath(root, rel string) (string, error) {
 // paths are left alone: an older keyframe may list one captured before it was
 // excluded, and a restore must never write or delete it.
 func Plan(current, target manifest.Manifest) []string {
-	add, change, remove := manifest.Diff(current.WithoutExcluded(), target.WithoutExcluded())
-	paths := append(append(add, change...), remove...)
+	add, change, remove := manifest.Diff(current, target)
+	paths := make([]string, 0, len(add)+len(change)+len(remove))
+	for _, group := range [][]string{add, change, remove} {
+		for _, p := range group {
+			if !manifest.Excluded(p) {
+				paths = append(paths, p)
+			}
+		}
+	}
 	sort.Strings(paths)
 	return paths
 }

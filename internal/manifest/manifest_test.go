@@ -292,6 +292,19 @@ func TestSecretPathMatchesCredentialFiles(t *testing.T) {
 		{"terraform/variables.tfvars.example", false},
 		{"src/keystore.ts", false},
 		{"service-account.go", false},
+		// File-name rules match the file's own name, not its directories.
+		{"pkg/kubeconfig/load.go", false},
+		{"pkg/KubeConfig/load_test.go", false},
+		{"fixtures/credentials.json/README.md", false},
+		{"build/app.keystore/notes.txt", false},
+		{"terraform.tfstate.d/dev/notes.md", false},
+		{"deploy/.npmrc/x", false},
+		// Directory rules that applied to every element still do.
+		{".env/settings.go", true},
+		{"certs/server.pem/README", true},
+		{"keys/id_rsa/notes.txt", true},
+		{"home/.aws/config", true},
+		{"a/.ssh/known_hosts", true},
 	} {
 		if got := SecretPath(tc.path); got != tc.secret {
 			t.Errorf("SecretPath(%q) = %v; want %v", tc.path, got, tc.secret)

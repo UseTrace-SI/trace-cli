@@ -25,24 +25,28 @@ type Ignorer interface {
 	Ignored(rel string, isDir bool) bool
 }
 
-// excluded reports paths Trace never captures or restores. Restored paths can
-// come from an imported bundle or a recovery server, so Git metadata is
-// protected at every depth (a nested repository's hooks run on its next
-// commit). Names are compared case-insensitively, as case-insensitive file
-// systems (the macOS default) resolve `.GIT` to `.git`.
+// excluded reports paths Trace never captures or restores: Trace's own and
+// agents' hook configuration (see protectedFolded) and secret files.
 func excluded(rel string) bool {
 	folded := foldPath(rel)
-	for _, part := range strings.Split(folded, "/") {
-		if part == ".git" {
-			return true
-		}
+	return protectedFolded(folded) || secretFolded(folded)
+}
+
+// protectedFolded reports Git metadata, Trace state and agent hook
+// configuration. Restored paths can come from an imported bundle or a recovery
+// server, so Git metadata is protected at every depth (a nested repository's
+// hooks run on its next commit). Names are compared case-insensitively, as
+// case-insensitive file systems (the macOS default) resolve `.GIT` to `.git`.
+func protectedFolded(folded string) bool {
+	if folded == ".git" || strings.HasPrefix(folded, ".git/") || strings.HasSuffix(folded, "/.git") || strings.Contains(folded, "/.git/") {
+		return true
 	}
 	for _, dir := range []string{".trace", ".trace-brain", ".trace-graph"} {
 		if folded == dir || strings.HasPrefix(folded, dir+"/") {
 			return true
 		}
 	}
-	return folded == ".mcp.json" || folded == ".claude/settings.local.json" || folded == ".cursor/hooks.json" || folded == ".gemini/settings.json" || folded == ".agents/hooks.json" || SecretPath(rel)
+	return folded == ".mcp.json" || folded == ".claude/settings.local.json" || folded == ".cursor/hooks.json" || folded == ".gemini/settings.json" || folded == ".agents/hooks.json"
 }
 
 // foldPath lowercases rel and drops the code points HFS+ ignores in names,
