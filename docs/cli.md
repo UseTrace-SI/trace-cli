@@ -163,7 +163,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace why FILE:LINE [--all] [--messages]` | Find the change responsible for a line, across Git rewrites, and optionally show its conversation |
 | `trace blame FILE` | Show the origin, commit, confidence and rewrites of every line |
 | `trace fork STEP [--agent NAME] [--name SUFFIX] [--no-launch]` | Create a worktree at a step |
-| `trace resume STEP [--agent NAME] [--no-launch]` | Rewind and continue with an agent |
+| `trace resume STEP\|SESSION [--agent NAME] [--fork [--name SUFFIX]] [--no-rewind] [--no-launch] [--max-context-bytes N]` | Continue a recorded session in the same or another agent; see [Cross-agent resume](#cross-agent-resume) |
 | `trace status` | Show daemon, session, and storage status |
 | `trace activity [--days N]` | Summarize local turns, sessions, changed files, and agent activity |
 | `trace search [TERMS...] [--scope all\|turns\|messages] [--edited-path GLOB] [--limit N]` | Search completed turns by text and edited path |
@@ -241,6 +241,31 @@ trace rewind 2
 ```
 
 A real rewind saves a safety keyframe first and prints the command to undo it, also when the restore then fails (`--json` output includes `safety_step` and `error`). Rewind and `--dry-run` refuse to replace an ignored or `.traceignore`d file, a symlink or another path the safety keyframe cannot capture; move it aside or limit the restore with `--files`. `fork` and `resume` launch the selected agent unless `--no-launch` is set.
+
+## Cross-agent resume
+
+`trace resume` continues a session recorded with one agent in any agent with a launch capability, for example after a Claude Code session:
+
+```sh
+trace resume 7 --agent codex              # rewind to step 7, start Codex
+trace resume 01JD3 --agent cursor --fork  # a session's latest step, in a new worktree
+trace resume 7 --agent agy --no-launch    # print the plan and the handoff only
+```
+
+The argument is a step number or a session: a Trace session ID, a unique prefix of one, or the agent's own session ID; a session resolves to its latest step. Before anything else, `resume` checks that the agent can be launched; otherwise it fails with the list of agents that can, and leaves the tree alone. Then it prepares the tree: by default a rewind with a safety keyframe (as `trace rewind`), with `--fork` a new worktree beside the repository (as `trace fork`, named `REPO-fork-STEP[-SUFFIX]`), or with `--no-rewind` nothing. Without `--agent`, it starts the session's own agent when that agent can be launched, else `claude-code`.
+
+The handoff is built from Trace history only and contains the source session and agent, the original goal (the session's first prompt), up to 20 latest turn prompts, the files changed since the session started with added/removed line counts, open items found in the last response (unchecked `- [ ]` items, `TODO`/`FIXME` lines and bullets under a "Next steps"-style heading) and how to see more with `trace show`, `trace log`, `trace diff` and the MCP tools `get_turn`, `get_messages` and `search_history`. Prompts are clipped to 500 characters, the file list to 60 entries, and the whole text to `--max-context-bytes` (default 12288, minimum 1024) after redaction; a cut is marked. All text passes through redaction again, so history stored before a redaction rule existed does not leak, and paths matching the secret excludes are left out.
+
+The handoff is written to `.trace/context.md` in the target worktree (Git-excluded, mode 0600) and passed as the agent's initial prompt argument. No project instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, `GEMINI.md`) is written or changed:
+
+| Agent | Command |
+| --- | --- |
+| `claude-code` | `claude "<handoff>"` |
+| `codex` | `codex "<handoff>"` |
+| `cursor` | `agent "<handoff>"` |
+| `agy` | `agy --prompt-interactive "<handoff>"` |
+
+Text output names the step, the undo command or fork path, the command (with the handoff shown as `<handoff context>`) and the context file; `--no-launch` then prints the handoff. `--json` returns `step`, `mode` (`rewind`, `fork` or `in-place`), `path`, `safety_step`, `session_id`, `source_agent`, `agent`, `command`, `context_file`, `context_bytes`, `truncated`, `files`, `todos` and `launched`, plus `context` with `--no-launch`. Rewinding still writes a safety keyframe even with `--no-launch`; use `--no-rewind --no-launch` for a plan without side effects other than the context file.
 
 ## Automation
 

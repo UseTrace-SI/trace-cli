@@ -1,5 +1,7 @@
 package adapters
 
+import "sort"
+
 // registry lists every adapter. Global integrations appear first, in the
 // order `trace agents` lists them and `trace setup --help` names them;
 // headless runners appear in the order `trace run --help` names them.
@@ -189,4 +191,17 @@ func Reviewers() []Reviewer {
 		}
 	}
 	return out
+}
+
+// LauncherNames returns the agents with a launch capability (fork, resume),
+// sorted by name.
+func LauncherNames() []string {
+	var names []string
+	for _, a := range registry {
+		if _, ok := a.(Launcher); ok {
+			names = append(names, a.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
 }
