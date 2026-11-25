@@ -54,6 +54,11 @@ func SetDisabled(disabled bool) error {
 }
 
 func agentPath(agent string) (string, error) {
+	// Agents recorded through `trace acp` are named "acp:<command>"; one
+	// marker pauses all of them.
+	if command, ok := strings.CutPrefix(agent, "acp:"); ok && command != "" && strings.Trim(command, "abcdefghijklmnopqrstuvwxyz0123456789-") == "" {
+		agent = "acp"
+	}
 	if agent == "" || strings.Trim(agent, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
 		return "", fmt.Errorf("invalid agent name")
 	}

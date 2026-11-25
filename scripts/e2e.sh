@@ -51,6 +51,7 @@ hermes_profile=$(mktemp -d)
 work_fork=$(mktemp -d)
 fork_target="${work_fork}-fork-1-e2e"
 work_rewrite=$(mktemp -d)
+work_acp=$(mktemp -d)
 # On failure, print each daemon's state and recent log before it is stopped, so
 # an intermittent CI failure can be attributed to a stalled or exited daemon
 # rather than to the event pipeline.
@@ -68,7 +69,7 @@ diagnose() {
 cleanup() {
   exit_status=$?
   [ "$exit_status" -eq 0 ] || echo "e2e failed with exit $exit_status; daemon diagnostics follow" >&2
-  for dir in "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$work_fork" "$fork_target" "$work_rewrite"; do
+  for dir in "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$work_fork" "$fork_target" "$work_rewrite" "$work_acp"; do
     pid=$(cat "$dir/.trace/daemon.pid" 2>/dev/null || true)
     if [ "$exit_status" -ne 0 ] && [ -f "$dir/.trace/daemon.log" ]; then
       diagnose "$dir" "$pid"
@@ -87,7 +88,7 @@ cleanup() {
     sleep 0.05
   done
   attempts=0
-  until rm -rf "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$cline_config" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$hermes_profile" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$mock_agents" "$work_fork" "$fork_target" "$work_rewrite" 2>/dev/null; do
+  until rm -rf "$work" "$work_goose" "$work_kiro" "$work_agy" "$work_cursor" "$work_cursor_global" "$work_windsurf_global" "$work_copilot_global" "$work_gemini_global" "$work_gemini_project" "$work_qwen_global" "$work_factory_global" "$work_amp_global" "$work_kilo_global" "$work_opencode_global" "$work_pi_global" "$work_omp_global" "$work_cline" "$work_cline_global" "$cline_config" "$work_auggie" "$work_openhands" "$work_openclaude" "$work_poolside" "$work_hermes" "$hermes_profile" "$work_crewai" "$work_aider" "$work_codebuff" "$work_continue" "$work_vibe" "$work_crush" "$work_aider_run" "$work_claude_global" "$work_kimi_global" "$work_codex_global" "$work_zoo" "$mock_agents" "$work_fork" "$fork_target" "$work_rewrite" "$work_acp" 2>/dev/null; do
     attempts=$((attempts+1))
     [ "$attempts" -lt 20 ] || return 1
     sleep 0.05
@@ -1045,4 +1046,62 @@ until "$binary" --repo "$work_rewrite" --json why app.txt:2 2>/dev/null | python
   sleep 0.05
 done
 "$binary" --repo "$work_rewrite" --json blame app.txt | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["summary"] == {"baseline": 1, "claude-code": 1}, s'
+# ACP proxy: a scripted editor talks to a scripted agent through
+# `trace acp`; every byte must pass unchanged and the turn must be recorded.
+git -C "$work_acp" init -q
+printf 'package main\n' > "$work_acp/main.go"
+"$binary" --repo "$work_acp" init --agent claude-code >/dev/null
+cat > "$mock_agents/fake-acp-agent" <<'PY'
+#!/usr/bin/env python3
+import json, os, sys
+cwd = os.environ['FAKE_ACP_CWD']
+def send(m):
+    sys.stdout.write(json.dumps(m) + '\n'); sys.stdout.flush()
+for line in sys.stdin:
+    m = json.loads(line)
+    method, mid = m.get('method'), m.get('id')
+    if method == 'initialize':
+        send({'jsonrpc': '2.0', 'id': mid, 'result': {'protocolVersion': 1, 'agentCapabilities': {}}})
+    elif method == 'session/new':
+        send({'jsonrpc': '2.0', 'id': mid, 'result': {'sessionId': 'sess_e2e'}})
+    elif method == 'session/prompt':
+        def update(u):
+            send({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 'sess_e2e', 'update': u}})
+        update({'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': 'Adding a main function.'}})
+        update({'sessionUpdate': 'tool_call', 'toolCallId': 'c1', 'title': 'Edit main.go', 'kind': 'edit', 'status': 'in_progress', 'locations': [{'path': cwd + '/main.go'}]})
+        with open(cwd + '/main.go', 'w') as f:
+            f.write('package main\n\nfunc main() {}\n')
+        update({'sessionUpdate': 'tool_call_update', 'toolCallId': 'c1', 'status': 'completed', 'content': [{'type': 'diff', 'path': cwd + '/main.go', 'oldText': 'package main\n', 'newText': 'package main\n\nfunc main() {}\n'}]})
+        send({'jsonrpc': '2.0', 'id': mid, 'result': {'stopReason': 'end_turn'}})
+PY
+chmod 700 "$mock_agents/fake-acp-agent"
+python3 - "$binary" "$work_acp" "$mock_agents/fake-acp-agent" <<'PY'
+import json, os, subprocess, sys
+binary, repo, agent = sys.argv[1:]
+env = dict(os.environ, FAKE_ACP_CWD=repo)
+proc = subprocess.Popen([binary, 'acp', '--', agent], stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=repo, env=env)
+received = b''
+def request(mid, method, params):
+    global received
+    proc.stdin.write((json.dumps({'jsonrpc': '2.0', 'id': mid, 'method': method, 'params': params}) + '\n').encode()); proc.stdin.flush()
+    while True:
+        line = proc.stdout.readline()
+        assert line, 'proxy closed early'
+        received += line
+        m = json.loads(line)
+        if m.get('id') == mid and 'method' not in m:
+            return m
+request(0, 'initialize', {'protocolVersion': 1, 'clientCapabilities': {}})
+assert request(1, 'session/new', {'cwd': repo, 'mcpServers': []})['result']['sessionId'] == 'sess_e2e'
+assert request(2, 'session/prompt', {'sessionId': 'sess_e2e', 'prompt': [{'type': 'text', 'text': 'add main via acp'}]})['result']['stopReason'] == 'end_turn'
+proc.stdin.close()
+assert proc.stdout.read() == b''
+assert proc.wait(timeout=20) == 0, proc.returncode
+assert received.count(b'\n') == 6, received
+PY
+n=0
+until "$binary" --repo "$work_acp" --json show 1 2>/dev/null | python3 -c 'import json,sys; s=json.load(sys.stdin); sys.exit(not (s["prompt"] == "add main via acp" and "main.go" in json.dumps(s)))' 2>/dev/null; do
+  n=$((n+1)); [ "$n" -lt 100 ] || { echo 'ACP turn was not recorded' >&2; "$binary" --repo "$work_acp" --json show 1 >&2 || true; exit 1; }
+  sleep 0.05
+done
 echo 'e2e passed'
