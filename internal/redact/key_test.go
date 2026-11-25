@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -163,5 +166,108 @@ func TestCheckMarkerKey(t *testing.T) {
 			}
 			_ = os.Chmod(path, 0600)
 		})
+	}
+}
+
+// TestMarkerKeyHelperProcess runs in a child process for
+// TestConcurrentProcessesRepairADamagedKeyToOneKey: it waits for the start
+// signal, loads the key and prints it.
+func TestMarkerKeyHelperProcess(t *testing.T) {
+	path := os.Getenv("TRACE_TEST_MARKER_KEY")
+	if path == "" {
+		t.Skip("helper process only")
+	}
+	for {
+		if _, err := os.Stat(path + ".go"); err == nil {
+			break
+		}
+		runtime.Gosched()
+	}
+	key, err := loadMarkerKey(path)
+	if err != nil {
+		fmt.Println("error", err)
+		os.Exit(2)
+	}
+	fmt.Println("key", hex.EncodeToString(key))
+	os.Exit(0)
+}
+
+// Processes that find the key damaged at the same moment must all end up
+// with one key, the one left on disk, so their markers agree.
+func TestConcurrentProcessesRepairADamagedKeyToOneKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns processes")
+	}
+	for round := 0; round < 5; round++ {
+		dir := t.TempDir()
+		path := filepath.Join(dir, markerKeyFile)
+		if err := os.WriteFile(path, []byte("damaged"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		const workers = 8
+		cmds := make([]*exec.Cmd, workers)
+		outputs := make([]*bytes.Buffer, workers)
+		for i := range cmds {
+			outputs[i] = &bytes.Buffer{}
+			cmds[i] = exec.Command(os.Args[0], "-test.run=^TestMarkerKeyHelperProcess$")
+			cmds[i].Env = append(os.Environ(), "TRACE_TEST_MARKER_KEY="+path)
+			cmds[i].Stdout, cmds[i].Stderr = outputs[i], outputs[i]
+			if err := cmds[i].Start(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(path+".go", nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		keys := map[string]bool{}
+		for i, cmd := range cmds {
+			if err := cmd.Wait(); err != nil {
+				t.Fatalf("helper %d: %v: %s", i, err, outputs[i])
+			}
+			for _, line := range strings.Split(outputs[i].String(), "\n") {
+				if k, ok := strings.CutPrefix(line, "key "); ok {
+					keys[k] = true
+				}
+			}
+		}
+		onDisk, err := readMarkerKey(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(keys) != 1 || !keys[hex.EncodeToString(onDisk)] {
+			t.Fatalf("round %d: processes used %d keys %v; key on disk %x", round, len(keys), keys, onDisk)
+		}
+	}
+}
+
+func TestConcurrentGoroutinesRepairADamagedKeyToOneKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), markerKeyFile)
+	for round := 0; round < 20; round++ {
+		if err := os.WriteFile(path, []byte("damaged"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		keys := make([][]byte, 16)
+		var wg sync.WaitGroup
+		for i := range keys {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				key, err := loadMarkerKey(path)
+				if err != nil {
+					t.Error(err)
+				}
+				keys[i] = key
+			}()
+		}
+		wg.Wait()
+		onDisk, err := readMarkerKey(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range keys {
+			if !bytes.Equal(key, onDisk) {
+				t.Fatalf("round %d: a goroutine used %x; key on disk %x", round, key, onDisk)
+			}
+		}
 	}
 }
