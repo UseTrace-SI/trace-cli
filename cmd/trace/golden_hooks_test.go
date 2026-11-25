@@ -80,6 +80,15 @@ func (s *sandbox) hook(roots map[string]string, inv invocation) result {
 	started := time.Now()
 	before := s.tree(roots, started)
 	r := s.run(inv)
+	// A hook that starts a daemon leaves its lock file. The daemon runs
+	// detached; wait for it so everything it writes is recorded with this
+	// case and removed before the next one.
+	for _, root := range roots {
+		if _, err := os.Stat(filepath.Join(root, ".trace", "daemon.lock")); err == nil {
+			waitForDaemons(s.t, "", false)
+			break
+		}
+	}
 	after := s.tree(roots, started)
 	r.Files = changes(before, after)
 	var created []string

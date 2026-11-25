@@ -501,3 +501,69 @@ func holdFakeDaemon(t *testing.T, root string) {
 	}
 	t.Cleanup(func() { f.Close() })
 }
+
+// traceDaemons returns the PIDs of daemons the binary under test runs for
+// root, or for any repository when root is empty. A started daemon runs
+// detached, so the tests find it by its command line.
+func traceDaemons(t *testing.T, root string) []int {
+	t.Helper()
+	bins := map[string]bool{traceBin: true}
+	if real, err := filepath.EvalSymlinks(traceBin); err == nil {
+		bins[real] = true
+	}
+	roots := map[string]bool{root: true}
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		roots[real] = true
+	}
+	matches := func(args []string) bool {
+		n := len(args)
+		return n >= 4 && bins[args[0]] && args[n-1] == "daemon" && (root == "" || (args[n-3] == "--repo" && roots[args[n-2]]))
+	}
+	var pids []int
+	if entries, err := os.ReadDir("/proc"); err == nil {
+		for _, entry := range entries {
+			pid, err := strconv.Atoi(entry.Name())
+			if err != nil {
+				continue
+			}
+			b, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
+			if err == nil && matches(strings.Split(strings.TrimSuffix(string(b), "\x00"), "\x00")) {
+				pids = append(pids, pid)
+			}
+		}
+		return pids
+	}
+	out, err := exec.Command("ps", "-A", "-o", "pid=", "-o", "args=").Output()
+	if err != nil {
+		t.Fatalf("listing processes: %v", err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// Sandbox paths contain no spaces, so the fields are the arguments.
+		if pid, err := strconv.Atoi(fields[0]); err == nil && matches(fields[1:]) {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// waitForDaemons waits until no daemon of the binary under test runs for
+// root ("" for any), first asking them to stop when stop is set.
+func waitForDaemons(t *testing.T, root string, stop bool) {
+	t.Helper()
+	if stop {
+		for _, pid := range traceDaemons(t, root) {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+		}
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for len(traceDaemons(t, root)) > 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("a Trace daemon for %q is still running", root)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
