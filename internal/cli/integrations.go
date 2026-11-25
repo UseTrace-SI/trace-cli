@@ -5,68 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 	"github.com/spf13/cobra"
 )
-
-type integration struct {
-	Name     string
-	Kind     string
-	Commands []string
-	Profiles []string
-	Apps     []string
-}
-
-var globalIntegrations = []integration{
-	{"claude-code", "CLI", []string{"claude"}, []string{".claude"}, nil},
-	{"codex", "CLI/Desktop", []string{"codex"}, []string{".codex"}, []string{"Codex.app"}},
-	{"cursor", "CLI/Desktop", []string{"cursor", "agent"}, []string{".cursor"}, []string{"Cursor.app"}},
-	{"windsurf", "Desktop", []string{"windsurf"}, []string{".codeium/windsurf"}, []string{"Windsurf.app", "Devin.app"}},
-	{"copilot", "CLI", []string{"copilot"}, []string{".copilot"}, nil},
-	{"gemini", "CLI", []string{"gemini"}, []string{".gemini"}, nil},
-	{"qwen", "CLI", []string{"qwen"}, []string{".qwen"}, nil},
-	{"factory", "CLI", []string{"droid"}, []string{".factory"}, nil},
-	{"amp", "CLI", []string{"amp"}, []string{".config/amp"}, nil},
-	{"pi", "CLI", []string{"pi"}, []string{".pi"}, nil},
-	{"omp", "CLI", []string{"omp"}, []string{".omp"}, nil},
-	{"kilo", "CLI", []string{"kilo"}, []string{".config/kilo"}, nil},
-	{"opencode", "CLI/Desktop", []string{"opencode"}, []string{".config/opencode"}, []string{"OpenCode.app"}},
-	{"openclaude", "CLI", []string{"openclaude"}, []string{".openclaude"}, nil},
-	{"kiro", "CLI", []string{"kiro-cli", "kiro"}, []string{".kiro"}, nil},
-	{"kimi", "CLI", []string{"kimi"}, []string{".kimi-code"}, nil},
-	{"auggie", "CLI", []string{"auggie"}, []string{".augment"}, nil},
-	{"openhands", "CLI", []string{"openhands"}, []string{".openhands"}, nil},
-	{"cline", "CLI", []string{"cline"}, []string{".cline"}, nil},
-	{"poolside", "CLI", []string{"pool"}, []string{".config/poolside"}, nil},
-	{"hermes", "CLI", []string{"hermes"}, []string{".hermes"}, nil},
-	{"zoo", "Desktop", nil, []string{".vscode/extensions/zoocodeorganization.zoo-code-*", ".vscode-insiders/extensions/zoocodeorganization.zoo-code-*"}, nil},
-}
-
-func integrationDetected(item integration, home string) bool {
-	for _, name := range item.Commands {
-		if _, err := exec.LookPath(name); err == nil {
-			return true
-		}
-	}
-	for _, profile := range item.Profiles {
-		matches, _ := filepath.Glob(filepath.Join(home, profile))
-		if len(matches) > 0 {
-			return true
-		}
-	}
-	for _, app := range item.Apps {
-		for _, directory := range []string{"/Applications", filepath.Join(home, "Applications")} {
-			if _, err := os.Stat(filepath.Join(directory, app)); err == nil {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 func installedIntegrations() ([]string, error) {
 	home, err := os.UserHomeDir()
@@ -74,21 +18,17 @@ func installedIntegrations() ([]string, error) {
 		return nil, err
 	}
 	var names []string
-	for _, item := range globalIntegrations {
-		if integrationDetected(item, home) {
-			names = append(names, item.Name)
+	for _, agent := range adapters.Globals() {
+		if agent.Integration().Detected(home) {
+			names = append(names, agent.Name())
 		}
 	}
 	return names, nil
 }
 
 func knownIntegration(name string) bool {
-	for _, item := range globalIntegrations {
-		if item.Name == name {
-			return true
-		}
-	}
-	return false
+	_, ok := adapters.ForGlobal(name)
+	return ok
 }
 
 func agentsCommand(jsonOutput *bool) *cobra.Command {
@@ -113,9 +53,11 @@ func agentsCommand(jsonOutput *bool) *cobra.Command {
 			Paused     bool   `json:"paused"`
 			Enable     string `json:"enable_command"`
 		}
-		rows := make([]row, 0, len(globalIntegrations))
-		for _, item := range globalIntegrations {
-			rows = append(rows, row{item.Name, item.Kind, integrationDetected(item, home), known[item.Name], userstate.DisabledFor(item.Name), "trace enable --agent " + item.Name})
+		globals := adapters.Globals()
+		rows := make([]row, 0, len(globals))
+		for _, agent := range globals {
+			item, name := agent.Integration(), agent.Name()
+			rows = append(rows, row{name, item.Kind, item.Detected(home), known[name], userstate.DisabledFor(name), "trace enable --agent " + name})
 		}
 		if *jsonOutput {
 			return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"paused": userstate.Disabled(), "agents": rows, "enable_all_command": "trace enable --all", "scope": "supported user-level integrations; agent trust/restart/extension activation may still be required"})
