@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 )
 
@@ -43,7 +44,7 @@ func runTestHook(args []string) {
 		return
 	}
 	defer e.Close()
-	for _, ev := range gitHookEvents(args[1], input, root) {
+	for _, ev := range adapters.GitHookEvents(args[1], input, root) {
 		if err := e.Process(ev); err != nil {
 			report(err)
 		}

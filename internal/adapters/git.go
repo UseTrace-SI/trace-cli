@@ -1,4 +1,4 @@
-package cli
+package adapters
 
 import (
 	"bytes"
@@ -16,13 +16,32 @@ import (
 // daemon's frame limit; larger rebases are sent as several events.
 const maxRewritesPerEvent = 2000
 
-// gitHookEvents builds the events for Trace's Git hooks. They only read files
+// gitAdapter receives Trace's own post-commit and post-rewrite hooks.
+type gitAdapter struct{ GenericHooks }
+
+func (gitAdapter) Name() string { return "git" }
+
+func (gitAdapter) Capabilities() Capabilities {
+	return Capabilities{DisplayName: "Git", Verification: Verified}
+}
+
+// FramePerEvent keeps a long rebase within the daemon's frame limits.
+func (gitAdapter) FramePerEvent() bool { return true }
+
+func (a gitAdapter) DecodeHook(c *HookCall, body []byte, root string) ([]event.Event, error) {
+	if c.Event == string(event.GitCommit) || c.Event == string(event.GitRewrite) {
+		return GitHookEvents(c.Event, body, root), nil
+	}
+	return a.GenericHooks.DecodeHook(c, body, root)
+}
+
+// GitHookEvents builds the events for Trace's Git hooks. They only read files
 // in the Git directory, never run Git, and never fail the hook.
-func gitHookEvents(hookEvent string, input []byte, root string) []event.Event {
+func GitHookEvents(hookEvent string, input []byte, root string) []event.Event {
 	now := time.Now().UnixMilli()
 	switch hookEvent {
 	case string(event.GitCommit):
-		ev, err := parseGenericHook("git", hookEvent, input, root)
+		ev, err := ParseGeneric("git", hookEvent, input, root)
 		if err != nil || !event.ValidSHA(ev.GitSHA) {
 			return nil
 		}
