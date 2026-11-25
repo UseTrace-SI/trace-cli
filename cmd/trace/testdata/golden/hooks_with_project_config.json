@@ -1,0 +1,1965 @@
+{
+  "amp-global/bogus_event#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "bogus_event"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"bogus_event\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/session_start#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\",\"tool_name\":\"edit_file\",\"paths\":[\"{{BASE}}/project-amp/a.go\",\"{{BASE}}/project-amp/b.go\"]}\n"
+    }
+  },
+  "amp-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "amp-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/turn_context#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\",\"context_type\":\"response\",\"text\":\"Imports tidied.\"}\n"
+    }
+  },
+  "amp-global/turn_end#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/turn_start#0": {
+    "args": [
+      "hook",
+      "amp-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\",\"prompt\":\"tidy imports\"}\n"
+    }
+  },
+  "amp-global/turn_start#1": {
+    "args": [
+      "hook",
+      "amp-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#0": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#1": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#2": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#3": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#4": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#5": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PostToolUse#6": {
+    "args": [
+      "hook",
+      "cline",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/PreToolUse#0": {
+    "args": [
+      "hook",
+      "cline",
+      "PreToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/SessionShutdown#0": {
+    "args": [
+      "hook",
+      "cline",
+      "SessionShutdown"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskCancel#0": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskCancel"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskComplete#0": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskComplete"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskComplete#1": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskComplete"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskError#0": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskError"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskResume#0": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskResume"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskStart#0": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskStart#1": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskStart#2": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/UserPromptSubmit#0": {
+    "args": [
+      "hook",
+      "cline",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/agentStop#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "agentStop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/agentStop#1": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "agentStop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#1": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#2": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#3": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#4": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/postToolUse#5": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "postToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/preToolUse#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "preToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/sessionEnd#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "sessionEnd"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/sessionStart#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/sessionStart#1": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/userPromptSubmitted#0": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "userPromptSubmitted"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cursor-global/afterAgentResponse#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "afterAgentResponse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/afterAgentThought#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "afterAgentThought"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/afterFileEdit#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "afterFileEdit"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/afterShellExecution#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "afterShellExecution"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/beforeReadFile#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "beforeReadFile"
+    ],
+    "stdout": "{\"permission\":\"allow\"}\n",
+    "exit": 0
+  },
+  "cursor-global/beforeShellExecution#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "beforeShellExecution"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/beforeSubmitPrompt#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "beforeSubmitPrompt"
+    ],
+    "stdout": "{\"continue\":true}\n",
+    "exit": 0
+  },
+  "cursor-global/beforeSubmitPrompt#1": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "beforeSubmitPrompt"
+    ],
+    "stdout": "{\"continue\":true}\n",
+    "exit": 0
+  },
+  "cursor-global/sessionEnd#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "sessionEnd"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/sessionStart#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/stop#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/stop#1": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/subagentStop#0": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "subagentStop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/subagentStop#1": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "subagentStop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "factory-global/Notification#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "Notification"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/Notification#1": {
+    "args": [
+      "hook",
+      "factory-global",
+      "Notification"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#1": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#2": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#3": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#4": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PostToolUse#5": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/PreToolUse#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "PreToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SessionEnd#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SessionEnd"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SessionStart#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SessionStart#1": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/Stop#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SubagentStop#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SubagentStop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SubagentStop#1": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SubagentStop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/UserPromptSubmit#0": {
+    "args": [
+      "hook",
+      "factory-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "gemini-global/AfterAgent#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterAgent#1": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterAgent#2": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterTool#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterTool"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterTool#1": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterTool"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterTool#2": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterTool"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/AfterTool#3": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "AfterTool"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/BeforeAgent#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "BeforeAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/BeforeAgent#1": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "BeforeAgent"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/BeforeTool#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "BeforeTool"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/SessionEnd#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "SessionEnd"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/SessionStart#0": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "kilo-global/bogus_event#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "bogus_event"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"bogus_event\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/file_read#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "file_read"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/project-kilo/a.go\"]}\n"
+    }
+  },
+  "kilo-global/session_end#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "session_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_end\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/session_start#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\",\"tool_name\":\"edit\",\"paths\":[\"{{BASE}}/project-kilo/a.go\"]}\n"
+    }
+  },
+  "kilo-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\",\"tool_name\":\"bash\"}\n"
+    }
+  },
+  "kilo-global/tool_edit#2": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/turn_context#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\",\"context_type\":\"response\",\"text\":\"Renamed the helper.\"}\n"
+    }
+  },
+  "kilo-global/turn_end#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/turn_start#0": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\",\"prompt\":\"rename the helper\"}\n"
+    }
+  },
+  "kilo-global/turn_start#1": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/Interrupt#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "Interrupt"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/project-kiro\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/project-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/PostToolUse#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PostToolUse#1": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PostToolUse#2": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PostToolUse#3": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PostToolUse#4": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PostToolUse#5": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/PreToolUse#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "PreToolUse"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/SessionEnd#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "SessionEnd"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_end\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/project-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/SessionStart#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/Stop#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/Stop#1": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#0": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#1": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#2": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#3": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#4": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "kiro-global/UserPromptSubmit#5": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "omp-global/file_read#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "file_read"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\",\"tool_name\":\"read\",\"paths\":[\"a.go\"]}\n"
+    }
+  },
+  "omp-global/session_end#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "session_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_end\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/session_start#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\",\"tool_name\":\"write\",\"paths\":[\"{{BASE}}/project-omp/a.go\"]}\n"
+    }
+  },
+  "omp-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "omp-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\",\"tool_name\":\"bash\"}\n"
+    }
+  },
+  "omp-global/tool_edit#2": {
+    "args": [
+      "hook",
+      "omp-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/tool_execution_end#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "tool_execution_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_execution_end\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/turn_context#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\",\"context_type\":\"response\",\"text\":\"Added logging.\"}\n"
+    }
+  },
+  "omp-global/turn_end#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/turn_start#0": {
+    "args": [
+      "hook",
+      "omp-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\",\"prompt\":\"add logging\"}\n"
+    }
+  },
+  "omp-global/turn_start#1": {
+    "args": [
+      "hook",
+      "omp-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-global/bogus_event#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "bogus_event"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"bogus_event\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/file_read#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "file_read"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"paths\":[\"{{BASE}}/project-opencode/main.go\"]}\n"
+    }
+  },
+  "opencode-global/session_end#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "session_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_end\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/session_start#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"tool_name\":\"edit\",\"paths\":[\"{{BASE}}/project-opencode/main.go\"]}\n"
+    }
+  },
+  "opencode-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"tool_name\":\"bash\"}\n"
+    }
+  },
+  "opencode-global/tool_edit#2": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/turn_context#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"context_type\":\"thinking\",\"text\":\"considering flags\"}\n"
+    }
+  },
+  "opencode-global/turn_context#1": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"context_type\":\"response\",\"text\":\"Added the flag.\"}\n"
+    }
+  },
+  "opencode-global/turn_end#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/turn_start#0": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\",\"prompt\":\"add a flag\"}\n"
+    }
+  },
+  "opencode-global/turn_start#1": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/bogus_event#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "bogus_event"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/file_read#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "file_read"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/session_end#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "session_end"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/session_start#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/tool_edit#2": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/turn_context#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/turn_context#1": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/turn_end#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/turn_start#0": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/turn_start#1": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "pi-global/file_read#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "file_read"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\",\"tool_name\":\"read\",\"paths\":[\"a.go\"]}\n"
+    }
+  },
+  "pi-global/session_end#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "session_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_end\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/session_start#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/tool_edit#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\",\"tool_name\":\"write\",\"paths\":[\"{{BASE}}/project-pi/a.go\"]}\n"
+    }
+  },
+  "pi-global/tool_edit#1": {
+    "args": [
+      "hook",
+      "pi-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\",\"tool_name\":\"bash\"}\n"
+    }
+  },
+  "pi-global/tool_edit#2": {
+    "args": [
+      "hook",
+      "pi-global",
+      "tool_edit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/tool_execution_end#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "tool_execution_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_execution_end\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/turn_context#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "turn_context"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_context\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\",\"context_type\":\"response\",\"text\":\"Added logging.\"}\n"
+    }
+  },
+  "pi-global/turn_end#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "turn_end"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_end\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/turn_start#0": {
+    "args": [
+      "hook",
+      "pi-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\",\"prompt\":\"add logging\"}\n"
+    }
+  },
+  "pi-global/turn_start#1": {
+    "args": [
+      "hook",
+      "pi-global",
+      "turn_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#1": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#2": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#3": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#4": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PostToolUse#5": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PostToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/PreToolUse#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "PreToolUse"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/SessionEnd#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "SessionEnd"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/SessionStart#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/SessionStart#1": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/Stop#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/Stop#1": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/Stop#2": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/StopFailure#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "StopFailure"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/UserPromptSubmit#0": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/UserPromptSubmit#1": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "UserPromptSubmit"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "repo-flag/amp-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-amp",
+      "hook",
+      "amp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/project-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/cline/TaskStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-cline",
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cline\",\"agent_session_id\":\"task-1\",\"worktree\":\"{{BASE}}/project-cline\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/copilot-global/sessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-copilot",
+      "hook",
+      "copilot-global",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cop-1\",\"worktree\":\"{{BASE}}/project-copilot\",\"at\":1767323045000}\n"
+    }
+  },
+  "repo-flag/cursor-global/sessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-cursor",
+      "hook",
+      "cursor-global",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cursor\",\"agent_session_id\":\"conv-1\",\"worktree\":\"{{BASE}}/project-cursor\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/factory-global/SessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-factory",
+      "hook",
+      "factory-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"factory\",\"agent_session_id\":\"fac-1\",\"worktree\":\"{{BASE}}/project-factory\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/gemini-global/SessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-gemini",
+      "hook",
+      "gemini-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/project-gemini\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/project-gemini/.gemini-transcript.json\"}\n"
+    }
+  },
+  "repo-flag/kilo-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-kilo",
+      "hook",
+      "kilo-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/project-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/kiro-global/SessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-kiro",
+      "hook",
+      "kiro-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/project-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/omp-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-omp",
+      "hook",
+      "omp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/project-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/opencode-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-opencode",
+      "hook",
+      "opencode-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/project-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/opencode-v1-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-opencode",
+      "hook",
+      "opencode-v1-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "repo-flag/pi-global/session_start#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-pi",
+      "hook",
+      "pi-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/project-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/qwen-global/SessionStart#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-qwen",
+      "hook",
+      "qwen-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/project-qwen\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "repo-flag/windsurf-global/pre_user_prompt#0": {
+    "args": [
+      "--repo",
+      "{{BASE}}/project-windsurf",
+      "hook",
+      "windsurf-global",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"windsurf\",\"agent_session_id\":\"conversation-1\",\"worktree\":\"{{BASE}}/project-windsurf\",\"at\":1767323045000,\"prompt\":\"add search\"}\n"
+    }
+  },
+  "windsurf-global/other#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "other"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/post_cascade_response#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "post_cascade_response"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/post_read_code#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "post_read_code"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/post_run_command#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "post_run_command"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/post_write_code#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "post_write_code"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/post_write_code#1": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "post_write_code"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/pre_user_prompt#0": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/pre_user_prompt#1": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0
+  }
+}
