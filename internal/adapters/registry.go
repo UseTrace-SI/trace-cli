@@ -40,7 +40,13 @@ var registry = []Adapter{
 }
 
 // projectRemovalOrder is the order `trace uninstall` removes project
-// hooks; the first failure stops it. Project installers not listed here
+// hooks. The first failure stops it, so the order is observable: a broken
+// configuration file of one agent leaves the hooks of every agent after it
+// installed. This is the order of the uninstall command before the
+// registry existed. It cannot be derived from the registry order, which is
+// observable too (`trace agents`, `trace setup --help`) and conflicts with
+// it: cursor precedes cline there, cline precedes cursor here. A new
+// project installer does not need an entry; installers not listed here
 // follow in registry order.
 var projectRemovalOrder = []string{"claude-code", "cline", "openclaude", "openhands", "cursor", "windsurf", "agy", "gemini", "copilot", "qwen", "factory", "pi", "omp", "grok", "goose", "amp", "kilo", "kiro", "langgraph", "crewai", "aider", "codebuff"}
 
