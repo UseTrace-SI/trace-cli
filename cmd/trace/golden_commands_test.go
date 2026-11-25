@@ -122,6 +122,7 @@ func TestGoldenCommands(t *testing.T) {
 		[]string{"--json", "export", "--format", "agent-trace", "--rev", "HEAD", "--out", "../out/trace.jsonl"},
 		[]string{"export", "--format", "markdown"},
 		[]string{"--json", "export", "--format", "markdown", "--out", "../out/md"},
+		[]string{"export", "--format", "markdown", "--out", "../out/md2"},
 		[]string{"export", "--format", "nope"},
 		[]string{"import", "--from", "entire"},
 		[]string{"--json", "import", "--from", "git-ai"},

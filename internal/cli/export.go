@@ -179,6 +179,15 @@ func exportMarkdown(c *cobra.Command, repoPath, dir, session string, jsonOutput 
 		}
 	}
 	files := []string{}
+	if len(sessions) == 0 {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+		if !jsonOutput {
+			_, err := fmt.Fprintf(c.OutOrStdout(), "No sessions recorded; nothing written to %s\n", dir)
+			return err
+		}
+	}
 	for _, id := range sessions {
 		if !safeSessionID.MatchString(id) {
 			return fmt.Errorf("invalid session ID %q", id)

@@ -304,9 +304,26 @@
       "../out/md"
     ],
     "stdout": "{\"dir\":\"../out/md\",\"files\":[],\"format\":\"markdown\"}\n",
-    "exit": 0
+    "exit": 0,
+    "files": {
+      "out/md/": "[0700] dir"
+    }
   },
-  "interop/08 export --format nope": {
+  "interop/08 export --format markdown --out ../out/md2": {
+    "args": [
+      "export",
+      "--format",
+      "markdown",
+      "--out",
+      "../out/md2"
+    ],
+    "stdout": "No sessions recorded; nothing written to ../out/md2\n",
+    "exit": 0,
+    "files": {
+      "out/md2/": "[0700] dir"
+    }
+  },
+  "interop/09 export --format nope": {
     "args": [
       "export",
       "--format",
@@ -316,7 +333,7 @@
     "stderr": "unsupported export format \"nope\" (want agent-trace, markdown or bundle)\n",
     "exit": 1
   },
-  "interop/09 import --from entire": {
+  "interop/10 import --from entire": {
     "args": [
       "import",
       "--from",
@@ -326,7 +343,7 @@
     "stderr": "importing from Entire is not supported: its checkpoint file layout and trailer value are not publicly specified (pass ./entire to import a Trace database file named entire)\n",
     "exit": 1
   },
-  "interop/10 --json import --from git-ai": {
+  "interop/11 --json import --from git-ai": {
     "args": [
       "--json",
       "import",
