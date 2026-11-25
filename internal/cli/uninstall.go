@@ -47,7 +47,7 @@ func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				identity = daemon.CheckTraceDaemon(pid, root)
 			}
 			if identity == daemon.DaemonUnknown {
-				return fmt.Errorf("cannot confirm that process %d is the Trace daemon (is ps installed?); stop it manually and run uninstall again", pid)
+				return fmt.Errorf("cannot confirm that process %d is the Trace daemon; stop it manually and run uninstall again", pid)
 			}
 			if identity == daemon.DaemonConfirmed {
 				if p, err := os.FindProcess(pid); err == nil {

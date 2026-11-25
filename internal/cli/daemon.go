@@ -280,7 +280,7 @@ func daemonCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return nil
 		case daemon.DaemonUnknown:
 			// Deleting the pid file here would orphan a running daemon.
-			return fmt.Errorf("cannot confirm that process %d is the Trace daemon (is ps installed?); daemon.pid was kept, stop the process manually", pid)
+			return fmt.Errorf("cannot confirm that process %d is the Trace daemon; daemon.pid was kept, stop the process manually", pid)
 		}
 		p, err := os.FindProcess(pid)
 		if err != nil {

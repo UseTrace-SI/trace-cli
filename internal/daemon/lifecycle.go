@@ -255,7 +255,7 @@ var readCommandLine = processCommandLine
 // daemon.pid file. A recorded process start time identifies the exact process
 // instance; the command-line check remains as a fallback for older daemons.
 func CheckTraceDaemon(pid int, root string) DaemonIdentity {
-	if !ProcessRunning(pid) {
+	if !ProcessRunning(pid) || processZombie(pid) {
 		return DaemonAbsent
 	}
 	if expected := readDaemonStartTime(filepath.Join(root, ".trace")); expected > 0 {

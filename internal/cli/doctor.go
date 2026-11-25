@@ -84,7 +84,7 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return "pid " + strings.TrimSpace(string(pidBytes))
 			}
 			if daemonUnverified {
-				return "pid " + strings.TrimSpace(string(pidBytes)) + " is running but could not be identified (is ps installed?)"
+				return "pid " + strings.TrimSpace(string(pidBytes)) + " is running but could not be identified"
 			}
 			return "run: trace daemon start (or any hook will auto-start it)"
 		}())
