@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -21,6 +22,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestBundleRejectsUnsafeArchivesWithoutChangingHistory(t *testing.T) {
@@ -668,5 +670,94 @@ func TestHandoffJSONListsLeftOutPaths(t *testing.T) {
 	}
 	if got.Path != out || got.Context == "" || len(got.LeftOut) != 1 || got.LeftOut[0] != ".npmrc" || got.Included {
 		t.Fatalf("handoff --json = %+v", got)
+	}
+}
+
+// bundleMembers returns every member of a bundle, with object members also
+// decompressed, so a scan sees what a reader of the archive could recover.
+func bundleMembers(t *testing.T, archive string) map[string][]byte {
+	t.Helper()
+	f, err := os.Open(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	decoder, err := zstd.NewReader(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer decoder.Close()
+	members := map[string][]byte{}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return members
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		members[h.Name] = b
+		if strings.HasPrefix(h.Name, ".trace/objects/") {
+			if plain, err := decoder.DecodeAll(b, nil); err == nil {
+				members[h.Name+" (decoded)"] = plain
+			}
+		}
+	}
+}
+
+// Stripping rewrites rows in the bundle's copy of the database. The old
+// values must not survive in freed pages: no member of a default export or
+// handoff, including the raw SQLite file, may contain the stripped content
+// hash or the credential.
+func TestStrippedBundleKeepsNoTraceOfExcludedContent(t *testing.T) {
+	source, secret := sinceExcludedHistory(t)
+	// Many operations on the file fill pages that stripping then frees.
+	e, err := engine.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ {
+		if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES(?,'.npmrc','modify',?,?,'watcher',?)", fmt.Sprintf("o-bulk-%03d", i), secret, secret, i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.Close()
+	exported := filepath.Join(t.TempDir(), "export.tar.gz")
+	if _, err := exportBundle(source, exported, bundleOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	handoff := filepath.Join(t.TempDir(), "handoff.tar.gz")
+	jsonOutput := true
+	cmd := handoffCommand(&source, &jsonOutput)
+	cmd.SetArgs([]string{"--out", handoff})
+	cmd.SetOut(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, archive := range []string{exported, handoff} {
+		members := bundleMembers(t, archive)
+		if _, ok := members[".trace/trace.db"]; !ok {
+			t.Fatalf("%s has no database", archive)
+		}
+		for name, b := range members {
+			if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-journal") || strings.HasSuffix(name, "-shm") {
+				t.Errorf("%s bundles a database side file %s", archive, name)
+			}
+			for _, needle := range []string{string(secret), "_authToken"} {
+				if n := bytes.Count(b, []byte(needle)); n > 0 {
+					t.Errorf("%s: member %s contains %q %d times", filepath.Base(archive), name, needle, n)
+				}
+			}
+		}
 	}
 }

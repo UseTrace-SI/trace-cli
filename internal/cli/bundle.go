@@ -204,6 +204,11 @@ func stripBundleHistory(ctx context.Context, snapshot string, bs, staged *blob.S
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
+	// Rewritten values must not survive in freed pages of the bundled file,
+	// and the file must be complete without a side WAL.
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=DELETE; PRAGMA secure_delete=ON"); err != nil {
+		return nil, err
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -310,6 +315,13 @@ func stripBundleHistory(ctx context.Context, snapshot string, bs, staged *blob.S
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+	if apply && len(found) > 0 {
+		// secure_delete zeroes freed content, but rebuilding the file also
+		// drops slack in pages that stay in use.
+		if _, err := db.ExecContext(ctx, "VACUUM"); err != nil {
+			return nil, fmt.Errorf("compacting the bundle's history: %w", err)
+		}
 	}
 	paths := make([]string, 0, len(found))
 	for rel := range found {
