@@ -76,3 +76,24 @@ func TestDoctorWarnsAboutStoreSizeAndDroppedEvents(t *testing.T) {
 		t.Fatalf("drops from long ago still flagged: %+v", c)
 	}
 }
+
+func TestDoctorChecksRedactionKey(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TRACE_HOME", home)
+	root := competitiveRepo(t)
+	if c := doctorChecks(t, root)["redaction key"]; c.OK || !strings.Contains(c.Detail, "missing") {
+		t.Fatalf("missing key not flagged: %+v", c)
+	}
+	if err := os.WriteFile(filepath.Join(home, "redaction.key"), []byte(strings.Repeat("ab", 32)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if c := doctorChecks(t, root)["redaction key"]; !c.OK {
+		t.Fatalf("usable key flagged: %+v", c)
+	}
+	if err := os.Chmod(filepath.Join(home, "redaction.key"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if c := doctorChecks(t, root)["redaction key"]; c.OK || !strings.Contains(c.Detail, "0600") {
+		t.Fatalf("readable key not flagged: %+v", c)
+	}
+}

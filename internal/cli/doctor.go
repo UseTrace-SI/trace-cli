@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
 	"github.com/spf13/cobra"
@@ -138,6 +139,13 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			add(".trace size", false, fmt.Sprintf("%d bytes exceeds the %d byte budget (TRACE_MAX_STORE_BYTES); run: trace gc", size, budget))
 		} else {
 			add(".trace size", true, fmt.Sprintf("%d bytes (budget %d)", size, budget))
+		}
+		// An unusable redaction key makes each process mark secrets with its
+		// own ephemeral key, so markers stop matching across processes.
+		if path, err := redact.CheckMarkerKey(); err != nil {
+			add("redaction key", false, err.Error())
+		} else {
+			add("redaction key", true, path)
 		}
 		// Hooks drop events rather than block when the spool is full.
 		spool := daemon.ReadSpoolHealth(td)

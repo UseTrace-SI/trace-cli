@@ -115,3 +115,53 @@ func TestConcurrentFirstRunsAgreeOnOneKey(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckMarkerKey(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TRACE_HOME", home)
+	path := filepath.Join(home, markerKeyFile)
+	if _, err := CheckMarkerKey(); err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("missing key: %v", err)
+	}
+	if _, err := loadMarkerKey(path); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := CheckMarkerKey(); err != nil || got != path {
+		t.Fatalf("usable key reported %q, %v", got, err)
+	}
+	for _, tc := range []struct {
+		name, want string
+		damage     func() error
+	}{
+		{"readable by others", "mode", func() error { return os.Chmod(path, 0644) }},
+		{"unreadable", "not readable", func() error { return os.Chmod(path, 0) }},
+		{"damaged", "damaged", func() error { return os.WriteFile(path, []byte("short"), 0600) }},
+		{"symlink", "not a regular file", func() error {
+			target := filepath.Join(t.TempDir(), "key")
+			if err := os.WriteFile(target, []byte(strings.Repeat("ab", 32)), 0600); err != nil {
+				return err
+			}
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+			return os.Symlink(target, path)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "unreadable" && os.Geteuid() == 0 {
+				t.Skip("root reads any file")
+			}
+			_ = os.Remove(path)
+			if _, err := loadMarkerKey(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.damage(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := CheckMarkerKey(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("CheckMarkerKey = %v; want an error mentioning %q", err, tc.want)
+			}
+			_ = os.Chmod(path, 0600)
+		})
+	}
+}

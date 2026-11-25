@@ -148,3 +148,40 @@ func readMarkerKey(path string) ([]byte, error) {
 	}
 	return key, nil
 }
+
+// CheckMarkerKey reports whether the per-install marker key exists as a
+// private regular file this process can read. When it cannot be used, every
+// process redacts with its own ephemeral key, so equal secrets get different
+// markers. It never creates or repairs the key.
+func CheckMarkerKey() (string, error) {
+	path, err := userstate.Path(markerKeyFile)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return path, fmt.Errorf("%s is missing; run trace init or start the daemon to create it", path)
+	}
+	if err != nil {
+		return path, err
+	}
+	if !info.Mode().IsRegular() {
+		return path, fmt.Errorf("%s is not a regular file", path)
+	}
+	if info.Mode().Perm()&0077 != 0 {
+		return path, fmt.Errorf("%s has mode %04o; want 0600", path, info.Mode().Perm())
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return path, fmt.Errorf("%s is not readable: %w", path, err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 256))
+	if err != nil {
+		return path, fmt.Errorf("reading %s: %w", path, err)
+	}
+	if key, err := hex.DecodeString(strings.TrimSpace(string(data))); err != nil || len(key) != 32 {
+		return path, fmt.Errorf("%s is damaged", path)
+	}
+	return path, nil
+}
