@@ -25,7 +25,7 @@ type uploadPreview struct {
 }
 
 func previewUpload(ctx context.Context, e *engine.Engine) (uploadPreview, error) {
-	out := uploadPreview{PotentialSecrets: []string{}, ExcludedHistory: []string{}, Disclosure: "Approval uploads existing and future history and derived context. Source bytes remain exact and may contain credentials. Hosted personal history is server-encrypted and readable by the service. Capture exclusions do not erase earlier snapshots. Secret scanning is best effort."}
+	out := uploadPreview{PotentialSecrets: []string{}, ExcludedHistory: []string{}, Disclosure: "Approval uploads existing and future history and derived context. Source bytes remain exact and may contain credentials. Hosted personal history is server-encrypted and readable by the service. Earlier snapshots of files matching Trace's built-in credential exclusions are left out of uploads; .traceignore changes do not erase earlier snapshots. Secret scanning is best effort."}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	rows, err := e.DB.QueryContext(ctx, "SELECT manifest_hash FROM keyframes")

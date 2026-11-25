@@ -52,7 +52,7 @@ func TestReadCommitPages(t *testing.T) {
 	var got []string
 	after := ""
 	for {
-		rows, cursors, err := readRows(db.DB, "commits", after, 2)
+		rows, cursors, err := readRows(db.DB, nil, "commits", after, 2)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ func TestReadCommitPages(t *testing.T) {
 	if want := []string{"a", "b", "c", "d", "e"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("commit pages = %v, want %v", got, want)
 	}
-	if _, _, err := readRows(db.DB, "commits", "bad-cursor", 2); err == nil {
+	if _, _, err := readRows(db.DB, nil, "commits", "bad-cursor", 2); err == nil {
 		t.Fatal("invalid commit cursor accepted")
 	}
 }
@@ -621,7 +621,7 @@ func TestCommitAttributionRoundTripsThroughSync(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows, _, err := readRows(source.DB, "commits", "", 10)
+	rows, _, err := readRows(source.DB, nil, "commits", "", 10)
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("read %d commit rows: %v", len(rows), err)
 	}

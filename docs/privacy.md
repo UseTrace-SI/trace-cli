@@ -28,7 +28,9 @@ Codex assistant output and reasoning summaries, Cursor Agent CLI response and th
 
 ## File exclusions and removal
 
-Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, `.ssh/`, key stores (`*.p12`, `*.pfx`, `*.jks`, `*.keystore`), credential files (`.npmrc`, `.pypirc`, `.netrc`, `_netrc`, `.git-credentials`, `.pgpass`, `credentials.json`, `service-account*.json`), Terraform state (`*.tfstate`, `*.tfstate.backup`), or cluster and registry configs (`kubeconfig`, `kubeconfig.yaml`, `*.kubeconfig`, `.kube/config`, `.docker/config.json`); these names match in any directory and letter case. Excluded files are also never restored by rewind. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
+Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, `.ssh/`, key stores (`*.p12`, `*.pfx`, `*.jks`, `*.keystore`), credential files (`.npmrc`, `.pypirc`, `.netrc`, `_netrc`, `.git-credentials`, `.pgpass`, `credentials.json`, `service-account*.json`), Terraform state (`*.tfstate`, `*.tfstate.backup`), or cluster and registry configs (`kubeconfig`, `kubeconfig.yaml`, `*.kubeconfig`, `.kube/config`, `.docker/config.json`); these names match in any directory and letter case. Excluded files are also never restored by rewind.
+
+History recorded before one of these exclusions existed can still hold such a file. It stays in local history, but by default it is left out of everything that leaves the machine: `trace export --format bundle` and `trace handoff` rewrite the bundle's copy of the history so neither the path nor its bytes are included and list the paths they left out, and sync uploads stripped snapshots and no content for those files. Pass `--include-excluded-history` to `trace export` or `trace handoff` to keep them; the command then warns that the bundle may hold credentials. History uploaded before this change is not erased from the server. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
 
@@ -47,7 +49,7 @@ indexes, even when tracked by Git. Use a relative filename, a directory prefix
 ending in `/`, or a single-level glob such as `secrets/*.json` or `*.local`.
 Blank lines and `#` comments are supported. Negation and `**` patterns are rejected.
 Built-in secret exclusions always apply. Existing snapshots and hosted history
-are not erased when this file changes; the preview identifies historical paths
+are not erased when `.traceignore` changes, and those snapshots are still exported and uploaded; the preview identifies historical paths
 that are now excluded. Review or delete that history before connecting if needed.
 
 Default capture budgets are 64 MiB per file, 512 MiB per scan/batch, and 64 MiB of
