@@ -3371,7 +3371,10 @@
       "AfterTool"
     ],
     "stdout": "{}\n",
-    "exit": 0
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"tool_name\":\"read_file\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
   },
   "batch/gemini-global/BeforeAgent#0": {
     "args": [
@@ -3506,7 +3509,10 @@
       "AfterTool"
     ],
     "stdout": "{}\n",
-    "exit": 0
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"tool_name\":\"read_file\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
   },
   "batch/gemini/BeforeAgent#0": {
     "args": [
@@ -11189,7 +11195,10 @@
       "AfterTool"
     ],
     "stdout": "{}\n",
-    "exit": 0
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"file_read\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"tool_name\":\"read_file\",\"paths\":[\"{{BASE}}/legacy/a.go\"]}\n"
+    }
   },
   "legacy/gemini/BeforeAgent#0": {
     "args": [

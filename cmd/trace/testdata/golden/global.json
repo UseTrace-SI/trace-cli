@@ -1876,7 +1876,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "home/.gemini/": "[0700] dir",
@@ -1890,7 +1890,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"enabled\":false}\n",
+    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"enabled\":false}\n",
     "exit": 0
   },
   "clean/gemini/02 setup --agent gemini --remove": {
@@ -1924,7 +1924,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
+    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
     "exit": 0,
     "files": {
       "home/.gemini/settings.json": "[0600] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
@@ -1957,7 +1957,7 @@
     "args": [
       "enable"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0,
     "files": {
       "trace_home/agents/gemini.disabled": "\u003cdeleted\u003e"
@@ -1968,7 +1968,7 @@
       "--json",
       "enable"
     ],
-    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
+    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
     "exit": 0
   },
   "clean/gemini/09 enable gemini": {
@@ -1976,7 +1976,7 @@
       "enable",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0
   },
   "clean/gemini/10 disable": {
@@ -1995,7 +1995,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0,
     "files": {
       "trace_home/disabled": "\u003cdeleted\u003e"
@@ -3773,7 +3773,7 @@
       "--agent",
       "codex,gemini,qwen,copilot,windsurf,opencode,kilo,pi,omp,amp,hermes,zoo,poolside,kiro"
     ],
-    "stdout": "Selected integrations installed. In Codex, review and trust the new hooks with /hooks. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks. Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks. Restart Copilot CLI and confirm hooks are active. Restart Windsurf or Devin Desktop and confirm hooks are active. Restart OpenCode and confirm the Trace plugin loaded. Restart Kilo and confirm the Trace plugin loaded. Restart pi and confirm the Trace extension loaded. Restart omp and confirm the Trace extension loaded. Reload Amp plugins and check activation with amp plugins list. Enable trace-observer in Hermes and set TRACE_HERMES_REPO to the repository path. Install {{HOME}}/.trace/integrations/trace-zoo.vsix as a VSIX in your editor and reload the window. Poolside 1.0.16 or later is required; restart Poolside after setup. Restart Kiro and confirm hooks are active.\n",
+    "stdout": "Selected integrations installed. In Codex, review and trust the new hooks with /hooks. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks. Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks. Restart Copilot CLI and confirm hooks are active. Restart Windsurf or Devin Desktop and confirm hooks are active. Restart OpenCode and confirm the Trace plugin loaded. Restart Kilo and confirm the Trace plugin loaded. Restart pi and confirm the Trace extension loaded. Restart omp and confirm the Trace extension loaded. Reload Amp plugins and check activation with amp plugins list. Enable trace-observer in Hermes and set TRACE_HERMES_REPO to the repository path. Install {{HOME}}/.trace/integrations/trace-zoo.vsix as a VSIX in your editor and reload the window. Poolside 1.0.16 or later is required; restart Poolside after setup. Restart Kiro and confirm hooks are active.\n",
     "exit": 0,
     "files": {
       "home/.codeium/": "[0700] dir",
@@ -3831,7 +3831,7 @@
       "--agent",
       "codex,gemini,qwen,copilot,windsurf,opencode,kilo,pi,omp,amp,hermes,zoo,poolside,kiro"
     ],
-    "stdout": "{\"additional_setup\":\"Review and trust the Codex hooks with /hooks; ensure hooks are enabled. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks. Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks. Restart Copilot CLI and confirm hooks are active. Restart Windsurf or Devin Desktop and confirm hooks are active. Restart OpenCode and confirm the Trace plugin loaded. Restart Kilo and confirm the Trace plugin loaded. Restart pi and confirm the Trace extension loaded. Restart omp and confirm the Trace extension loaded. Reload Amp plugins and check activation with amp plugins list. Enable trace-observer in Hermes and set TRACE_HERMES_REPO. Install the generated VSIX in your editor and reload the window. Poolside 1.0.16 or later is required; restart Poolside after setup. Restart Kiro and confirm hooks are active.\",\"agents\":[\"codex\",\"gemini\",\"qwen\",\"copilot\",\"windsurf\",\"opencode\",\"kilo\",\"pi\",\"omp\",\"amp\",\"hermes\",\"zoo\",\"poolside\",\"kiro\"],\"enabled\":false,\"extension_package\":\"{{HOME}}/.trace/integrations/trace-zoo.vsix\"}\n",
+    "stdout": "{\"additional_setup\":\"Review and trust the Codex hooks with /hooks; ensure hooks are enabled. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks. Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks. Restart Copilot CLI and confirm hooks are active. Restart Windsurf or Devin Desktop and confirm hooks are active. Restart OpenCode and confirm the Trace plugin loaded. Restart Kilo and confirm the Trace plugin loaded. Restart pi and confirm the Trace extension loaded. Restart omp and confirm the Trace extension loaded. Reload Amp plugins and check activation with amp plugins list. Enable trace-observer in Hermes and set TRACE_HERMES_REPO. Install the generated VSIX in your editor and reload the window. Poolside 1.0.16 or later is required; restart Poolside after setup. Restart Kiro and confirm hooks are active.\",\"agents\":[\"codex\",\"gemini\",\"qwen\",\"copilot\",\"windsurf\",\"opencode\",\"kilo\",\"pi\",\"omp\",\"amp\",\"hermes\",\"zoo\",\"poolside\",\"kiro\"],\"enabled\":false,\"extension_package\":\"{{HOME}}/.trace/integrations/trace-zoo.vsix\"}\n",
     "exit": 0
   },
   "combo/05 setup --agent codex,gemini,qwen,copilot,windsurf,opencode,kilo,pi,omp,amp,hermes,zoo,poolside,kiro --remove": {
@@ -4030,7 +4030,7 @@
       "codex",
       "gemini"
     ],
-    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Review and trust the Codex hooks with /hooks; ensure hooks are enabled. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"codex\",\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"codex\",\"gemini\"]}\n",
+    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Review and trust the Codex hooks with /hooks; ensure hooks are enabled. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"codex\",\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"codex\",\"gemini\"]}\n",
     "exit": 0,
     "files": {
       "home/.codex/hooks.json": "[0600] {\n  \"hooks\": {\n    \"Interrupt\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex Interrupt\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex PostToolUse\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex Stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"UserPromptSubmit\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook codex UserPromptSubmit\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
@@ -5227,7 +5227,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "home/.gemini/": "[0755] dir",
@@ -5241,7 +5241,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"enabled\":false}\n",
+    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"enabled\":false}\n",
     "exit": 0
   },
   "seeded/gemini/02 setup --agent gemini --remove": {
@@ -5275,7 +5275,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
+    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
     "exit": 0,
     "files": {
       "home/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini-global SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user-stop\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"opus\"\n}\n",
@@ -5308,7 +5308,7 @@
     "args": [
       "enable"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0,
     "files": {
       "trace_home/agents/gemini.disabled": "\u003cdeleted\u003e"
@@ -5319,7 +5319,7 @@
       "--json",
       "enable"
     ],
-    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
+    "stdout": "{\"activation_required\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agents\":[\"gemini\"],\"configured\":true,\"paused\":false,\"selected_agents\":[\"gemini\"]}\n",
     "exit": 0
   },
   "seeded/gemini/09 enable gemini": {
@@ -5327,7 +5327,7 @@
       "enable",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0
   },
   "seeded/gemini/10 disable": {
@@ -5346,7 +5346,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
+    "stdout": "Selected integrations installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\nRecording enabled. Approved projects sync automatically. Use trace disable to pause or trace agents to inspect integrations.\n",
     "exit": 0,
     "files": {
       "trace_home/disabled": "\u003cdeleted\u003e"

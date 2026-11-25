@@ -2839,7 +2839,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Trace initialized. Gemini hooks installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Trace initialized. Gemini hooks installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "root/.gemini/": "[0700] dir",
@@ -2875,7 +2875,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"initialized\":true,\"repo\":\"{{BASE}}/repo\"}\n",
+    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"initialized\":true,\"repo\":\"{{BASE}}/repo\"}\n",
     "exit": 0
   },
   "clean/gemini/02 agent remove gemini": {
@@ -2906,7 +2906,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "Added agent gemini. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Added agent gemini. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "root/.gemini/settings.json": "[0600] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
@@ -2919,7 +2919,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agent\":\"gemini\"}\n",
+    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agent\":\"gemini\"}\n",
     "exit": 0
   },
   "clean/gemini/06 uninstall": {
@@ -2942,7 +2942,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agent\":\"gemini\"}\n",
+    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agent\":\"gemini\"}\n",
     "exit": 0,
     "files": {
       "root/.gemini/settings.json": "[0600] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
@@ -6094,7 +6094,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Trace initialized. Gemini hooks installed. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Trace initialized. Gemini hooks installed. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "root/.gemini/": "[0755] dir",
@@ -6130,7 +6130,7 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"initialized\":true,\"repo\":\"{{BASE}}/repo\"}\n",
+    "stdout": "{\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"initialized\":true,\"repo\":\"{{BASE}}/repo\"}\n",
     "exit": 0
   },
   "seeded/gemini/02 agent remove gemini": {
@@ -6161,7 +6161,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "Added agent gemini. Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\n",
+    "stdout": "Added agent gemini. Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\n",
     "exit": 0,
     "files": {
       "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"
@@ -6174,7 +6174,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agent\":\"gemini\"}\n",
+    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agent\":\"gemini\"}\n",
     "exit": 0
   },
   "seeded/gemini/06 uninstall": {
@@ -6197,7 +6197,7 @@
       "add",
       "gemini"
     ],
-    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks.\",\"agent\":\"gemini\"}\n",
+    "stdout": "{\"added\":true,\"additional_setup\":\"Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks.\",\"agent\":\"gemini\"}\n",
     "exit": 0,
     "files": {
       "root/.gemini/settings.json": "[0644] {\n  \"hooks\": {\n    \"AfterAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"AfterTool\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"echo user\",\n            \"type\": \"command\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini AfterTool\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini BeforeAgent\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionEnd\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"command\": \"{{BIN}} hook gemini SessionStart\",\n            \"type\": \"command\"\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": \"Dark\"\n}\n"

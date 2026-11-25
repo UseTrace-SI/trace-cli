@@ -14,6 +14,8 @@ func TestParse(t *testing.T) {
 		{"SessionStart", `{"session_id":"s","hook_event_name":"SessionStart"}`, event.SessionStart},
 		{"BeforeAgent", `{"session_id":"s","hook_event_name":"BeforeAgent","prompt":"hello"}`, event.TurnStart},
 		{"AfterTool", `{"session_id":"s","hook_event_name":"AfterTool","tool_name":"write_file","tool_input":{"file_path":"/repo/a.go"}}`, event.ToolEdit},
+		// Gemini CLI tools reference: read_file's path argument is file_path.
+		{"AfterTool", `{"session_id":"s","hook_event_name":"AfterTool","tool_name":"read_file","tool_input":{"file_path":"/repo/b.go"}}`, event.FileRead},
 	} {
 		got, err := Parse(tc.name, []byte(tc.payload), "/repo")
 		if err != nil {

@@ -6,7 +6,7 @@ import (
 )
 
 // geminiEnableNotice is the activation step reported for Gemini CLI.
-const geminiEnableNotice = "Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks."
+const geminiEnableNotice = "Ensure Gemini hooks are enabled: current versions run hooks unless hooksConfig.enabled is false in settings.json; some older versions require hooks.enabled=true. Enabling hooks can also enable other configured hooks."
 
 type geminiAdapter struct {
 	Hooks
