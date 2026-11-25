@@ -19,6 +19,14 @@ func TestMain(m *testing.M) {
 		runTestHook(os.Args[2:])
 		os.Exit(0)
 	}
+	if len(os.Args) > 2 && os.Args[1] == "trailer-hook" {
+		source := ""
+		if len(os.Args) > 3 {
+			source = os.Args[3]
+		}
+		_ = addCommitTrailers("", os.Args[2], source)
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
 }
 

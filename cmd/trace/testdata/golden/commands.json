@@ -90,7 +90,7 @@
     "args": [
       "--help"
     ],
-    "stdout": "Local coding-agent history\n\nUsage:\n  trace [command]\n\nAvailable Commands:\n  activity     Summarize local recorded activity\n  agent        \n  agent-help   \n  agents       List supported global integrations, detection and recording state\n  blame        Show who wrote each line of a file\n  clean        \n  cloud-run    Submit explicitly selected files to an approved isolated NUC job\n  comments     Manage anchored review comments\n  companions   Manage optional Brain and Graph integration\n  completion   Generate the autocompletion script for the specified shell\n  connect      Connect this repository to your private hosted dashboard\n  context      Combine history, memory and code context\n  dag          Show the causal graph of edits (parent pointers)\n  dashboard    Serve a local read-only web dashboard\n  diff         \n  disable      Pause all recording/uploads or recording for selected agents\n  dispatch     \n  doctor       \n  enable       Enable selected agents or automatically detect supported installed CLI/desktop agents\n  experts      Rank agent provenance for code scopes\n  export       Export code attribution\n  fork         \n  gc           Remove expired local history\n  git-native   Manage opt-in git-native checkpoint storage\n  handoff      Export a portable handoff bundle with context for another machine/agent\n  help         Help about any command\n  import       Import history from another Trace database\n  init         \n  log          \n  login        Sign in once to connect this computer to your Trace dashboard\n  mcp          Serve read-only Trace tools over MCP stdio\n  messages     \n  plugin       Verify and manage explicitly trusted offline plugin bundles\n  resume       \n  review       Review changes independently with one or more selected agents\n  rewind       \n  run          Run a single headless agent prompt with Trace\n  search       \n  setup        Enable automatic recording across repositories\n  shadow       Manage shadow branches for in-session rewind\n  show         \n  stats        Summarize local Trace history\n  status       \n  sync         Upload local history after login\n  timeline     Show fine-grained edit timeline\n  tokens       Analyze token usage across sessions and checkpoints\n  trail        Manage named trails over recorded history\n  tui          \n  uninstall    \n  update-check Check for a newer release (opt-in)\n  version      \n  why          \n\nFlags:\n  -h, --help          help for trace\n      --json          machine-readable output\n      --repo string   repository root\n\nUse \"trace [command] --help\" for more information about a command.\n",
+    "stdout": "Local coding-agent history\n\nUsage:\n  trace [command]\n\nAvailable Commands:\n  activity     Summarize local recorded activity\n  agent        \n  agent-help   \n  agents       List supported global integrations, detection and recording state\n  blame        Show who wrote each line of a file\n  clean        \n  cloud-run    Submit explicitly selected files to an approved isolated NUC job\n  comments     Manage anchored review comments\n  companions   Manage optional Brain and Graph integration\n  completion   Generate the autocompletion script for the specified shell\n  config       Read or change repository settings\n  connect      Connect this repository to your private hosted dashboard\n  context      Combine history, memory and code context\n  dag          Show the causal graph of edits (parent pointers)\n  dashboard    Serve a local read-only web dashboard\n  diff         \n  disable      Pause all recording/uploads or recording for selected agents\n  dispatch     \n  doctor       \n  enable       Enable selected agents or automatically detect supported installed CLI/desktop agents\n  experts      Rank agent provenance for code scopes\n  export       Export code attribution\n  fork         \n  gc           Remove expired local history\n  git-native   Manage opt-in git-native checkpoint storage\n  handoff      Export a portable handoff bundle with context for another machine/agent\n  help         Help about any command\n  import       Import history from another Trace database\n  init         \n  log          \n  login        Sign in once to connect this computer to your Trace dashboard\n  mcp          Serve read-only Trace tools over MCP stdio\n  messages     \n  plugin       Verify and manage explicitly trusted offline plugin bundles\n  resume       \n  review       Review changes independently with one or more selected agents\n  rewind       \n  run          Run a single headless agent prompt with Trace\n  search       \n  setup        Enable automatic recording across repositories\n  shadow       Manage shadow branches for in-session rewind\n  show         \n  stats        Summarize local Trace history\n  status       \n  sync         Upload local history after login\n  timeline     Show fine-grained edit timeline\n  tokens       Analyze token usage across sessions and checkpoints\n  trail        Manage named trails over recorded history\n  tui          \n  uninstall    \n  update-check Check for a newer release (opt-in)\n  version      \n  why          \n\nFlags:\n  -h, --help          help for trace\n      --json          machine-readable output\n      --repo string   repository root\n\nUse \"trace [command] --help\" for more information about a command.\n",
     "exit": 0
   },
   "help/01 setup --help": {
@@ -205,6 +205,152 @@
       "--help"
     ],
     "stdout": "Usage:\n  trace hook \u003cagent\u003e \u003cevent\u003e [flags]\n\nFlags:\n  -h, --help   help for hook\n\nGlobal Flags:\n      --json          machine-readable output\n      --repo string   repository root\n",
+    "exit": 0
+  },
+  "interop/00 config get commit-trailer": {
+    "args": [
+      "config",
+      "get",
+      "commit-trailer"
+    ],
+    "stdout": "commit-trailer off\n",
+    "exit": 0
+  },
+  "interop/01 config set commit-trailer on": {
+    "args": [
+      "config",
+      "set",
+      "commit-trailer",
+      "on"
+    ],
+    "stdout": "commit-trailer on\n",
+    "exit": 0,
+    "files": {
+      "root/.git/hooks/prepare-commit-msg": "[0755] #!/bin/sh\n# trace prepare-commit-msg begin\nif [ -f .trace/commit-trailer ]; then\n\t{{BIN}} trailer-hook \"$1\" \"$2\" \u003e/dev/null 2\u003e\u00261 || true\nfi\n# trace prepare-commit-msg end\n",
+      "root/.trace/commit-trailer": "[0600] 1\n",
+      "root/.trace/prepare-commit-msg-installed-sha": "{{SHA}}",
+      "root/.trace/prepare-commit-msg-original": "[0600] "
+    }
+  },
+  "interop/02 --json config get commit-trailer": {
+    "args": [
+      "--json",
+      "config",
+      "get",
+      "commit-trailer"
+    ],
+    "stdout": "{\"key\":\"commit-trailer\",\"value\":\"on\"}\n",
+    "exit": 0
+  },
+  "interop/03 config set commit-trailer off": {
+    "args": [
+      "config",
+      "set",
+      "commit-trailer",
+      "off"
+    ],
+    "stdout": "commit-trailer off\n",
+    "exit": 0,
+    "files": {
+      "root/.git/hooks/prepare-commit-msg": "\u003cdeleted\u003e",
+      "root/.trace/commit-trailer": "\u003cdeleted\u003e"
+    }
+  },
+  "interop/04 config set nope on": {
+    "args": [
+      "config",
+      "set",
+      "nope",
+      "on"
+    ],
+    "stdout": "",
+    "stderr": "unknown setting \"nope\" (known: commit-trailer)\n",
+    "exit": 1
+  },
+  "interop/05 --json export --format agent-trace --rev HEAD --out ../out/trace.jsonl": {
+    "args": [
+      "--json",
+      "export",
+      "--format",
+      "agent-trace",
+      "--rev",
+      "HEAD",
+      "--out",
+      "../out/trace.jsonl"
+    ],
+    "stdout": "{\"format\":\"agent-trace\",\"path\":\"../out/trace.jsonl\",\"publish\":false,\"records\":1}\n",
+    "exit": 0,
+    "files": {
+      "out/trace.jsonl": "[0600] {\"version\":\"0.1\",\"id\":\"c3bb5211-5b6d-4c7d-84de-66b05a3e3223\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"vcs\":{\"type\":\"git\",\"revision\":\"48346f00593d14cf903cdc99e16ee3c6b03a53c2\"},\"tool\":{\"name\":\"trace\"},\"files\":[{\"path\":\"a.go\",\"conversations\":[{\"contributor\":{\"type\":\"unknown\"},\"ranges\":[{\"start_line\":1,\"end_line\":1}]}]},{\"path\":\"sub/b.go\",\"conversations\":[{\"contributor\":{\"type\":\"unknown\"},\"ranges\":[{\"start_line\":1,\"end_line\":1}]}]}],\"metadata\":{\"dev.usetrace\":{\"scope\":\"commit\"}}}\n"
+    }
+  },
+  "interop/06 export --format markdown": {
+    "args": [
+      "export",
+      "--format",
+      "markdown"
+    ],
+    "stdout": "",
+    "stderr": "--out DIR is required for markdown\n",
+    "exit": 1
+  },
+  "interop/07 --json export --format markdown --out ../out/md": {
+    "args": [
+      "--json",
+      "export",
+      "--format",
+      "markdown",
+      "--out",
+      "../out/md"
+    ],
+    "stdout": "{\"dir\":\"../out/md\",\"files\":[],\"format\":\"markdown\"}\n",
+    "exit": 0,
+    "files": {
+      "out/md/": "[0700] dir"
+    }
+  },
+  "interop/08 export --format markdown --out ../out/md2": {
+    "args": [
+      "export",
+      "--format",
+      "markdown",
+      "--out",
+      "../out/md2"
+    ],
+    "stdout": "No sessions recorded; nothing written to ../out/md2\n",
+    "exit": 0,
+    "files": {
+      "out/md2/": "[0700] dir"
+    }
+  },
+  "interop/09 export --format nope": {
+    "args": [
+      "export",
+      "--format",
+      "nope"
+    ],
+    "stdout": "",
+    "stderr": "unsupported export format \"nope\" (want agent-trace, markdown or bundle)\n",
+    "exit": 1
+  },
+  "interop/10 import --from entire": {
+    "args": [
+      "import",
+      "--from",
+      "entire"
+    ],
+    "stdout": "",
+    "stderr": "importing from Entire is not supported: its checkpoint file layout and trailer value are not publicly specified (pass ./entire to import a Trace database file named entire)\n",
+    "exit": 1
+  },
+  "interop/11 --json import --from git-ai": {
+    "args": [
+      "--json",
+      "import",
+      "--from",
+      "git-ai"
+    ],
+    "stdout": "{\"source\":\"git-ai\",\"ref\":\"refs/notes/ai\",\"notes\":0,\"imported\":0,\"already_imported\":0,\"skipped\":[]}\n",
     "exit": 0
   },
   "resume/00 resume 0": {

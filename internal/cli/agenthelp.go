@@ -32,7 +32,7 @@ Commands:
   trace rewind <step>       restore tree to a step (undoable)
   trace fork <step>         new worktree at a keyframe
   trace resume <step>       rewind + launch agent
-  trace export --format agent-trace --out <file>
+  trace export --format agent-trace [--rev A..B]  Agent Trace JSONL
   trace gc / clean          prune old history
   trace doctor              self-diagnose
   trace tui                 interactive timeline

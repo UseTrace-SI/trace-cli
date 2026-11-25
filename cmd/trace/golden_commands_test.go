@@ -103,6 +103,31 @@ func TestGoldenCommands(t *testing.T) {
 		[]string{"review", "--agent", "agy"},
 	)
 
+	// Interoperability: opt-in trailers, exports and importers.
+	s = newSandbox(t)
+	root = s.repo("repo")
+	holdFakeDaemon(t, root)
+	out = filepath.Join(s.base, "out")
+	writeFile(t, filepath.Join(out, ".keep"), "")
+	roots = map[string]string{"root": root, "home": s.home, "trace_home": s.traceHome, "out": out}
+	if r := s.run(invocation{dir: root, args: []string{"init", "--agent", "claude-code"}}); r.Exit != 0 {
+		t.Fatalf("init: %+v", r)
+	}
+	s.changedSteps(g, "interop", roots, root, nil,
+		[]string{"config", "get", "commit-trailer"},
+		[]string{"config", "set", "commit-trailer", "on"},
+		[]string{"--json", "config", "get", "commit-trailer"},
+		[]string{"config", "set", "commit-trailer", "off"},
+		[]string{"config", "set", "nope", "on"},
+		[]string{"--json", "export", "--format", "agent-trace", "--rev", "HEAD", "--out", "../out/trace.jsonl"},
+		[]string{"export", "--format", "markdown"},
+		[]string{"--json", "export", "--format", "markdown", "--out", "../out/md"},
+		[]string{"export", "--format", "markdown", "--out", "../out/md2"},
+		[]string{"export", "--format", "nope"},
+		[]string{"import", "--from", "entire"},
+		[]string{"--json", "import", "--from", "git-ai"},
+	)
+
 	// Resume rewinds and launches the agent with the context; fork also
 	// creates a worktree, whose new daemon is stopped after each case.
 	s = newSandbox(t)

@@ -128,7 +128,7 @@ done
 "$binary" --repo "$work" --json show 5 | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["step"] == 5 and "file.txt" in s["files"] and "Finished turn 5" in s["reasoning"], s'
 "$binary" --repo "$work" --json why file.txt:1 | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s[0]["step"] == 5, s'
 "$binary" --repo "$work" export --format agent-trace --out "$work/.trace/e2e-agent-trace.jsonl" >/dev/null
-python3 -c 'import json,sys; rows=[json.loads(line) for line in open(sys.argv[1])]; assert len(rows)>=5 and all(row["version"]=="0.1.0" for row in rows)' "$work/.trace/e2e-agent-trace.jsonl"
+python3 -c 'import json,sys; rows=[json.loads(line) for line in open(sys.argv[1])]; assert len(rows)==1 and rows[0]["version"]=="0.1" and rows[0]["files"] and all(c["contributor"]["type"] in ("ai","human","mixed","unknown") for f in rows[0]["files"] for c in f["conversations"])' "$work/.trace/e2e-agent-trace.jsonl"
 "$binary" --repo "$work" rewind 2 >/dev/null
 [ "$(cat "$work/file.txt")" = 2 ] || { echo 'rewind did not restore step 2' >&2; exit 1; }
 [ "$(cat "$work/added.txt")" = created ] || { echo 'rewind did not restore created file' >&2; exit 1; }

@@ -880,3 +880,26 @@ func explainLines(db Querier, blobs *blob.Store, root, file, current string, lin
 	}
 	return out, r, nil
 }
+
+// ExplainCommitLines explains 1-based lines of path as committed in sha,
+// following the commit's record, git blame and recorded rewrites.
+func ExplainCommitLines(db Querier, blobs *blob.Store, root, sha, path string, lines []int) ([]Origin, error) {
+	r := newResolver(db, blobs, root, false)
+	verdicts, err := r.resolveLines(sha, path, lines, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Origin, len(verdicts))
+	for i, v := range verdicts {
+		if v.commit == "" {
+			v.commit = sha
+		}
+		if v.origin == "" && v.kind != "unknown" {
+			v.origin = v.commit
+		}
+		if out[i], err = r.w.origin(v); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}

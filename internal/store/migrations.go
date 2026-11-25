@@ -335,5 +335,15 @@ CREATE INDEX IF NOT EXISTS comments_file ON comments(file, line);`
 			return err
 		}
 	}
+	// Attribution hints read from other tools' Git metadata (trace import
+	// --from git-ai). They are local, re-importable and not synced.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS imported_attributions (source TEXT NOT NULL,
+  commit_sha TEXT NOT NULL, path TEXT NOT NULL, start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
+  contributor TEXT NOT NULL, tool TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '',
+  conversation TEXT NOT NULL DEFAULT '', imported_at INTEGER NOT NULL,
+  PRIMARY KEY(source, commit_sha, path, start_line, end_line, conversation));
+INSERT OR IGNORE INTO schema_version(version) VALUES(16);`); err != nil {
+		return fmt.Errorf("creating imported attributions: %w", err)
+	}
 	return nil
 }
