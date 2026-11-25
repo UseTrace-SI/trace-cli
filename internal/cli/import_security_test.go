@@ -15,9 +15,11 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
+	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
@@ -352,6 +354,28 @@ func sinceExcludedHistory(t *testing.T) (root string, secret blob.Hash) {
 			t.Fatalf("%s: %v", stmt.query, err)
 		}
 	}
+	// A later turn attributes a queued watcher change to .npmrc, recorded by an
+	// earlier version: the turn end snapshots the whole operation row as a
+	// sync correction, hashes included.
+	if err := os.WriteFile(filepath.Join(root, "app.go"), []byte("package app\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	ev := event.Event{Agent: "codex", AgentSessionID: "s2", Worktree: root, At: now, Kind: event.TurnStart, Prompt: "tidy up"}
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO ops(id,path,kind,before_hash,after_hash,source,at) VALUES('o-watch','.npmrc','modify',?,?,'watcher',?)", secret, secret, now+1); err != nil {
+		t.Fatal(err)
+	}
+	ev.Kind, ev.At = event.TurnEnd, now+2
+	if err := e.Process(ev); err != nil {
+		t.Fatal(err)
+	}
+	var correction string
+	if err := e.DB.QueryRow("SELECT data FROM sync_updates WHERE table_name='ops' AND row_id='o-watch'").Scan(&correction); err != nil || !strings.Contains(correction, string(secret)) {
+		t.Fatalf("turn end did not record the operation correction with its hashes: %q %v", correction, err)
+	}
 	if err := e.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -469,6 +493,10 @@ func TestBundleLeavesOutSinceExcludedHistory(t *testing.T) {
 	}
 	if _, err := got.Blobs.Get(secret); err == nil {
 		t.Fatal("import stored the .npmrc bytes")
+	}
+	var correction string
+	if err := got.DB.QueryRow("SELECT data FROM sync_updates WHERE table_name='ops' AND row_id='o-watch'").Scan(&correction); err != nil || strings.Contains(correction, string(secret)) || !strings.Contains(correction, `"after_hash":null`) {
+		t.Fatalf("imported operation correction still references .npmrc content: %q %v", correction, err)
 	}
 	if _, _, err := got.Rewind(1, "", false); err != nil {
 		t.Fatalf("rewind to imported step: %v", err)

@@ -420,8 +420,11 @@ func readRows(db *sql.DB, bs *blob.Store, table, after string, limit int) ([]Row
 				data["manifest_hash"] = string(stripped)
 			}
 		case "ops":
-			if rel, ok := data["path"].(string); ok && manifest.Excluded(rel) {
-				data["before_hash"], data["after_hash"] = nil, nil
+			manifest.StripOpContent(data)
+		case "sync_updates":
+			// A correction snapshots the whole operation row, hashes included.
+			if snapshot, ok := data["data"].(map[string]any); ok && data["table_name"] == "ops" {
+				manifest.StripOpContent(snapshot)
 			}
 		}
 		id, _ := data["id"].(string)

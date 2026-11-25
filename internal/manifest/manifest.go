@@ -376,6 +376,24 @@ func StripExcluded(h blob.Hash, from, to *blob.Store) (blob.Hash, []string, erro
 	return stripped, dropped, nil
 }
 
+// StripOpContent removes the content hashes from a snapshot of an ops row
+// (a sync_updates record) whose path Trace excludes, as exports and uploads
+// do for the row itself. It reports whether it changed the snapshot.
+func StripOpContent(op map[string]any) bool {
+	rel, ok := op["path"].(string)
+	if !ok || !excluded(rel) {
+		return false
+	}
+	changed := false
+	for _, field := range []string{"before_hash", "after_hash"} {
+		if v, ok := op[field]; ok && v != nil {
+			op[field] = nil
+			changed = true
+		}
+	}
+	return changed
+}
+
 // StrippedHash is the hash StripExcluded would return, computed without
 // saving anything.
 func StrippedHash(h blob.Hash, bs *blob.Store) (blob.Hash, error) {

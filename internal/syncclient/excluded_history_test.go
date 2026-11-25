@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
@@ -49,6 +50,17 @@ func TestSyncLeavesOutSinceExcludedHistory(t *testing.T) {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// A correction snapshots the whole operation row, hashes included.
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordUpdate(tx, "ops", "O2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
 	}
 	offered := map[string]bool{}
 	uploaded := map[string]bool{}
@@ -119,6 +131,15 @@ func TestSyncLeavesOutSinceExcludedHistory(t *testing.T) {
 	}
 	if op := rows["ops:O1"]; op == nil || op["after_hash"] != string(app) {
 		t.Fatalf("app.go operation lost its content: %v", op)
+	}
+	var correction map[string]any
+	for key, row := range rows {
+		if strings.HasPrefix(key, "sync_updates:") && row["row_id"] == "O2" {
+			correction, _ = row["data"].(map[string]any)
+		}
+	}
+	if correction == nil || correction["path"] != ".npmrc" || correction["after_hash"] != nil || correction["before_hash"] != nil {
+		t.Fatalf(".npmrc operation correction uploaded with content: %v", correction)
 	}
 	var local string
 	if err := db.QueryRow("SELECT manifest_hash FROM keyframes WHERE id='K1'").Scan(&local); err != nil || local != string(original) {

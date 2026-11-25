@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -261,6 +262,48 @@ func stripBundleHistory(ctx context.Context, snapshot string, bs, staged *blob.S
 	if apply {
 		for _, id := range ops {
 			if _, err := tx.ExecContext(ctx, "UPDATE ops SET before_hash=NULL, after_hash=NULL WHERE id=?", id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Corrections recorded for operations snapshot the whole row, hashes
+	// included.
+	updates, err := tx.QueryContext(ctx, "SELECT id,data FROM sync_updates WHERE table_name='ops'")
+	if err != nil {
+		return nil, err
+	}
+	stripped := map[string]string{}
+	for updates.Next() {
+		var id, data string
+		if err := updates.Scan(&id, &data); err != nil {
+			updates.Close()
+			return nil, err
+		}
+		decoder := json.NewDecoder(strings.NewReader(data))
+		decoder.UseNumber()
+		var op map[string]any
+		if err := decoder.Decode(&op); err != nil {
+			updates.Close()
+			return nil, fmt.Errorf("decoding operation correction %s: %w", id, err)
+		}
+		if !manifest.StripOpContent(op) {
+			continue
+		}
+		rel, _ := op["path"].(string)
+		found[rel] = true
+		b, err := json.Marshal(op)
+		if err != nil {
+			updates.Close()
+			return nil, err
+		}
+		stripped[id] = string(b)
+	}
+	if err := errors.Join(updates.Err(), updates.Close()); err != nil {
+		return nil, err
+	}
+	if apply {
+		for id, data := range stripped {
+			if _, err := tx.ExecContext(ctx, "UPDATE sync_updates SET data=? WHERE id=?", data, id); err != nil {
 				return nil, err
 			}
 		}
