@@ -6,28 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/aider"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/amp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cline"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/codebuff"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/copilot"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/crewai"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cursor"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/factory"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/gemini"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/goose"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/grok"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kilo"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kiro"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/langgraph"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/omp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openclaude"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openhands"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/pi"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/qwen"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/windsurf"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/spf13/cobra"
 )
@@ -42,121 +21,26 @@ func agentCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if _, err := repo.FindRoot(root); err != nil {
 			return err
 		}
-		switch args[0] {
-		case "codebuff":
-			if err := codebuff.Install(root); err != nil {
-				return err
-			}
-		case "aider":
-			if err := aider.Install(root); err != nil {
-				return err
-			}
-		case "crewai":
-			if err := crewai.Install(root); err != nil {
-				return err
-			}
-		case "claude-code":
-			if err := claudecode.Install(root); err != nil {
-				return err
-			}
-		case "cline":
-			if err := cline.Install(root); err != nil {
-				return err
-			}
-		case "openclaude":
-			if err := openclaude.Install(root); err != nil {
-				return err
-			}
-		case "openhands":
-			if err := openhands.InstallProject(root); err != nil {
-				return err
-			}
-		case "cursor":
-			if err := cursor.Install(root); err != nil {
-				return err
-			}
-		case "windsurf":
-			if err := windsurf.Install(root); err != nil {
-				return err
-			}
-		case "gemini":
-			if err := gemini.Install(root); err != nil {
-				return err
-			}
-		case "copilot":
-			if err := copilot.Install(root); err != nil {
-				return err
-			}
-		case "qwen":
-			if err := qwen.Install(root); err != nil {
-				return err
-			}
-		case "factory":
-			if err := factory.Install(root); err != nil {
-				return err
-			}
-		case "pi":
-			if err := pi.Install(root); err != nil {
-				return err
-			}
-		case "omp":
-			if err := omp.Install(root); err != nil {
-				return err
-			}
-		case "grok":
-			if err := grok.Install(root); err != nil {
-				return err
-			}
-		case "goose":
-			if err := goose.Install(root); err != nil {
-				return err
-			}
-		case "amp":
-			if err := amp.Install(root); err != nil {
-				return err
-			}
-		case "kilo":
-			if err := kilo.Install(root); err != nil {
-				return err
-			}
-		case "kiro":
-			if err := kiro.Install(root); err != nil {
-				return err
-			}
-		case "langgraph":
-			if err := langgraph.Install(root); err != nil {
-				return err
-			}
-		case "agy":
-			if err := agy.Install(root); err != nil {
-				return err
-			}
-		case "codex":
-			if err := osWriteEnabled(root, "codex.enabled"); err != nil {
-				return err
-			}
-		case "opencode":
-			if err := osWriteEnabled(root, "opencode.enabled"); err != nil {
-				return err
-			}
-		default:
+		agent, ok := adapters.ForProject(args[0])
+		if !ok {
 			return fmt.Errorf("unsupported agent %q", args[0])
+		}
+		if err := addProjectAgent(agent, root); err != nil {
+			return err
+		}
+		var notice string
+		if n, ok := agent.(adapters.ProjectNoticer); ok {
+			_, notice = n.ProjectNotice()
 		}
 		if *jsonOutput {
 			result := map[string]any{"agent": args[0], "added": true}
-			if args[0] == "gemini" {
-				result["additional_setup"] = geminiEnableNotice
-			} else if args[0] == "qwen" {
-				result["additional_setup"] = qwenEnableNotice
+			if notice != "" {
+				result["additional_setup"] = notice
 			}
 			return json.NewEncoder(c.OutOrStdout()).Encode(result)
 		}
-		if args[0] == "gemini" {
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Added agent gemini. %s\n", geminiEnableNotice)
-			return err
-		}
-		if args[0] == "qwen" {
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Added agent qwen. %s\n", qwenEnableNotice)
+		if notice != "" {
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Added agent %s. %s\n", args[0], notice)
 			return err
 		}
 		_, err = fmt.Fprintf(c.OutOrStdout(), "Added agent %s.\n", args[0])
@@ -172,60 +56,11 @@ func agentCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		name := args[0]
-		switch name {
-		case "codebuff":
-			err = codebuff.Uninstall(root)
-		case "aider":
-			err = aider.Uninstall(root)
-		case "crewai":
-			err = crewai.Uninstall(root)
-		case "claude-code":
-			err = claudecode.Uninstall(root)
-		case "cline":
-			err = cline.Uninstall(root)
-		case "openclaude":
-			err = openclaude.Uninstall(root)
-		case "openhands":
-			err = openhands.UninstallProject(root)
-		case "codex", "opencode":
-			err = os.Remove(filepath.Join(repo.TraceDir(root), name+".enabled"))
-			if os.IsNotExist(err) {
-				err = nil
-			}
-		case "cursor":
-			err = cursor.Uninstall(root)
-		case "windsurf":
-			err = windsurf.Uninstall(root)
-		case "gemini":
-			err = gemini.Uninstall(root)
-		case "copilot":
-			err = copilot.Uninstall(root)
-		case "qwen":
-			err = qwen.Uninstall(root)
-		case "factory":
-			err = factory.Uninstall(root)
-		case "pi":
-			err = pi.Uninstall(root)
-		case "omp":
-			err = omp.Uninstall(root)
-		case "grok":
-			err = grok.Uninstall(root)
-		case "goose":
-			err = goose.Uninstall(root)
-		case "amp":
-			err = amp.Uninstall(root)
-		case "kilo":
-			err = kilo.Uninstall(root)
-		case "kiro":
-			err = kiro.Uninstall(root)
-		case "langgraph":
-			err = langgraph.Uninstall(root)
-		case "agy":
-			err = agy.Uninstall(root)
-		default:
+		agent, ok := adapters.ForProject(name)
+		if !ok {
 			return fmt.Errorf("unsupported agent %q", name)
 		}
-		if err != nil {
+		if err := removeProjectAgent(agent, root); err != nil {
 			return fmt.Errorf("removing agent %s: %w", name, err)
 		}
 		if *jsonOutput {
@@ -236,6 +71,25 @@ func agentCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	}}
 	cmd.AddCommand(remove)
 	return cmd
+}
+
+// addProjectAgent installs agent's hooks, or writes its marker, in root.
+func addProjectAgent(agent adapters.Adapter, root string) error {
+	if m, ok := agent.(adapters.MarkerEnabled); ok {
+		return osWriteEnabled(root, m.EnableMarker().File)
+	}
+	return agent.(adapters.ProjectInstaller).InstallProject(root)
+}
+
+func removeProjectAgent(agent adapters.Adapter, root string) error {
+	if m, ok := agent.(adapters.MarkerEnabled); ok {
+		err := os.Remove(filepath.Join(repo.TraceDir(root), m.EnableMarker().File))
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return err
+	}
+	return agent.(adapters.ProjectInstaller).RemoveProject(root)
 }
 
 func osWriteEnabled(root, name string) error {
