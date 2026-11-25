@@ -12,14 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func setupAgent(home, name string, remove bool) error {
-	agent, ok := adapters.ForGlobal(name)
-	if !ok {
-		return fmt.Errorf("global setup is not available for agent %q", name)
-	}
-	return agent.SetupGlobal(home, remove)
-}
-
 func setupCommand(jsonOutput *bool) *cobra.Command {
 	return setupCommandWithDefaults(jsonOutput, nil)
 }

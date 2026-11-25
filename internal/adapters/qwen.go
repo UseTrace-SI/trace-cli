@@ -5,8 +5,8 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
 
-// QwenEnableNotice is the activation step reported for Qwen Code.
-const QwenEnableNotice = "Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks."
+// qwenEnableNotice is the activation step reported for Qwen Code.
+const qwenEnableNotice = "Use a Qwen Code version that supports hooks and confirm they are enabled; version 0.0.14 does not emit Trace hooks."
 
 type qwenAdapter struct {
 	Hooks
@@ -37,7 +37,7 @@ func (qwenAdapter) InvalidPayloadMessage() string { return "trace hook: invalid 
 func (qwenAdapter) InstallProject(root string) error { return qwen.Install(root) }
 func (qwenAdapter) RemoveProject(root string) error  { return qwen.Uninstall(root) }
 
-func (qwenAdapter) ProjectNotice() (string, string) { return "Qwen", QwenEnableNotice }
+func (qwenAdapter) ProjectNotice() (string, string) { return "Qwen", qwenEnableNotice }
 
 func (qwenAdapter) Integration() Integration {
 	return Integration{Kind: "CLI", Commands: []string{"qwen"}, Profiles: []string{".qwen"}}
@@ -54,8 +54,8 @@ func (qwenAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]an
 	if remove {
 		return "", nil
 	}
-	return QwenEnableNotice, nil
+	return qwenEnableNotice, nil
 }
 
 func (qwenAdapter) SetupHeadline() (string, bool) { return "", true }
-func (qwenAdapter) SetupNotice(string) string     { return QwenEnableNotice }
+func (qwenAdapter) SetupNotice(string) string     { return qwenEnableNotice }

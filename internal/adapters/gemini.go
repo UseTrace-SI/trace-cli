@@ -5,8 +5,8 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
 
-// GeminiEnableNotice is the activation step reported for Gemini CLI.
-const GeminiEnableNotice = "Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks."
+// geminiEnableNotice is the activation step reported for Gemini CLI.
+const geminiEnableNotice = "Ensure Gemini hooks are enabled; some versions require hooks.enabled=true in settings.json. This can enable other configured hooks."
 
 type geminiAdapter struct {
 	Hooks
@@ -39,7 +39,7 @@ func (geminiAdapter) InvalidPayloadMessage() string { return "trace hook: invali
 func (geminiAdapter) InstallProject(root string) error { return gemini.Install(root) }
 func (geminiAdapter) RemoveProject(root string) error  { return gemini.Uninstall(root) }
 
-func (geminiAdapter) ProjectNotice() (string, string) { return "Gemini", GeminiEnableNotice }
+func (geminiAdapter) ProjectNotice() (string, string) { return "Gemini", geminiEnableNotice }
 
 func (geminiAdapter) Integration() Integration {
 	return Integration{Kind: "CLI", Commands: []string{"gemini"}, Profiles: []string{".gemini"}}
@@ -56,8 +56,8 @@ func (geminiAdapter) SetupJSONNotice(_ string, remove bool) (string, map[string]
 	if remove {
 		return "", nil
 	}
-	return GeminiEnableNotice, nil
+	return geminiEnableNotice, nil
 }
 
 func (geminiAdapter) SetupHeadline() (string, bool) { return "", true }
-func (geminiAdapter) SetupNotice(string) string     { return GeminiEnableNotice }
+func (geminiAdapter) SetupNotice(string) string     { return geminiEnableNotice }

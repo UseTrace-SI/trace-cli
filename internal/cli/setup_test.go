@@ -8,7 +8,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 )
+
+// globalAgent returns the user-level installer that `trace setup --agent
+// name` runs.
+func globalAgent(t *testing.T, name string) adapters.GlobalInstaller {
+	t.Helper()
+	agent, ok := adapters.ForGlobal(name)
+	if !ok {
+		t.Fatalf("no global installer for %q", name)
+	}
+	return agent
+}
 
 func TestGlobalSetupPreservesUserHooks(t *testing.T) {
 	t.Setenv("CODEX_HOME", "")
@@ -24,14 +37,14 @@ func TestGlobalSetupPreservesUserHooks(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := setupAgent(home, "codex", false); err != nil {
+	if err := globalAgent(t, "codex").SetupGlobal(home, false); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(b), "my-hook") || !strings.Contains(string(b), " hook codex Stop") {
 		t.Fatalf("installed hooks: %s, %v", b, err)
 	}
-	if err := setupAgent(home, "codex", true); err != nil {
+	if err := globalAgent(t, "codex").SetupGlobal(home, true); err != nil {
 		t.Fatal(err)
 	}
 	b, err = os.ReadFile(path)
@@ -44,7 +57,7 @@ func TestOpenClaudeGlobalSetupRespectsConfigDirectory(t *testing.T) {
 	home := t.TempDir()
 	config := filepath.Join(t.TempDir(), "custom-config")
 	t.Setenv("OPENCLAUDE_CONFIG_DIR", config)
-	if err := setupAgent(home, "openclaude", false); err != nil {
+	if err := globalAgent(t, "openclaude").SetupGlobal(home, false); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(config, "settings.json")
@@ -52,7 +65,7 @@ func TestOpenClaudeGlobalSetupRespectsConfigDirectory(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), " hook openclaude Stop") {
 		t.Fatalf("hooks: %s, %v", b, err)
 	}
-	if err := setupAgent(home, "openclaude", true); err != nil {
+	if err := globalAgent(t, "openclaude").SetupGlobal(home, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -72,7 +85,7 @@ func TestClaudeGlobalSetupRespectsConfigDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", config)
-	if err := setupAgent(home, "claude-code", false); err != nil {
+	if err := globalAgent(t, "claude-code").SetupGlobal(home, false); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(path)
@@ -82,7 +95,7 @@ func TestClaudeGlobalSetupRespectsConfigDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".claude", "settings.json")); !os.IsNotExist(err) {
 		t.Fatalf("default settings changed: %v", err)
 	}
-	if err := setupAgent(home, "claude-code", true); err != nil {
+	if err := globalAgent(t, "claude-code").SetupGlobal(home, true); err != nil {
 		t.Fatal(err)
 	}
 	b, err = os.ReadFile(path)
@@ -90,7 +103,7 @@ func TestClaudeGlobalSetupRespectsConfigDirectory(t *testing.T) {
 		t.Fatalf("removed: %s %v", b, err)
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", "relative")
-	if err := setupAgent(home, "claude-code", false); err == nil {
+	if err := globalAgent(t, "claude-code").SetupGlobal(home, false); err == nil {
 		t.Fatal("accepted relative config directory")
 	}
 }
@@ -249,14 +262,14 @@ func TestAuggieGlobalSetupPreservesHooks(t *testing.T) {
 	if err := os.WriteFile(p, []byte(original), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := setupAgent(home, "auggie", false); err != nil {
+	if err := globalAgent(t, "auggie").SetupGlobal(home, false); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(p)
 	if err != nil || !strings.Contains(string(b), "custom") || !strings.Contains(string(b), "hook auggie PromptSubmit") {
 		t.Fatalf("installed: %s, %v", b, err)
 	}
-	if err := setupAgent(home, "auggie", true); err != nil {
+	if err := globalAgent(t, "auggie").SetupGlobal(home, true); err != nil {
 		t.Fatal(err)
 	}
 	b, err = os.ReadFile(p)
