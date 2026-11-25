@@ -245,3 +245,90 @@ func TestCompanionStateExcludedFromAllNewSnapshots(t *testing.T) {
 		t.Fatal("historical manifest was mutated")
 	}
 }
+
+// Credential stores, package-manager auth files, Terraform state and cluster
+// or registry configs never enter snapshots, in any directory or letter case;
+// source files with similar names still do.
+func TestSecretPathMatchesCredentialFiles(t *testing.T) {
+	for _, tc := range []struct {
+		path   string
+		secret bool
+	}{
+		{".npmrc", true},
+		{"packages/web/.npmrc", true},
+		{".pypirc", true},
+		{".netrc", true},
+		{"_netrc", true},
+		{".git-credentials", true},
+		{".pgpass", true},
+		{"certs/client.p12", true},
+		{"certs/Client.PFX", true},
+		{"android/release.jks", true},
+		{"android/app.keystore", true},
+		{"credentials.json", true},
+		{"config/Credentials.JSON", true},
+		{"service-account.json", true},
+		{"deploy/service-account-prod.json", true},
+		{"infra/terraform.tfstate", true},
+		{"infra/terraform.tfstate.backup", true},
+		{"kubeconfig", true},
+		{"ops/kubeconfig.yaml", true},
+		{"ops/staging.kubeconfig", true},
+		{".kube/config", true},
+		{"home/.kube/config", true},
+		{".docker/config.json", true},
+		{"ci/.docker/config.json", true},
+		{".env.production", true},
+		{"web/.env.local", true},
+		{"id_ed25519_sk", true},
+		{"internal/syncclient/credentials.go", false},
+		{"pkg/kubeconfig.go", false},
+		{"pkg/kubeconfig_test.go", false},
+		{"docs/npmrc.md", false},
+		{"config.json", false},
+		{".docker/Dockerfile", false},
+		{"kube/config.go", false},
+		{"terraform/main.tf", false},
+		{"terraform/variables.tfvars.example", false},
+		{"src/keystore.ts", false},
+		{"service-account.go", false},
+	} {
+		if got := SecretPath(tc.path); got != tc.secret {
+			t.Errorf("SecretPath(%q) = %v; want %v", tc.path, got, tc.secret)
+		}
+	}
+}
+
+// Scan applies the same exclusions: an excluded credential file is never read
+// into a blob.
+func TestScanNeverCapturesCredentialFiles(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	files := []string{".npmrc", ".git-credentials", "infra/terraform.tfstate", ".kube/config", ".docker/config.json", "certs/client.p12", "app.go"}
+	for _, name := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte("placeholder "+name+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bs, err := blob.Open(filepath.Join(t.TempDir(), "objects"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Scan(root, nil, bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range files[:len(files)-1] {
+		if _, ok := got[name]; ok {
+			t.Errorf("captured %s", name)
+		}
+	}
+	if got["app.go"].Hash == "" {
+		t.Fatalf("lost an ordinary file: %v", got)
+	}
+}

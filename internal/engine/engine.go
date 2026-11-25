@@ -841,6 +841,9 @@ func (e *Engine) Rewind(seq int64, glob string, dryRun bool) (int64, []string, e
 	if err != nil {
 		return 0, nil, err
 	}
+	// The restored tree is recorded as the latest keyframe; it must not claim
+	// a since-excluded file that the restore leaves alone.
+	target = target.WithoutExcluded()
 	current, err := manifest.Scan(e.Root, nil, e.Blobs)
 	if err != nil {
 		return 0, nil, err

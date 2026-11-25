@@ -36,8 +36,11 @@ func safePath(root, rel string) (string, error) {
 	return filepath.Join(root, filepath.FromSlash(rel)), nil
 }
 
+// Plan lists the paths a restore from current to target changes. Excluded
+// paths are left alone: an older keyframe may list one captured before it was
+// excluded, and a restore must never write or delete it.
 func Plan(current, target manifest.Manifest) []string {
-	add, change, remove := manifest.Diff(current, target)
+	add, change, remove := manifest.Diff(current.WithoutExcluded(), target.WithoutExcluded())
 	paths := append(append(add, change...), remove...)
 	sort.Strings(paths)
 	return paths

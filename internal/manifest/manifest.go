@@ -60,6 +60,28 @@ func foldPath(rel string) string {
 
 func Excluded(rel string) bool { return excluded(rel) }
 
+// WithoutExcluded drops the paths Trace never captures or restores. Keyframes
+// recorded before an exclusion was added can still list such a path.
+func (m Manifest) WithoutExcluded() Manifest {
+	var out Manifest
+	for rel := range m {
+		if !excluded(rel) {
+			continue
+		}
+		if out == nil {
+			out = make(Manifest, len(m))
+			for p, entry := range m {
+				out[p] = entry
+			}
+		}
+		delete(out, rel)
+	}
+	if out == nil {
+		return m
+	}
+	return out
+}
+
 // Portable reports whether a snapshot path from another history (an imported
 // bundle or a recovery server) is safe to keep: relative, canonical, inside
 // the repository and not excluded.
