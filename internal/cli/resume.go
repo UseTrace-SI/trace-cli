@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -21,6 +22,8 @@ type resumeOptions struct {
 	fork     bool
 	name     string
 	maxBytes int
+	step     bool
+	session  bool
 }
 
 func resumeCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
@@ -34,18 +37,22 @@ the turns, the files changed with line counts, open items from the last
 response and how to see more. The handoff is also written to
 .trace/context.md. --fork restores into a new worktree instead of
 rewinding, --no-rewind keeps the tree as it is, and --no-launch prints
-the plan and the handoff without starting the agent.`,
+the plan and the handoff without starting the agent (it still rewinds
+unless --no-rewind is set). A number is a step; when it also starts a
+session ID, pass --step or --session.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runResume(c, *repoPath, *jsonOutput, args[0], o)
 		},
 	}
 	cmd.Flags().StringVar(&o.agent, "agent", "", "agent to launch (default: the session's agent when it can be launched, else claude-code)")
-	cmd.Flags().BoolVar(&o.noLaunch, "no-launch", false, "print the plan and handoff context without launching")
+	cmd.Flags().BoolVar(&o.noLaunch, "no-launch", false, "print the plan and handoff context without launching (still rewinds unless --no-rewind)")
+	cmd.Flags().BoolVar(&o.step, "step", false, "read the argument as a step number")
+	cmd.Flags().BoolVar(&o.session, "session", false, "read the argument as a session ID, prefix or agent session ID")
 	cmd.Flags().BoolVar(&o.noRewind, "no-rewind", false, "keep the working tree as it is")
 	cmd.Flags().BoolVar(&o.fork, "fork", false, "restore the step into a new worktree instead of rewinding")
 	cmd.Flags().StringVar(&o.name, "name", "", "fork suffix (with --fork)")
-	cmd.Flags().IntVar(&o.maxBytes, "max-context-bytes", engine.DefaultHandoffBytes, fmt.Sprintf("cap on the handoff context size (at least %d)", engine.MinHandoffBytes))
+	cmd.Flags().IntVar(&o.maxBytes, "max-context-bytes", engine.DefaultHandoffBytes, fmt.Sprintf("cap on the handoff context size (%d to %d)", engine.MinHandoffBytes, engine.MaxHandoffBytes))
 	return cmd
 }
 
@@ -56,8 +63,17 @@ func runResume(c *cobra.Command, repoPath string, jsonOutput bool, target string
 	if o.name != "" && (!o.fork || !safeName.MatchString(o.name)) {
 		return fmt.Errorf("invalid fork name (--name needs --fork and letters, digits, - or _)")
 	}
-	if o.maxBytes < engine.MinHandoffBytes {
-		return fmt.Errorf("--max-context-bytes must be at least %d", engine.MinHandoffBytes)
+	if o.maxBytes < engine.MinHandoffBytes || o.maxBytes > engine.MaxHandoffBytes {
+		return fmt.Errorf("--max-context-bytes must be between %d and %d", engine.MinHandoffBytes, engine.MaxHandoffBytes)
+	}
+	if o.step && o.session {
+		return fmt.Errorf("--step and --session cannot be combined")
+	}
+	kind := engine.ResumeAuto
+	if o.step {
+		kind = engine.ResumeStep
+	} else if o.session {
+		kind = engine.ResumeSession
 	}
 	root, err := initializedRoot(repoPath)
 	if err != nil {
@@ -68,7 +84,7 @@ func runResume(c *cobra.Command, repoPath string, jsonOutput bool, target string
 		return err
 	}
 	defer e.Close()
-	step, err := e.ResolveResumeTarget(target)
+	step, err := e.ResolveResumeTarget(target, kind)
 	if err != nil {
 		return err
 	}
@@ -89,6 +105,11 @@ func runResume(c *cobra.Command, repoPath string, jsonOutput bool, target string
 		return err
 	}
 	_, shown, _ := agentLaunchCommand(agent, contextPlaceholder)
+	if !o.noLaunch {
+		if _, err := exec.LookPath(program); err != nil {
+			return fmt.Errorf("%s is not installed or not on PATH (%s); install it or use --no-launch: %w", program, agent, err)
+		}
+	}
 
 	mode := "rewind"
 	workRoot := root

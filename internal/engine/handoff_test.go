@@ -200,21 +200,182 @@ func TestResolveResumeTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, arg := range []string{sid, sid[:8], "claude-sid-1"} {
-		got, err := e.ResolveResumeTarget(arg)
-		if err != nil || got != step {
-			t.Fatalf("%q: step=%d err=%v", arg, got, err)
+		for _, kind := range []ResumeTargetKind{ResumeAuto, ResumeSession} {
+			got, err := e.ResolveResumeTarget(arg, kind)
+			if err != nil || got != step {
+				t.Fatalf("%q: step=%d err=%v", arg, got, err)
+			}
 		}
 	}
-	if got, err := e.ResolveResumeTarget("1"); err != nil || got != 1 {
+	if got, err := e.ResolveResumeTarget("1", ResumeAuto); err != nil || got != 1 {
 		t.Fatalf("step: %d %v", got, err)
 	}
-	for _, arg := range []string{"nope", "", "%", "_"} {
-		if _, err := e.ResolveResumeTarget(arg); err == nil {
-			t.Fatalf("%q accepted", arg)
+	for _, tc := range []struct {
+		arg  string
+		kind ResumeTargetKind
+	}{{"nope", ResumeAuto}, {"", ResumeAuto}, {"%", ResumeAuto}, {"_", ResumeSession}, {"x", ResumeStep}, {"1", ResumeSession}} {
+		if _, err := e.ResolveResumeTarget(tc.arg, tc.kind); err == nil {
+			t.Fatalf("%q (%d) accepted", tc.arg, tc.kind)
 		}
 	}
 	if _, err := e.Handoff(999, 0); err == nil {
 		t.Fatal("missing step accepted")
+	}
+}
+
+func TestResolveResumeTargetSessionNames(t *testing.T) {
+	e, _ := handoffRepo(t)
+	var turnID string
+	if err := e.DB.QueryRow("SELECT id FROM turns WHERE seq=1").Scan(&turnID); err != nil {
+		t.Fatal(err)
+	}
+	// Sessions named with LIKE metacharacters, a numeric ID, and an agent
+	// session ID that prefixes another session's ID.
+	sessions := []struct{ id, agentSID string }{
+		{"sess_abc123", "a1"}, {"sessXabc999", "a2"}, {"12345", "a3"}, {"100", "agentsid"}, {"agentsid-other", "a5"},
+	}
+	for i, s := range sessions {
+		if _, err := e.DB.Exec("INSERT INTO sessions(id,agent,agent_sid,worktree,started_at) VALUES(?,?,?,?,1)", s.id, "codex", s.agentSID, "/x"); err != nil {
+			t.Fatal(err)
+		}
+		seq := int64(100 + i)
+		tid := "t-" + s.id
+		if _, err := e.DB.Exec("INSERT INTO turns(id,session_id,seq,prompt,started_at) VALUES(?,?,?,?,1)", tid, s.id, seq, "p"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.DB.Exec("INSERT INTO keyframes(id,turn_id,seq,manifest_hash,created_at) SELECT 'k-'||?,?,?,manifest_hash,1 FROM keyframes WHERE seq=1", s.id, tid, seq); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		arg  string
+		kind ResumeTargetKind
+		want int64
+		err  string
+	}{
+		{"sess_abc123", ResumeAuto, 100, ""},
+		{"sess_abc", ResumeAuto, 100, ""}, // "_" is literal, not a wildcard
+		{"sess%", ResumeAuto, 0, "no session matches"},
+		{"sess", ResumeAuto, 0, "matches several sessions"},
+		{"1234", ResumeAuto, 0, "ambiguous: \"1234\" is step 1234 or a session ID (or prefix of one); use --step or --session"},
+		{"100", ResumeAuto, 0, "ambiguous: \"100\" is step 100"}, // an exact session ID
+		{"12", ResumeAuto, 12, ""}, // too short to be read as a prefix
+		{"123", ResumeStep, 123, ""},
+		{"123", ResumeSession, 102, ""},
+		{"2", ResumeAuto, 2, ""},
+		{"agentsid", ResumeSession, 103, ""}, // exact agent session ID wins over an ID prefix
+	} {
+		got, err := e.ResolveResumeTarget(tc.arg, tc.kind)
+		if tc.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("%q: err = %v, want %q", tc.arg, err, tc.err)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("%q (%d): got %d, %v; want %d", tc.arg, tc.kind, got, err, tc.want)
+		}
+	}
+	// An ID that is also another session's agent session ID is reported.
+	if _, err := e.DB.Exec("UPDATE sessions SET agent_sid='sess_abc123' WHERE id='12345'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ResolveResumeTarget("sess_abc123", ResumeSession); err == nil || !strings.Contains(err.Error(), "names several sessions (12345, sess_abc123)") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// Fields are redacted before they are clipped, so a cut that would hide
+// the end of a secret pattern cannot leak its start.
+func TestHandoffRedactsBeforeClipping(t *testing.T) {
+	e, _ := handoffRepo(t)
+	step := lastStep(t, e)
+	body := strings.Repeat("MIIEowIBAAKCAQEAx9", 80)
+	pem := "-----BEGIN RSA PRIVATE KEY-----\n" + body + "\n-----END RSA PRIVATE KEY-----"
+	aws := "AKIA" + "Z7Q4W8E2R6T1Y3U5"
+	straddle := strings.Repeat("a", handoffPromptRunes-6) + " " + aws + " tail"
+	if _, err := e.DB.Exec("UPDATE turns SET prompt=? WHERE seq=1", "deploy with "+pem); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("UPDATE turns SET prompt=? WHERE seq=?", straddle, step); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("UPDATE messages SET content=? WHERE role='assistant' AND turn_id=(SELECT id FROM turns WHERE seq=?)", "Next steps:\n- rotate "+strings.Repeat("b", handoffTodoRunes-8)+" "+aws, step); err != nil {
+		t.Fatal(err)
+	}
+	h, err := e.Handoff(step, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := h.Text + strings.Join(h.Todos, "\n") + strings.Join(h.Files, "\n")
+	for _, leak := range []string{body[:24], "AKIAZ", "Z7Q4W8"} {
+		if strings.Contains(all, leak) {
+			t.Fatalf("%q leaked:\n%s", leak, all)
+		}
+	}
+}
+
+func TestHandoffRedactsFileNames(t *testing.T) {
+	e, root := handoffRepo(t)
+	name := "keys-" + handoffSecret + ".txt"
+	if err := os.WriteFile(filepath.Join(root, name), []byte("x\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "claude-code", AgentSessionID: "claude-sid-1", Worktree: root, At: time.Now().UnixMilli() + 10}
+	for _, k := range []event.Kind{event.TurnStart, event.ToolEdit, event.TurnEnd} {
+		ev.Kind = k
+		ev.Prompt, ev.Paths = "", nil
+		if k == event.TurnStart {
+			ev.Prompt = "add key file"
+		}
+		if k == event.ToolEdit {
+			ev.ToolName, ev.Paths = "Write", []string{filepath.Join(root, name)}
+		}
+		if err := e.Process(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, err := e.Handoff(lastStep(t, e), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(h.Text+strings.Join(h.Files, " "), handoffSecret) || len(h.Files) != 3 {
+		t.Fatalf("files %q\n%s", h.Files, h.Text)
+	}
+}
+
+func TestSanitizeHandoff(t *testing.T) {
+	in := "a\x00b\x1b[31mred\x1b[0m\x1b]0;title\x07c\r\n\td\x7f\u009be"
+	if got := sanitizeHandoff(in); got != "abredc\n\tde" {
+		t.Fatalf("got %q", got)
+	}
+	e, _ := handoffRepo(t)
+	if _, err := e.DB.Exec("UPDATE turns SET prompt=? WHERE seq=1", "evil\x00\x1b[2Jprompt"); err != nil {
+		t.Fatal(err)
+	}
+	h, err := e.Handoff(lastStep(t, e), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(h.Text, "\x00\x1b\r") || !strings.Contains(h.Text, "evilprompt") {
+		t.Fatalf("unsanitized:\n%q", h.Text)
+	}
+}
+
+func TestTruncateKeepingMarkers(t *testing.T) {
+	m := "⟨redacted:github-token:0123abcd⟩"
+	s := "abc " + m + " end"
+	for n := 0; n <= len(s); n++ {
+		got := truncateKeepingMarkers(s, n)
+		if len(got) > n || !strings.HasPrefix(s, got) {
+			t.Fatalf("n=%d: %q", n, got)
+		}
+		if i := strings.Index(got, "⟨"); i >= 0 && !strings.Contains(got, m) {
+			t.Fatalf("n=%d split the marker: %q", n, got)
+		}
+	}
+	if got := truncateKeepingMarkers(s, 6); got != "abc " {
+		t.Fatalf("got %q", got)
 	}
 }
 

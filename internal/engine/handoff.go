@@ -22,6 +22,11 @@ const DefaultHandoffBytes = 12 << 10
 // MinHandoffBytes is the smallest accepted handoff budget.
 const MinHandoffBytes = 1 << 10
 
+// MaxHandoffBytes is the largest accepted handoff budget. The handoff is one
+// command-line argument, and Linux limits one argument to 128 KiB
+// (MAX_ARG_STRLEN).
+const MaxHandoffBytes = 100 << 10
+
 const (
 	handoffMaxTurns      = 20
 	handoffPromptRunes   = 500
@@ -45,55 +50,118 @@ type Handoff struct {
 	Truncated bool     `json:"truncated"`
 }
 
-// ResolveResumeTarget turns a step number or a session ID (full, unique
-// prefix, or the agent's own session ID) into a step. For a session the step
-// is its latest keyframe.
-func (e *Engine) ResolveResumeTarget(arg string) (int64, error) {
-	if step, err := strconv.ParseInt(arg, 10, 64); err == nil {
+// ResumeTargetKind says how ResolveResumeTarget reads its argument.
+type ResumeTargetKind int
+
+const (
+	// ResumeAuto reads a number as a step and anything else as a session,
+	// and refuses a number that also names a session.
+	ResumeAuto ResumeTargetKind = iota
+	// ResumeStep reads the argument as a step number.
+	ResumeStep
+	// ResumeSession reads the argument as a session.
+	ResumeSession
+)
+
+// ResolveResumeTarget turns a step number or a session (Trace session ID,
+// unique prefix of one, or the agent's own session ID) into a step. For a
+// session the step is its latest keyframe.
+func (e *Engine) ResolveResumeTarget(arg string, kind ResumeTargetKind) (int64, error) {
+	if arg == "" {
+		return 0, fmt.Errorf("empty step or session")
+	}
+	step, numErr := strconv.ParseInt(arg, 10, 64)
+	if kind == ResumeStep {
+		if numErr != nil {
+			return 0, fmt.Errorf("invalid step %q", arg)
+		}
 		return step, nil
 	}
-	if arg == "" || strings.ContainsAny(arg, "%_") {
-		return 0, fmt.Errorf("invalid step or session %q", arg)
+	if kind == ResumeAuto && numErr == nil {
+		named, err := e.numberNamesSession(arg)
+		if err != nil {
+			return 0, err
+		}
+		if named {
+			return 0, fmt.Errorf("ambiguous: %q is step %d or a session ID (or prefix of one); use --step or --session", arg, step)
+		}
+		return step, nil
 	}
-	rows, err := e.DB.Query(`SELECT id FROM sessions WHERE id=? OR agent_sid=? OR id LIKE ? ORDER BY id LIMIT 3`, arg, arg, arg+"%")
+	session, err := e.findSession(arg)
 	if err != nil {
-		return 0, fmt.Errorf("finding session: %w", err)
+		return 0, err
 	}
+	var latest sql.NullInt64
+	if err := e.DB.QueryRow(`SELECT MAX(k.seq) FROM keyframes k JOIN turns t ON t.id=k.turn_id WHERE t.session_id=?`, session).Scan(&latest); err != nil {
+		return 0, fmt.Errorf("finding session step: %w", err)
+	}
+	if !latest.Valid {
+		return 0, fmt.Errorf("session %s has no recorded steps", session)
+	}
+	return latest.Int64, nil
+}
+
+var errNoSession = errors.New("no session matches")
+
+// minNumericSessionPrefix is the shortest number also tried as a session ID
+// prefix without --session.
+const minNumericSessionPrefix = 4
+
+// numberNamesSession reports whether a numeric argument is also a Trace or
+// agent session ID, or a prefix of a Trace session ID at least
+// minNumericSessionPrefix long. Every ULID starts with "0", so shorter
+// numbers are never read as prefixes.
+func (e *Engine) numberNamesSession(arg string) (bool, error) {
+	ids, err := e.sessionIDs(`SELECT id FROM sessions WHERE id=? OR agent_sid=? LIMIT 1`, arg, arg)
+	if err != nil || len(ids) > 0 || len(arg) < minNumericSessionPrefix {
+		return len(ids) > 0, err
+	}
+	ids, err = e.sessionIDs(`SELECT id FROM sessions WHERE id LIKE ? LIMIT 1`, arg+"%") // digits need no escaping
+	return len(ids) > 0, err
+}
+
+// findSession matches arg exactly against Trace and agent session IDs,
+// then as a prefix of Trace session IDs.
+func (e *Engine) findSession(arg string) (string, error) {
+	ids, err := e.sessionIDs(`SELECT DISTINCT id FROM sessions WHERE id=? OR agent_sid=? ORDER BY id LIMIT 3`, arg, arg)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) > 1 {
+		return "", fmt.Errorf("%q names several sessions (%s) as a Trace or agent session ID; pass the full Trace session ID", arg, strings.Join(ids, ", "))
+	}
+	if len(ids) == 1 {
+		return ids[0], nil
+	}
+	escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(arg)
+	ids, err = e.sessionIDs(`SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\' ORDER BY id LIMIT 3`, escaped+"%")
+	if err != nil {
+		return "", err
+	}
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("%w %q", errNoSession, arg)
+	case 1:
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("session prefix %q matches several sessions (%s, ...); use more characters", arg, strings.Join(ids[:2], ", "))
+}
+
+func (e *Engine) sessionIDs(query string, args ...any) ([]string, error) {
+	rows, err := e.DB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("finding session: %w", err)
+	}
+	defer rows.Close()
 	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return 0, err
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	exact := ""
-	for _, id := range ids {
-		if id == arg {
-			exact = id
-		}
-	}
-	switch {
-	case exact != "":
-		ids = []string{exact}
-	case len(ids) == 0:
-		return 0, fmt.Errorf("no step or session matches %q", arg)
-	case len(ids) > 1:
-		return 0, fmt.Errorf("session %q is ambiguous; use more characters", arg)
-	}
-	var step sql.NullInt64
-	if err := e.DB.QueryRow(`SELECT MAX(k.seq) FROM keyframes k JOIN turns t ON t.id=k.turn_id WHERE t.session_id=?`, ids[0]).Scan(&step); err != nil {
-		return 0, fmt.Errorf("finding session step: %w", err)
-	}
-	if !step.Valid {
-		return 0, fmt.Errorf("session %s has no recorded steps", ids[0])
-	}
-	return step.Int64, nil
+	return ids, rows.Err()
 }
 
 type handoffTurn struct {
@@ -126,6 +194,13 @@ func (e *Engine) Handoff(step int64, maxBytes int) (Handoff, error) {
 		return h, err
 	}
 	h.Turns = total
+	// Redact every field before it is clipped, so a cut can never leave
+	// part of a secret that only the whole value would have matched.
+	for i := range turns {
+		turns[i].prompt = e.Redactor.Text(turns[i].prompt)
+		turns[i].reasoning = e.Redactor.Text(turns[i].reasoning)
+	}
+	h.Agent = sanitizeHandoff(e.Redactor.Text(h.Agent))
 	target, err := e.ManifestAt(step)
 	if err != nil {
 		return h, err
@@ -136,7 +211,8 @@ func (e *Engine) Handoff(step int64, maxBytes int) (Handoff, error) {
 	}
 	target, base = target.WithoutExcluded(), base.WithoutExcluded()
 	added, modified, deleted := manifest.Diff(base, target)
-	var stat []string
+	marks := map[string]string{}
+	var paths []string
 	for _, group := range []struct {
 		mark  string
 		paths []string
@@ -145,17 +221,25 @@ func (e *Engine) Handoff(step int64, maxBytes int) (Handoff, error) {
 			if manifest.Excluded(p) {
 				continue
 			}
-			h.Files = append(h.Files, p)
-			plus, minus := e.lineStat(base[p].Hash, target[p].Hash)
-			stat = append(stat, fmt.Sprintf("%s %s (+%d -%d)", group.mark, p, plus, minus))
+			marks[p] = group.mark
+			paths = append(paths, p)
 		}
 	}
-	sort.Strings(h.Files)
-	sort.SliceStable(stat, func(i, j int) bool { return stat[i][2:] < stat[j][2:] })
+	sort.Strings(paths)
+	var stat []string
+	for i, p := range paths {
+		shown := sanitizeHandoff(e.Redactor.Text(p))
+		h.Files = append(h.Files, shown)
+		if i < handoffMaxFiles { // line counts only for listed files
+			plus, minus := e.lineStat(base[p].Hash, target[p].Hash)
+			stat = append(stat, fmt.Sprintf("%s %s (+%d -%d)", marks[p], shown, plus, minus))
+		}
+	}
 	if len(turns) > 0 {
-		last := turns[len(turns)-1]
-		response := e.lastResponse(last)
-		h.Todos = extractTodos(response)
+		response := e.Redactor.Text(e.lastResponse(turns[len(turns)-1]))
+		for _, todo := range extractTodos(response) {
+			h.Todos = append(h.Todos, sanitizeHandoff(e.Redactor.Text(todo)))
+		}
 	}
 
 	var body strings.Builder
@@ -189,12 +273,11 @@ func (e *Engine) Handoff(step int64, maxBytes int) (Handoff, error) {
 	if len(stat) == 0 {
 		fmt.Fprintln(&body, "(none)")
 	}
-	for i, line := range stat {
-		if i == handoffMaxFiles {
-			fmt.Fprintf(&body, "(%d more)\n", len(stat)-i)
-			break
-		}
+	for _, line := range stat {
 		fmt.Fprintf(&body, "- %s\n", line)
+	}
+	if len(paths) > len(stat) {
+		fmt.Fprintf(&body, "(%d more)\n", len(paths)-len(stat))
 	}
 	if len(h.Todos) > 0 {
 		fmt.Fprintf(&body, "\n## Open items from the last response\n\n")
@@ -204,12 +287,12 @@ func (e *Engine) Handoff(step int64, maxBytes int) (Handoff, error) {
 	}
 	footer := fmt.Sprintf("\n## More history\n\nRun `trace show %d` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n", step)
 
-	text := e.Redactor.Text(body.String())
-	footer = e.Redactor.Text(footer)
+	text := sanitizeHandoff(e.Redactor.Text(body.String()))
+	footer = sanitizeHandoff(e.Redactor.Text(footer))
 	const marker = "\n[handoff truncated to fit the size limit]\n"
 	if len(text)+len(footer) > maxBytes {
 		h.Truncated = true
-		text = textutil.TruncateBytes(text, maxBytes-len(footer)-len(marker)) + marker
+		text = truncateKeepingMarkers(text, maxBytes-len(footer)-len(marker)) + marker
 	}
 	h.Text = text + footer
 	return h, nil
@@ -336,8 +419,10 @@ func extractTodos(text string) []string {
 	return todos
 }
 
-// lineStat counts added and removed lines between two blobs. Large or
-// unreadable blobs are counted as whole-file changes.
+// lineStat counts added and removed lines between two blobs. Only the first
+// 256 KiB of each blob is read, so counts for larger files cover that part;
+// when both line lists are large, every line is counted as changed.
+// Unreadable blobs count as empty.
 func (e *Engine) lineStat(before, after blob.Hash) (int, int) {
 	a, b := e.statLines(before), e.statLines(after)
 	if len(a)*len(b) > 4_000_000 {
@@ -401,4 +486,39 @@ func shortHead(h string) string {
 		return h[:12]
 	}
 	return h
+}
+
+var terminalEscape = regexp.MustCompile(`\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)?|[@-_])`)
+
+// sanitizeHandoff removes terminal escape sequences, NUL and other control
+// characters except newline and tab, so the handoff is a valid argument and
+// cannot drive the terminal it is printed to.
+func sanitizeHandoff(s string) string {
+	s = terminalEscape.ReplaceAllString(s, "")
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// truncateKeepingMarkers cuts s to at most n bytes without splitting a
+// UTF-8 sequence or a redaction marker.
+func truncateKeepingMarkers(s string, n int) string {
+	const open = "⟨redacted:"
+	cut := textutil.TruncateBytes(s, n)
+	if i := strings.LastIndex(cut, open); i >= 0 && !strings.Contains(cut[i:], "⟩") {
+		return cut[:i]
+	}
+	// A cut inside the marker's opening text is still a partial marker.
+	for i := len(open) - 1; i > 0; i-- {
+		if strings.HasSuffix(cut, open[:i]) && strings.HasPrefix(s[len(cut)-i:], open) {
+			return cut[:len(cut)-i]
+		}
+	}
+	return cut
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -258,5 +259,72 @@ func TestResumeRefusesAgentWithoutLauncher(t *testing.T) {
 		if _, err := runResumeCmd(t, root, false, args...); err == nil {
 			t.Fatalf("%v accepted", args)
 		}
+	}
+}
+
+// A missing agent program or an oversized budget is refused before the
+// tree changes, so no rewind (and no safety keyframe) happens.
+func TestResumeRefusesBeforeRewind(t *testing.T) {
+	root, _ := resumeRepo(t)
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	only := t.TempDir() // git only, no agent programs
+	if err := os.Symlink(git, filepath.Join(only, "git")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", only)
+	before := worktreeFiles(t, root)
+	if _, err := runResumeCmd(t, root, false, "1", "--agent", "codex"); err == nil || !strings.Contains(err.Error(), "codex is not installed or not on PATH") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := runResumeCmd(t, root, false, "1", "--agent", "claude-code", "--max-context-bytes", "102401", "--no-launch"); err == nil || !strings.Contains(err.Error(), "between 1024 and 102400") {
+		t.Fatalf("err = %v", err)
+	}
+	if after := worktreeFiles(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatal("refused resume changed the worktree")
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	var n int
+	if err := e.DB.QueryRow("SELECT COUNT(*) FROM keyframes WHERE tag='pre-rewind'").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("safety keyframes = %d, %v", n, err)
+	}
+}
+
+func TestResumeJSONRedactsFileNames(t *testing.T) {
+	root, _ := resumeRepo(t)
+	name := "creds-" + resumeSecret + ".txt"
+	if err := os.WriteFile(filepath.Join(root, name), []byte("x\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "claude-code", AgentSessionID: "cc-1", Worktree: root, At: time.Now().UnixMilli() + 10}
+	for _, k := range []event.Kind{event.TurnStart, event.ToolEdit, event.TurnEnd} {
+		ev.Kind, ev.Prompt, ev.ToolName, ev.Paths = k, "add creds", "", nil
+		if k == event.ToolEdit {
+			ev.Prompt, ev.ToolName, ev.Paths = "", "Write", []string{filepath.Join(root, name)}
+		}
+		if err := e.Process(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.Close()
+	out, err := runResumeCmd(t, root, true, "cc-1", "--session", "--agent", "codex", "--no-rewind", "--no-launch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, resumeSecret) || !strings.Contains(out, "creds-⟨redacted:") {
+		t.Fatalf("file name not redacted: %s", out)
+	}
+	if _, err := runResumeCmd(t, root, false, "1", "--step", "--session", "--no-launch"); err == nil {
+		t.Fatal("--step --session accepted")
 	}
 }
