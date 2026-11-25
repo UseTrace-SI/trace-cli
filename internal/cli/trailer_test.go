@@ -164,3 +164,28 @@ func TestCommitTrailerSkipsReusedMessages(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigSetCommitTrailerReportsManualHook(t *testing.T) {
+	r := newRewriteRepo(t, map[string]string{"a.txt": "a\n"})
+	r.git("config", "core.hooksPath", ".husky")
+	if err := os.MkdirAll(filepath.Join(r.root, ".husky"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	root := r.root
+	jsonOutput := false
+	cmd := configCommand(&root, &jsonOutput)
+	var stdout, stderr strings.Builder
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"set", "commit-trailer", "on"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != "commit-trailer on\n" || !strings.Contains(stderr.String(), "Manual step pending") ||
+		!strings.Contains(stderr.String(), filepath.Join(".husky", "prepare-commit-msg")) || !strings.Contains(stderr.String(), "trailer-hook") {
+		t.Fatalf("stdout %q stderr %q", stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(r.root, ".husky", "prepare-commit-msg")); !os.IsNotExist(err) {
+		t.Fatalf("wrote a hook inside the worktree: %v", err)
+	}
+}

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -54,8 +54,11 @@ func configCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		var manual *gitx.ManualHookError
 		if errors.As(err, &manual) {
+			if *jsonOutput {
+				return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"key": args[0], "value": onOff(on), "manual_hooks": manual.Hooks})
+			}
 			for _, h := range manual.Hooks {
-				if _, werr := fmt.Fprintf(c.ErrOrStderr(), "Add to %s:\n%s", h.Path, h.Block); werr != nil {
+				if _, werr := fmt.Fprintf(c.ErrOrStderr(), "Manual step pending: Git runs hooks from inside the repository, so Trace left them unchanged. Trailers are not added until you add this block to %s:\n%s", h.Path, h.Block); werr != nil {
 					return werr
 				}
 			}
