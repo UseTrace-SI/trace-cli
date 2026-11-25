@@ -3,6 +3,7 @@ package redact
 import (
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -117,24 +118,22 @@ func (r Redactor) Text(s string) string {
 	}
 	context := hasKeyContext(s)
 	if context {
-		s = redactEnvValues(s)
-	}
-	original := s
-	var indexes [][]int
-	if context {
-		indexes = candidate.FindAllStringIndex(original, -1)
-	}
-	for i := len(indexes) - 1; i >= 0; i-- {
-		start, end := indexes[i][0], indexes[i][1]
-		from := start - 30
-		if from < 0 {
-			from = 0
+		// Masking can join or shift quotes and escapes so that a second
+		// reading finds more (an escaped value whose closing escape was
+		// masked runs to the line end). Repeat until nothing changes, so
+		// redacting the output again leaves it as it is.
+		originals := map[string]envOriginal{}
+		for i := 0; i < maxEnvPasses; i++ {
+			next := redactEnvValues(s, originals, i > 0)
+			if next == s {
+				break
+			}
+			s = next
+			if settled(s, originals) {
+				break
+			}
 		}
-		value := original[start:end]
-		if strings.Contains(original[from:start], "⟨redacted:") || !keyContext.MatchString(original[from:start]) || entropy(value) <= 3.5 {
-			continue
-		}
-		s = s[:start] + marker("entropy", value) + s[end:]
+		s = redactEntropy(s, originals)
 	}
 	if r.PII {
 		s = email.ReplaceAllStringFunc(s, func(v string) string { return marker("email", v) })
@@ -166,6 +165,35 @@ func replaceMatches(rx *regexp.Regexp, s, kind string) string {
 	return out.String()
 }
 
+// settled reports that another environment pass cannot change s: every
+// marker of this call stands alone, ending at a separator and, when it is
+// followed by a quote, opened by the same unescaped quote. A value a pass
+// could read again would have to run into or out of such a marker.
+func settled(s string, originals map[string]envOriginal) bool {
+	for _, loc := range redactionMarker.FindAllStringIndex(s, -1) {
+		if _, ok := originals[s[loc[0]:loc[1]]]; !ok {
+			continue
+		}
+		if loc[1] == len(s) {
+			continue
+		}
+		switch c := s[loc[1]]; c {
+		case ' ', '\t', '\n', '\r', ',':
+			continue
+		case '"', '\'':
+			if loc[0] > 0 && s[loc[0]-1] == c && (loc[0] < 2 || s[loc[0]-2] != '\\') {
+				continue
+			}
+		}
+		return false
+	}
+	return true
+}
+
+// maxEnvPasses bounds the passes that bring environment-value redaction to a
+// fixed point; real text settles in one or two.
+const maxEnvPasses = 4
+
 func hasKeyContext(s string) bool {
 	lower := strings.ToLower(s)
 	for _, word := range []string{"key", "secret", "token", "password", "passwd", "api"} {
@@ -177,77 +205,195 @@ func hasKeyContext(s string) bool {
 	return strings.ContainsRune(s, '\u017f') && keyContext.MatchString(s)
 }
 
-func redactEnvValues(s string) string {
+// envOriginal is the value an environment marker replaced. plainEnd is
+// where, within it, the last stretch the plain reading alone (the rules
+// before escaped quotes were read) would also have masked ends, or -1:
+// before that point those rules saw a marker, after it plain text.
+type envOriginal struct {
+	text     string
+	plainEnd int
+}
+
+func redactEnvValues(s string, originals map[string]envOriginal, later bool) string {
 	// Every environment assignment requires a separator. Avoid the expensive
 	// case-insensitive name matcher on large source/transcript strings without
 	// one; this preserves exactly the same redaction behavior.
 	if !strings.ContainsAny(s, "=:") {
 		return s
 	}
-	matches := envValue.FindAllStringSubmatchIndex(s, -1)
-	if len(matches) == 0 {
+	markers := redactionMarker.FindAllStringIndex(s, -1)
+	// The escaped-quote rules can read a stretch of text differently from
+	// the plain rules (an escaped quote can open a value that would
+	// otherwise hold the next name). Masking the union of both readings
+	// never masks less than the plain rules alone.
+	plain := plainEnvSpans(s, markers)
+	spans := mergeSpans(append(envSpans(s, markers), plain...))
+	sort.Slice(plain, func(i, j int) bool { return plain[i][0] < plain[j][0] })
+	if len(spans) == 0 {
 		return s
 	}
-	markers := redactionMarker.FindAllStringIndex(s, -1)
 	var out strings.Builder
-	last, nextMarker := 0, 0
-	for _, match := range matches {
-		for nextMarker < len(markers) && markers[nextMarker][1] <= match[0] {
-			nextMarker++
-		}
-		if nextMarker < len(markers) && markers[nextMarker][0] <= match[0] && match[0] < markers[nextMarker][1] {
-			continue
-		}
-		start, end := match[6], match[7]
-		value := s[start:end]
-		if match[8] >= 0 {
-			// An escaped string literal: mask up to the matching escaped
-			// quote, keeping the escapes; unterminated, to the end of the line.
-			start = match[9]
-			end = escapedValueEnd(s, start, match[9]-match[8]-1)
-			value = s[start:end]
-			if value == "" {
-				continue
+	last, p := 0, 0
+	for _, span := range spans {
+		out.WriteString(s[last:span[0]])
+		m := marker("env", s[span[0]:span[1]])
+		if originals != nil {
+			// plain is sorted and inside the merged spans, so it is walked
+			// once alongside them.
+			plainEnd := -1
+			for ; !later && p < len(plain) && plain[p][0] < span[1]; p++ {
+				if span[0] < plain[p][1] {
+					plainEnd = max(plainEnd, min(plain[p][1], span[1])-span[0])
+				}
 			}
-			if location := redactionMarker.FindStringIndex(value); location != nil && location[0] == 0 && location[1] == len(value) {
-				continue
-			}
-			out.WriteString(s[last:start])
-			out.WriteString(marker("env", value))
-			last = end
-			continue
+			originals[m] = envOriginal{text: s[span[0]:span[1]], plainEnd: plainEnd}
 		}
-		quoted := value[0] == '"' || value[0] == '\''
-		// Only a plain assignment takes a bare value. After a quoted name, a
-		// comparison or a hash rocket a credential is a string literal, so
-		// identifiers, numbers and null (`token != nil`, `key => key.id`,
-		// `"password": null`) are left alone.
-		if op := s[match[4]:match[5]]; !quoted && (match[2] >= 0 || (op != "=" && op != ":" && op != ":=")) {
-			continue
-		}
-		// Keep the quotes of a complete string so the surrounding code stays
-		// balanced and a second pass recognizes the marker.
-		if quoted && len(value) > 1 && value[len(value)-1] == value[0] {
-			start, end, value = start+1, end-1, value[1:len(value)-1]
-		}
-		unquoted := strings.Trim(value, `"'`)
-		if unquoted == "" {
-			continue
-		}
-		if location := redactionMarker.FindStringIndex(unquoted); location != nil && location[0] == 0 && location[1] == len(unquoted) {
-			continue
-		}
-		out.WriteString(s[last:start])
-		out.WriteString(marker("env", value))
-		last = end
+		out.WriteString(m)
+		last = span[1]
 	}
 	out.WriteString(s[last:])
 	return out.String()
 }
 
+// plainEnvValue is envValue without escaped quotes.
+var plainEnvValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)(?:[A-Z0-9_]*|(["']))\s*(===?|!==?|:=|=>|[:=])\s*("[^"\n]*"|'[^'\n]*'|["']?[^\s,"']+)`)
+
+// plainEnvSpans reads assignments with plainEnvValue, matches never
+// overlapping.
+func plainEnvSpans(s string, markers [][]int) [][2]int {
+	var spans [][2]int
+	for _, match := range plainEnvValue.FindAllStringSubmatchIndex(s, -1) {
+		if insideMarker(markers, match[0]) {
+			continue
+		}
+		if start, end, ok := valueSpan(s, match); ok {
+			spans = append(spans, [2]int{start, end})
+		}
+	}
+	return spans
+}
+
+// envSpans reads assignments with envValue, including escaped string values.
+// A value that is skipped is scanned again from its start, so an assignment
+// inside or right after it is still found.
+func envSpans(s string, markers [][]int) [][2]int {
+	var spans [][2]int
+	for pos := 0; pos < len(s); {
+		match := findEnvValue(s, pos)
+		if match == nil {
+			break
+		}
+		pos = match[6]
+		if insideMarker(markers, match[0]) {
+			continue
+		}
+		if match[8] >= 0 {
+			// An escaped string literal: mask up to the matching escaped
+			// quote, keeping the escapes; unterminated, to the end of the line.
+			start := match[9]
+			end := escapedValueEnd(s, start, match[9]-match[8]-1)
+			pos = max(end, start)
+			if value := s[start:end]; value != "" && !isMarker(value) {
+				spans = append(spans, [2]int{start, end})
+			}
+			continue
+		}
+		if start, end, ok := valueSpan(s, match); ok {
+			spans = append(spans, [2]int{start, end})
+			pos = end
+		}
+	}
+	return spans
+}
+
+// valueSpan returns the part of a matched plain value to mask, or false when
+// the value is not a credential.
+func valueSpan(s string, match []int) (int, int, bool) {
+	start, end := match[6], match[7]
+	value := s[start:end]
+	quoted := value[0] == '"' || value[0] == '\''
+	// Only a plain assignment takes a bare value. After a quoted name, a
+	// comparison or a hash rocket a credential is a string literal, so
+	// identifiers, numbers and null (`token != nil`, `key => key.id`,
+	// `"password": null`) are left alone.
+	if op := s[match[4]:match[5]]; !quoted && (match[2] >= 0 || (op != "=" && op != ":" && op != ":=")) {
+		return 0, 0, false
+	}
+	// Keep the quotes of a complete string so the surrounding code stays
+	// balanced and a second pass recognizes the marker.
+	if quoted && len(value) > 1 && value[len(value)-1] == value[0] {
+		start, end, value = start+1, end-1, value[1:len(value)-1]
+	}
+	// Backslashes that escape the quote after a bare value belong to that
+	// quote: masking them would leave a bare quote that a second pass reads
+	// as opening a new value.
+	if !quoted && end < len(s) && (s[end] == '"' || s[end] == '\'') {
+		for end > start && s[end-1] == '\\' {
+			end--
+		}
+		value = s[start:end]
+	}
+	unquoted := strings.Trim(value, `"'`)
+	if unquoted == "" || isMarker(unquoted) {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+// insideMarker reports whether position at falls inside a marker.
+func insideMarker(markers [][]int, at int) bool {
+	i := sort.Search(len(markers), func(i int) bool { return markers[i][1] > at })
+	return i < len(markers) && markers[i][0] <= at
+}
+
+// mergeSpans sorts spans and joins overlapping ones.
+func mergeSpans(spans [][2]int) [][2]int {
+	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
+	var out [][2]int
+	for _, span := range spans {
+		if n := len(out); n > 0 && span[0] < out[n-1][1] {
+			out[n-1][1] = max(out[n-1][1], span[1])
+			continue
+		}
+		out = append(out, span)
+	}
+	return out
+}
+
+// findEnvValue finds the next envValue match at or after pos, with indexes
+// into s. Searching a suffix loses what precedes it, which only matters to
+// the leading \b: a name cannot start inside a word, so the search first
+// skips the rest of any word pos is in.
+func findEnvValue(s string, pos int) []int {
+	if pos > 0 && isWordByte(s[pos-1]) {
+		for pos < len(s) && isWordByte(s[pos]) {
+			pos++
+		}
+	}
+	match := envValue.FindStringSubmatchIndex(s[pos:])
+	for i := range match {
+		if match[i] >= 0 {
+			match[i] += pos
+		}
+	}
+	return match
+}
+
+func isWordByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isMarker(s string) bool {
+	location := redactionMarker.FindStringIndex(s)
+	return location != nil && location[0] == 0 && location[1] == len(s)
+}
+
 // escapedValueEnd returns where a string value opened by a quote escaped with
-// n backslashes ends: before the first quote escaped with exactly n
-// backslashes (a quote with more is escaped content), or at the line end.
+// n backslashes ends: before the n backslashes escaping its closing quote, or
+// at the line end. Each nesting level doubles backslashes and escapes quotes,
+// so at this level a literal backslash in the value adds 2(n+1) backslashes
+// and a literal quote is preceded by n+(n+1): a quote ends the value only
+// when its run of backslashes is n plus a multiple of 2(n+1).
 func escapedValueEnd(s string, from, n int) int {
 	for i := from; i < len(s); i++ {
 		switch s[i] {
@@ -258,12 +404,168 @@ func escapedValueEnd(s string, from, n int) int {
 			for j > from && s[j-1] == '\\' {
 				j--
 			}
-			if i-j == n {
-				return j
+			if run := i - j; run >= n && (run-n)%(2*(n+1)) == 0 {
+				return i - n
 			}
 		}
 	}
 	return len(s)
+}
+
+// contextKind names marker kinds that stand for provider credentials: text
+// right after one (an AWS secret after its access key, a CSV column after a
+// token) is in key context. Unlike the platform's share redactor, "env" is
+// not one: an assignment's value is masked by name, and treating it as
+// context masked ordinary neighbours (`key=…, plaintext=128`) in the Go
+// standard-library corpus.
+var contextKind = regexp.MustCompile(`key|token|secret|password|passwd|api|auth|credential`)
+
+// contextWindow returns the 30 bytes before start in which a secret word
+// gives key context. An environment marker of this call reads as the value
+// it replaced (and markers inside that value as theirs), so masking a value
+// never removes the context it held, except where the plain rules would
+// also have masked it: the window ends there, as it does at any other
+// marker (the words before a masked value named it).
+func contextWindow(s string, before [][]int, start int, originals map[string]envOriginal) string {
+	window, _ := windowBefore(s, before, start, 30, originals, 0)
+	return window
+}
+
+// windowBefore collects up to need bytes before end of s, whose markers
+// (ending at or before end) are given, expanding markers as contextWindow
+// describes. stopped reports that a marker ended the window early.
+func windowBefore(s string, markers [][]int, end, need int, originals map[string]envOriginal, depth int) (window string, stopped bool) {
+	pos, i := end, len(markers)-1
+	for len(window) < need && pos > 0 {
+		floor := 0
+		if i >= 0 {
+			floor = markers[i][1]
+		}
+		from := max(floor, pos-(need-len(window)))
+		window = s[from:pos] + window
+		pos = from
+		if pos > floor || i < 0 {
+			return window, false
+		}
+		original, ok := originals[s[markers[i][0]:markers[i][1]]]
+		if !ok || depth > maxEnvPasses {
+			return window, true
+		}
+		text := original.text[max(original.plainEnd, 0):]
+		inner, innerStopped := windowBefore(text, redactionMarker.FindAllStringIndex(text, -1), len(text), need-len(window), originals, depth+1)
+		window = inner + window
+		if innerStopped || original.plainEnd >= 0 {
+			return window, true
+		}
+		pos = markers[i][0]
+		i--
+	}
+	return window, false
+}
+
+// expandOriginal replaces the environment markers of this call inside text
+// with the values they replaced.
+func expandOriginal(text string, originals map[string]envOriginal, depth int) string {
+	if depth > maxEnvPasses || !strings.Contains(text, "⟨redacted:env:") {
+		return text
+	}
+	return redactionMarker.ReplaceAllStringFunc(text, func(m string) string {
+		if original, ok := originals[m]; ok {
+			return expandOriginal(original.text, originals, depth+1)
+		}
+		return m
+	})
+}
+
+// leadingRun and trailingRun return the candidate characters at the start
+// and end of s.
+func leadingRun(s string) string {
+	if loc := candidateRun.FindStringIndex(s); loc != nil && loc[0] == 0 {
+		return s[:loc[1]]
+	}
+	return ""
+}
+
+func trailingRun(s string) string {
+	i := len(s)
+	for i > 0 && isCandidateByte(s[i-1]) {
+		i--
+	}
+	return s[i:]
+}
+
+var candidateRun = regexp.MustCompile(`[A-Za-z0-9_+/=-]+`)
+
+func isCandidateByte(c byte) bool {
+	return isWordByte(c) || c == '+' || c == '/' || c == '=' || c == '-'
+}
+
+// redactEntropy masks high-entropy candidates near a secret word or right
+// after a credential marker. Candidates overlapping a marker are skipped.
+// Entropy markers give no context, and a marker is at least as long as the
+// 30-byte window, so a second pass finds nothing new. originals maps the
+// environment markers of this call to the values they replaced: a candidate
+// touching one is judged together with the adjoining characters of that
+// value, as it would have been before the value was masked.
+func redactEntropy(s string, originals map[string]envOriginal) string {
+	markers := redactionMarker.FindAllStringIndex(s, -1)
+	var out strings.Builder
+	last, next := 0, 0
+	// Runs shorter than a candidate still count when they touch a marker of
+	// this call, as part of the longer run they formed before masking.
+	runs := candidate
+	if len(originals) > 0 {
+		runs = candidateRun
+	}
+	for _, c := range runs.FindAllStringIndex(s, -1) {
+		start, end := c[0], c[1]
+		for next < len(markers) && markers[next][1] <= start {
+			next++
+		}
+		if next < len(markers) && markers[next][0] < end {
+			continue
+		}
+		value := s[start:end]
+		joined, maskStart, maskEnd := value, start, end
+		if next < len(markers) && markers[next][0] == end {
+			if original, ok := originals[s[markers[next][0]:markers[next][1]]]; ok {
+				joined += leadingRun(expandOriginal(original.text, originals, 0))
+				maskEnd = markers[next][1]
+			}
+		}
+		if next > 0 && markers[next-1][1] == start && markers[next-1][0] >= last {
+			if original, ok := originals[s[markers[next-1][0]:markers[next-1][1]]]; ok {
+				joined = trailingRun(expandOriginal(original.text, originals, 0)) + joined
+				maskStart = markers[next-1][0]
+			}
+		}
+		alone := len(value) >= 12 && entropy(value) > 3.5
+		if !alone && (len(joined) < 12 || entropy(joined) <= 3.5) {
+			continue
+		}
+		from := max(0, start-30)
+		nearby := false
+		if next > 0 && markers[next-1][1] > from {
+			kind := s[markers[next-1][0]:markers[next-1][1]]
+			kind = strings.TrimPrefix(kind, "⟨redacted:")
+			kind, _, _ = strings.Cut(kind, ":")
+			nearby = contextKind.MatchString(kind)
+		}
+		if !nearby && !keyContext.MatchString(contextWindow(s, markers[:next], start, originals)) {
+			continue
+		}
+		if alone {
+			maskStart, maskEnd = start, end
+		}
+		// A run judged together with a touching masked value is masked
+		// together with it, as one marker: a run and a marker side by side
+		// would read as a new value on a second pass.
+		out.WriteString(s[last:maskStart])
+		out.WriteString(marker("entropy", s[maskStart:maskEnd]))
+		last = maskEnd
+	}
+	out.WriteString(s[last:])
+	return out.String()
 }
 
 func entropy(s string) float64 {
