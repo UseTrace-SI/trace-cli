@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -87,11 +89,13 @@ func commitTrailerHookCommand(repoPath *string) *cobra.Command {
 }
 
 func addCommitTrailers(repoPath, msgFile, source string) error {
-	if source == "merge" || source == "squash" {
+	// Merges, squashes and messages reused from another commit (amend,
+	// -c/-C) are left alone: their edits are not this commit's new work.
+	if source == "merge" || source == "squash" || source == "commit" {
 		return nil
 	}
 	root, err := initializedRoot(repoPath)
-	if err != nil || !gitx.TrailerEnabled(root) {
+	if err != nil || !gitx.TrailerEnabled(root) || replaying(root) {
 		return err
 	}
 	turns, err := stagedTurns(root)
@@ -99,6 +103,23 @@ func addCommitTrailers(repoPath, msgFile, source string) error {
 		return err
 	}
 	return gitx.AddTrailers(root, msgFile, turns)
+}
+
+// replaying reports a cherry-pick, revert or rebase in progress: the commit
+// being made replays an existing one.
+func replaying(root string) bool {
+	head, err := gitx.GitPath(root, "CHERRY_PICK_HEAD")
+	if err != nil {
+		return true
+	}
+	// These per-worktree state files share the directory of CHERRY_PICK_HEAD.
+	dir := filepath.Dir(head)
+	for _, name := range []string{"CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "rebase-merge", "rebase-apply", "sequencer"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // stagedTurns lists, oldest first, recorded turns that edited a staged path
