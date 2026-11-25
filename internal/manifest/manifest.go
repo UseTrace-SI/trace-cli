@@ -29,7 +29,15 @@ type Ignorer interface {
 // agents' hook configuration (see protectedFolded) and secret files.
 func excluded(rel string) bool {
 	folded := foldPath(rel)
-	return protectedFolded(folded) || secretFolded(folded)
+	if protectedFolded(folded) {
+		return true
+	}
+	// Normalize as SecretPath does: a name written with backslashes or a
+	// leading ./ is still the secret file.
+	if strings.ContainsRune(folded, '\\') || strings.HasPrefix(folded, "./") {
+		folded = strings.TrimPrefix(strings.ReplaceAll(folded, "\\", "/"), "./")
+	}
+	return secretFolded(folded)
 }
 
 // protectedFolded reports Git metadata, Trace state and agent hook

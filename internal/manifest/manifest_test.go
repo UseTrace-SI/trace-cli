@@ -345,3 +345,41 @@ func TestScanNeverCapturesCredentialFiles(t *testing.T) {
 		t.Fatalf("lost an ordinary file: %v", got)
 	}
 }
+
+// Capture and restore decisions use Excluded; SecretPath answers the same
+// question for adapters and events. They must agree on every secret path,
+// however it is spelled.
+func TestExcludedAgreesWithSecretPath(t *testing.T) {
+	for _, tc := range []struct {
+		path   string
+		secret bool
+	}{
+		{`a\.env`, true},
+		{`.kube\config`, true},
+		{`cfg\id_rsa`, true},
+		{`certs\server.PEM`, true},
+		{`deploy\.npmrc`, true},
+		{`.\credentials.json`, true},
+		{"./.env.local", true},
+		{"./infra/terraform.tfstate", true},
+		{".docker/config.json", true},
+		{`src\app.go`, false},
+		{"./src/app.go", false},
+		{`pkg\kubeconfig\load.go`, false},
+	} {
+		if got := SecretPath(tc.path); got != tc.secret {
+			t.Errorf("SecretPath(%q) = %v; want %v", tc.path, got, tc.secret)
+		}
+		if got := Excluded(tc.path); got != tc.secret {
+			t.Errorf("Excluded(%q) = %v; want %v", tc.path, got, tc.secret)
+		}
+	}
+	for _, p := range append(benchPaths(2000), ".env", "a/.ssh/id_ed25519", "ops/x.kubeconfig", "kube/config.go", "x/service-account-1.json") {
+		if SecretPath(p) && !Excluded(p) {
+			t.Errorf("SecretPath(%q) but not Excluded", p)
+		}
+		if !SecretPath(p) && Excluded(p) && !protectedFolded(foldPath(p)) {
+			t.Errorf("Excluded(%q) without being secret or protected", p)
+		}
+	}
+}
