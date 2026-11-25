@@ -24,6 +24,10 @@ func Parse(name string, body []byte, root string) ([]event.Event, error) {
 	if err := json.Unmarshal(body, &p); err != nil {
 		return nil, fmt.Errorf("parsing Copilot hook: %w", err)
 	}
+	return parse(name, p, root)
+}
+
+func parse(name string, p payload, root string) ([]event.Event, error) {
 	if p.SessionID == "" || (p.AgentID != "" && name != "postToolUse") {
 		return nil, nil
 	}

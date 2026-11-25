@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters/copilot"
 	"github.com/UseTrace-SI/trace-cli/internal/adapters/hookconfig"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
+	"github.com/UseTrace-SI/trace-cli/internal/userstate"
 )
 
 // claudeGlobalEvents are the events `trace setup` installs for Claude Code.
@@ -29,8 +31,30 @@ func (claudeCode) ResolveHookRoot(c *HookCall) (string, error) {
 	return root, err
 }
 
+// DecodeHook: Copilot CLI also runs a repository's .claude/settings*.json
+// hooks. Its payloads (see copilot.IsClaudeHookPayload) are recorded as
+// Copilot sessions; every Claude Code payload is parsed as before.
 func (claudeCode) DecodeHook(c *HookCall, body []byte, root string) ([]event.Event, error) {
+	if copilot.IsClaudeHookPayload(body) {
+		return copilot.ParseClaudeHook(c.Event, body, root)
+	}
 	return claudecode.ParseEvents(c.Event, body, root)
+}
+
+// SkipHook drops a Copilot call through the Claude Code hooks when Copilot
+// is disabled or Trace's own Copilot hook (project or user level) records
+// the same event, so a session is never recorded twice.
+func (claudeCode) SkipHook(c *HookCall, root string) bool {
+	body, err := c.Body()
+	if err != nil || !copilot.IsClaudeHookPayload(body) {
+		return false
+	}
+	name, ok := copilot.ClaudeHookEvent(c.Event)
+	if !ok || userstate.DisabledFor("copilot") || copilot.HasProjectHook(root, name) {
+		return true
+	}
+	home, err := os.UserHomeDir()
+	return err == nil && copilot.HasGlobalHook(home, name)
 }
 
 func (claudeCode) InvalidPayloadMessage() string { return "trace hook: invalid Claude payload" }

@@ -2356,5 +2356,47 @@
   "event": "turn_start",
   "stdin": "{\"session_id\":\"s1\",\"prompt\":",
   "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "SessionStart",
+  "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"cp-1\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"cwd\":\"{{ROOT}}\",\"source\":\"startup\"}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"sessionId\":\"cp-1\",\"timestamp\":1704614400000,\"cwd\":\"{{ROOT}}\",\"prompt\":\"hello from copilot\"}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"cp-1\",\"timestamp\":\"2026-01-01T00:00:01Z\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"cp-1\",\"timestamp\":1704614401000,\"cwd\":\"{{ROOT}}\",\"toolName\":\"edit\",\"toolArgs\":\"{\\\"path\\\":\\\"b.go\\\"}\"}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "Stop",
+  "stdin": "{\"sessionId\":\"cp-1\",\"timestamp\":1704614402000,\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"cp-1\",\"timestamp\":\"2026-01-01T00:00:03Z\",\"cwd\":\"{{ROOT}}\",\"reason\":\"complete\"}",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
+ },
+ {
+  "agent": "claude-code",
+  "event": "Stop",
+  "stdin": "{\"sessionId\":\"cp-1\",\"timestamp\":1,\"cwd\":\"{{ROOT}}\"",
+  "source": "internal/adapters/copilot/claudeformat_test.go"
  }
 ]

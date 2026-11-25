@@ -1496,6 +1496,30 @@
     "stdout": "",
     "exit": 0
   },
+  "batch/claude-code/PostToolUse#7": {
+    "args": [
+      "hook",
+      "claude-code",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1767225601000,\"tool_name\":\"create\",\"paths\":[\"{{BASE}}/batch/a.go\"]}\n"
+    }
+  },
+  "batch/claude-code/PostToolUse#8": {
+    "args": [
+      "hook",
+      "claude-code",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1704614401000,\"tool_name\":\"edit\",\"paths\":[\"{{BASE}}/batch/b.go\"]}\n"
+    }
+  },
   "batch/claude-code/PreToolUse#0": {
     "args": [
       "hook",
@@ -1517,6 +1541,18 @@
       "root/.trace/spool.jsonl": "[0600] {\"events\":[{\"kind\":\"tool_edit\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"},{\"kind\":\"turn_end\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"},{\"kind\":\"session_end\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\"}]}\n"
     }
   },
+  "batch/claude-code/SessionEnd#1": {
+    "args": [
+      "hook",
+      "claude-code",
+      "SessionEnd"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"events\":[{\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1767225603000},{\"kind\":\"turn_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1767225603000},{\"kind\":\"session_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1767225603000}]}\n"
+    }
+  },
   "batch/claude-code/SessionStart#0": {
     "args": [
       "hook",
@@ -1528,6 +1564,19 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/batch/.claude-transcript.jsonl\"}\n"
+    }
+  },
+  "batch/claude-code/SessionStart#1": {
+    "args": [
+      "hook",
+      "claude-code",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1767225600000}\n"
     }
   },
   "batch/claude-code/Stop#0": {
@@ -1559,6 +1608,27 @@
     ],
     "stdout": "",
     "stderr": "trace hook: invalid Claude payload\n",
+    "exit": 0
+  },
+  "batch/claude-code/Stop#3": {
+    "args": [
+      "hook",
+      "claude-code",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"events\":[{\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1704614402000},{\"kind\":\"turn_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1704614402000}]}\n"
+    }
+  },
+  "batch/claude-code/Stop#4": {
+    "args": [
+      "hook",
+      "claude-code",
+      "Stop"
+    ],
+    "stdout": "",
     "exit": 0
   },
   "batch/claude-code/StopFailure#0": {
@@ -1594,6 +1664,19 @@
     ],
     "stdout": "",
     "exit": 0
+  },
+  "batch/claude-code/UserPromptSubmit#2": {
+    "args": [
+      "hook",
+      "claude-code",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/batch\",\"at\":1704614400000,\"prompt\":\"hello from copilot\"}\n"
+    }
   },
   "batch/cline/PostToolUse#0": {
     "args": [
@@ -9810,6 +9893,30 @@
     "stdout": "",
     "exit": 0
   },
+  "legacy/claude-code/PostToolUse#7": {
+    "args": [
+      "hook",
+      "claude-code",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1767225601000,\"tool_name\":\"create\",\"paths\":[\"{{BASE}}/legacy/a.go\"]}\n"
+    }
+  },
+  "legacy/claude-code/PostToolUse#8": {
+    "args": [
+      "hook",
+      "claude-code",
+      "PostToolUse"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1704614401000,\"tool_name\":\"edit\",\"paths\":[\"{{BASE}}/legacy/b.go\"]}\n"
+    }
+  },
   "legacy/claude-code/PreToolUse#0": {
     "args": [
       "hook",
@@ -9831,6 +9938,18 @@
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"session_end\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\"}\n"
     }
   },
+  "legacy/claude-code/SessionEnd#1": {
+    "args": [
+      "hook",
+      "claude-code",
+      "SessionEnd"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1767225603000}\n{\"kind\":\"turn_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1767225603000}\n{\"kind\":\"session_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1767225603000}\n"
+    }
+  },
   "legacy/claude-code/SessionStart#0": {
     "args": [
       "hook",
@@ -9842,6 +9961,19 @@
     "files": {
       "root/.trace/daemon.lock": "[0600] ",
       "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"claude-code\",\"agent_session_id\":\"cc-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/legacy/.claude-transcript.jsonl\"}\n"
+    }
+  },
+  "legacy/claude-code/SessionStart#1": {
+    "args": [
+      "hook",
+      "claude-code",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1767225600000}\n"
     }
   },
   "legacy/claude-code/Stop#0": {
@@ -9873,6 +10005,27 @@
     ],
     "stdout": "",
     "stderr": "trace hook: invalid Claude payload\n",
+    "exit": 0
+  },
+  "legacy/claude-code/Stop#3": {
+    "args": [
+      "hook",
+      "claude-code",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1704614402000}\n{\"kind\":\"turn_end\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1704614402000}\n"
+    }
+  },
+  "legacy/claude-code/Stop#4": {
+    "args": [
+      "hook",
+      "claude-code",
+      "Stop"
+    ],
+    "stdout": "",
     "exit": 0
   },
   "legacy/claude-code/StopFailure#0": {
@@ -9908,6 +10061,19 @@
     ],
     "stdout": "",
     "exit": 0
+  },
+  "legacy/claude-code/UserPromptSubmit#2": {
+    "args": [
+      "hook",
+      "claude-code",
+      "UserPromptSubmit"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/daemon.lock": "[0600] ",
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cp-1\",\"worktree\":\"{{BASE}}/legacy\",\"at\":1704614400000,\"prompt\":\"hello from copilot\"}\n"
+    }
   },
   "legacy/cline/PostToolUse#0": {
     "args": [
