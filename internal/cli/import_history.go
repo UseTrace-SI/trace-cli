@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -214,6 +215,8 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		return report, err
 	}
 	remap := stepRemap{tx: write, steps: map[string]map[int64]int64{}, shifted: map[string]bool{}}
+	kept := map[string]bool{}
+	objects := &historyObjects{source: filepath.Join(filepath.Dir(source), "objects"), destination: filepath.Join(root, ".trace", "objects")}
 	for _, table := range store.ImportTables() {
 		if len(available[table]) == 0 {
 			continue
@@ -330,8 +333,20 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 					return report, err
 				}
 				if !reflect.DeepEqual(existing, values) {
-					rows.Close()
-					return report, fmt.Errorf("conflicting %s row; import into a fresh checkout to preserve both histories", table)
+					same, err := sameButExcludedContent(table, cols, existing, values, objects)
+					if err != nil {
+						rows.Close()
+						return report, err
+					}
+					if !same {
+						rows.Close()
+						return report, fmt.Errorf("conflicting %s row; import into a fresh checkout to preserve both histories", table)
+					}
+					// The local row stays; the incoming row's excluded content
+					// must not be copied in unreferenced.
+					if id, ok := rowID.(string); ok {
+						kept[table+":"+id] = true
+					}
 				}
 				report.Skipped++
 			}
@@ -341,7 +356,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 			return report, err
 		}
 	}
-	if err := copyHistoryObjects(ctx, read, filepath.Join(filepath.Dir(source), "objects"), filepath.Join(root, ".trace", "objects")); err != nil {
+	if err := copyHistoryObjects(ctx, read, filepath.Join(filepath.Dir(source), "objects"), filepath.Join(root, ".trace", "objects"), kept); err != nil {
 		return report, err
 	}
 	if err := write.Commit(); err != nil {
@@ -350,9 +365,112 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 	return report, nil
 }
 
+// historyObjects opens the source and destination object stores on first
+// use, for comparing manifests of rows both histories hold.
+type historyObjects struct {
+	source, destination string
+	src, dst            *blob.Store
+}
+
+func (o *historyObjects) open() error {
+	if o.src != nil {
+		return nil
+	}
+	src, err := blob.OpenReadOnly(o.source)
+	if err != nil {
+		return err
+	}
+	dst, err := blob.OpenReadOnly(o.destination)
+	if err != nil {
+		return err
+	}
+	o.src, o.dst = src, dst
+	return nil
+}
+
+// sameButExcludedContent reports whether an incoming row differs from the
+// existing one only by content of since-excluded paths, which exports and
+// uploads leave out (see stripBundleHistory). Such a row is the same history:
+// re-importing a default export into the history it came from, or the
+// reverse, keeps the local row.
+func sameButExcludedContent(table string, cols []string, existing, incoming []any, objects *historyObjects) (bool, error) {
+	column := map[string]int{}
+	for i, col := range cols {
+		column[col] = i
+	}
+	differs := func(skip ...string) bool {
+		for i := range cols {
+			if !slices.Contains(skip, cols[i]) && !reflect.DeepEqual(existing[i], incoming[i]) {
+				return true
+			}
+		}
+		return false
+	}
+	text := func(v any) string {
+		switch v := v.(type) {
+		case string:
+			return v
+		case []byte:
+			return string(v)
+		}
+		return ""
+	}
+	switch table {
+	case "keyframes":
+		i, ok := column["manifest_hash"]
+		if !ok || differs("manifest_hash") {
+			return false, nil
+		}
+		if err := objects.open(); err != nil {
+			return false, err
+		}
+		local, err := manifest.StrippedHash(blob.Hash(text(existing[i])), objects.dst)
+		if err != nil {
+			return false, nil
+		}
+		other, err := manifest.StrippedHash(blob.Hash(text(incoming[i])), objects.src)
+		if err != nil {
+			return false, nil
+		}
+		return local == other, nil
+	case "ops":
+		p, ok := column["path"]
+		if !ok || !manifest.Excluded(text(existing[p])) || differs("before_hash", "after_hash") {
+			return false, nil
+		}
+		for _, col := range []string{"before_hash", "after_hash"} {
+			if i, ok := column[col]; ok && text(existing[i]) != "" && text(incoming[i]) != "" && text(existing[i]) != text(incoming[i]) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "sync_updates":
+		d, ok := column["data"]
+		if t, ok2 := column["table_name"]; !ok || !ok2 || text(existing[t]) != "ops" || differs("data") {
+			return false, nil
+		}
+		normalize := func(v any) (map[string]any, bool) {
+			decoder := json.NewDecoder(strings.NewReader(text(v)))
+			decoder.UseNumber()
+			var op map[string]any
+			if decoder.Decode(&op) != nil {
+				return nil, false
+			}
+			manifest.StripOpContent(op)
+			return op, true
+		}
+		a, okA := normalize(existing[d])
+		b, okB := normalize(incoming[d])
+		return okA && okB && reflect.DeepEqual(a, b), nil
+	}
+	return false, nil
+}
+
+// historyHashes lists the objects a history references. Manifests are read
+// from bs, or from the first of more that holds them.
 func historyHashes(db interface {
 	Query(string, ...any) (*sql.Rows, error)
-}, bs *blob.Store) ([]blob.Hash, error) {
+}, bs *blob.Store, more ...*blob.Store) ([]blob.Hash, error) {
 	rows, err := db.Query("SELECT manifest_hash FROM keyframes UNION SELECT before_hash FROM ops WHERE before_hash IS NOT NULL AND before_hash!='' UNION SELECT after_hash FROM ops WHERE after_hash IS NOT NULL AND after_hash!=''")
 	if err != nil {
 		return nil, err
@@ -389,6 +507,12 @@ func historyHashes(db interface {
 	}
 	for _, h := range manifests {
 		m, err := manifest.Load(h, bs)
+		for _, other := range more {
+			if err == nil {
+				break
+			}
+			m, err = manifest.Load(h, other)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -406,7 +530,12 @@ func historyHashes(db interface {
 	return hashes, nil
 }
 
-func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination string) error {
+// copyHistoryObjects validates every object the source history references
+// and copies the ones the merged history uses. Rows in kept ("table:id")
+// were not imported because the local row differs only by excluded content;
+// objects only they reference (such as a credential file's bytes from an
+// --include-excluded-history bundle) are not copied.
+func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination string, kept map[string]bool) error {
 	bs, err := blob.OpenReadOnly(source)
 	if err != nil {
 		return err
@@ -418,6 +547,11 @@ func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination str
 	hashes, err := historyHashes(tx, bs)
 	if err != nil {
 		return fmt.Errorf("validating imported objects: %w", err)
+	}
+	if len(kept) > 0 {
+		if hashes, err = usedHistoryHashes(tx, bs, kept); err != nil {
+			return fmt.Errorf("selecting imported objects: %w", err)
+		}
 	}
 	for _, h := range hashes {
 		if err := ctx.Err(); err != nil {
@@ -437,6 +571,67 @@ func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination str
 		}
 	}
 	return nil
+}
+
+// usedHistoryHashes is historyHashes over the source rows not listed in kept.
+func usedHistoryHashes(tx *sql.Tx, bs *blob.Store, kept map[string]bool) ([]blob.Hash, error) {
+	set := map[blob.Hash]bool{}
+	rows, err := tx.Query("SELECT id, manifest_hash FROM keyframes")
+	if err != nil {
+		return nil, err
+	}
+	var manifests []blob.Hash
+	for rows.Next() {
+		var id string
+		var h blob.Hash
+		if err := rows.Scan(&id, &h); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if !kept["keyframes:"+id] {
+			manifests = append(manifests, h)
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	for _, h := range manifests {
+		set[h] = true
+		m, err := manifest.Load(h, bs)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range m {
+			set[entry.Hash] = true
+		}
+	}
+	rows, err = tx.Query("SELECT id, COALESCE(before_hash,''), COALESCE(after_hash,'') FROM ops")
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id, before, after string
+		if err := rows.Scan(&id, &before, &after); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if kept["ops:"+id] {
+			continue
+		}
+		for _, h := range []string{before, after} {
+			if h != "" {
+				set[blob.Hash(h)] = true
+			}
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	hashes := make([]blob.Hash, 0, len(set))
+	for h := range set {
+		hashes = append(hashes, h)
+	}
+	return hashes, nil
 }
 
 // snapshotHistory includes committed WAL content without copying mutable

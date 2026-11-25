@@ -7,12 +7,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
 	"github.com/spf13/cobra"
 )
+
+// spoolDropWarnWindow is how long trace doctor reports dropped hook events.
+const spoolDropWarnWindow = 7 * 24 * time.Hour
 
 func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var bundle string
@@ -127,18 +132,31 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			add("file watcher", true, "")
 		}
 		// size
-		var size int64
-		_ = filepath.WalkDir(td, func(p string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			info, _ := d.Info()
-			if info != nil {
-				size += info.Size()
-			}
-			return nil
-		})
-		add(".trace size", true, fmt.Sprintf("%d bytes", size))
+		size := traceDirSize(td)
+		if budget, err := maxStoreBytes(); err != nil {
+			add(".trace size", false, err.Error())
+		} else if size > budget {
+			add(".trace size", false, fmt.Sprintf("%d bytes exceeds the %d byte budget (TRACE_MAX_STORE_BYTES); run: trace gc", size, budget))
+		} else {
+			add(".trace size", true, fmt.Sprintf("%d bytes (budget %d)", size, budget))
+		}
+		// An unusable redaction key makes each process mark secrets with its
+		// own ephemeral key, so markers stop matching across processes.
+		if path, err := redact.CheckMarkerKey(); err != nil {
+			add("redaction key", false, err.Error())
+		} else {
+			add("redaction key", true, path)
+		}
+		// Hooks drop events rather than block when the spool is full.
+		spool := daemon.ReadSpoolHealth(td)
+		switch {
+		case spool.Dropped > 0 && time.Since(spool.LastDrop) < spoolDropWarnWindow:
+			add("event spool", false, fmt.Sprintf("%d hook events dropped (last %s) because the spool reached %d bytes; check that the daemon is running", spool.Dropped, spool.LastDrop.Format(time.RFC3339), spool.Limit))
+		case spool.Bytes > spool.Limit/4*3:
+			add("event spool", false, fmt.Sprintf("%d bytes waiting, near the %d byte limit; check that the daemon is running", spool.Bytes, spool.Limit))
+		default:
+			add("event spool", true, fmt.Sprintf("%d bytes waiting", spool.Bytes))
+		}
 
 		if _, err := readSyncConfig(root); err == nil {
 			health, readErr := syncclient.ReadHealth(td)

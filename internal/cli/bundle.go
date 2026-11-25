@@ -4,9 +4,12 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,14 +18,38 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
 const maxBundleBytes int64 = 4 << 30
 const maxBundleEntries = 100000
 
-// A portable bundle contains a consistent history snapshot and immutable
-// objects only. Credentials, logs, hooks and companion databases stay local.
+// bundleOptions selects what a bundle carries beyond the default.
+type bundleOptions struct {
+	// IncludeExcludedHistory keeps snapshots of paths Trace now excludes, such
+	// as credential files captured before their exclusion was added.
+	IncludeExcludedHistory bool
+}
+
 func writeBundle(root, out string) error {
+	_, err := exportBundle(root, out, bundleOptions{})
+	return err
+}
+
+// exportBundle writes a bundle and returns the since-excluded paths its
+// history listed: left out by default, kept with IncludeExcludedHistory.
+func exportBundle(root, out string, opts bundleOptions) ([]string, error) {
+	var found []string
+	err := buildBundle(root, out, opts, &found)
+	return found, err
+}
+
+// A portable bundle contains a consistent history snapshot and immutable
+// objects only. Credentials, logs, hooks and companion databases stay local,
+// and by default so do snapshots of paths Trace now excludes: the bundle's
+// copy of the history is rewritten so neither their names nor their bytes
+// are exported.
+func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	stage, err := os.MkdirTemp(filepath.Join(root, ".trace"), ".export-*")
@@ -34,23 +61,38 @@ func writeBundle(root, out string) error {
 	if err := snapshotHistory(ctx, filepath.Join(root, ".trace", "trace.db"), snapshot); err != nil {
 		return fmt.Errorf("snapshotting history: %w", err)
 	}
+	liveDir := filepath.Join(root, ".trace", "objects")
+	bs, err := blob.OpenReadOnly(liveDir)
+	if err != nil {
+		return err
+	}
+	// Stripped manifests are new objects private to this export. They live in
+	// the stage, where GC of the live store cannot remove them mid-export.
+	stageDir := filepath.Join(stage, "objects")
+	staged, err := blob.Open(stageDir)
+	if err != nil {
+		return err
+	}
+	if *found, err = stripBundleHistory(ctx, snapshot, bs, staged, !opts.IncludeExcludedHistory); err != nil {
+		return fmt.Errorf("leaving excluded paths out of the bundle: %w", err)
+	}
 	db, err := openHistoryReadOnly(snapshot)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	bs, err := blob.OpenReadOnly(filepath.Join(root, ".trace", "objects"))
-	if err != nil {
-		return err
-	}
-	hashes, err := historyHashes(db, bs)
+	hashes, err := historyHashes(db, staged, bs)
 	if err != nil {
 		return err
 	}
 	files := map[string]string{".trace/trace.db": snapshot}
 	for _, h := range hashes {
+		store, dir := bs, liveDir
+		if _, err := os.Lstat(filepath.Join(stageDir, string(h[:2]), string(h[2:]))); err == nil {
+			store, dir = staged, stageDir
+		}
 		// Verify every byte before publishing a supposedly recoverable archive.
-		reader, err := bs.Get(h)
+		reader, err := store.Get(h)
 		if err != nil {
 			return err
 		}
@@ -58,13 +100,13 @@ func writeBundle(root, out string) error {
 		if err := errors.Join(copyErr, reader.Close()); err != nil {
 			return err
 		}
-		files[".trace/objects/"+string(h[:2])+"/"+string(h[2:])] = filepath.Join(root, ".trace", "objects", string(h[:2]), string(h[2:]))
-		chunks, err := bs.Chunks(h)
+		files[".trace/objects/"+string(h[:2])+"/"+string(h[2:])] = filepath.Join(dir, string(h[:2]), string(h[2:]))
+		chunks, err := store.Chunks(h)
 		if err != nil {
 			return err
 		}
 		for _, ch := range chunks {
-			files[".trace/objects/chunks/"+string(ch[:2])+"/"+string(ch[2:])] = filepath.Join(root, ".trace", "objects", "chunks", string(ch[:2]), string(ch[2:]))
+			files[".trace/objects/chunks/"+string(ch[:2])+"/"+string(ch[2:])] = filepath.Join(dir, "chunks", string(ch[:2]), string(ch[2:]))
 		}
 	}
 	if len(files) > maxBundleEntries {
@@ -143,6 +185,167 @@ func writeBundle(root, out string) error {
 		return err
 	}
 	return os.Rename(f.Name(), out)
+}
+
+// stripBundleHistory finds the since-excluded paths a history snapshot still
+// lists, in keyframe manifests or in operations that stored their bytes.
+// With apply it rewrites the snapshot: keyframes point at manifests without
+// those paths, and such operations keep their metadata but no longer
+// reference content. The history stays self-consistent, so the bundle still
+// imports, rewinds and explains lines; restores skip these paths anyway.
+func stripBundleHistory(ctx context.Context, snapshot string, bs, staged *blob.Store, apply bool) ([]string, error) {
+	abs, err := filepath.Abs(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: abs}).String())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	// Rewritten values must not survive in freed pages of the bundled file,
+	// and the file must be complete without a side WAL.
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=DELETE; PRAGMA secure_delete=ON"); err != nil {
+		return nil, err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	found := map[string]bool{}
+	manifests, err := queryStrings(ctx, tx, "SELECT DISTINCT manifest_hash FROM keyframes")
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range manifests {
+		if !apply {
+			m, err := manifest.Load(blob.Hash(h), bs)
+			if err != nil {
+				return nil, err
+			}
+			for rel := range m {
+				if manifest.Excluded(rel) {
+					found[rel] = true
+				}
+			}
+			continue
+		}
+		stripped, dropped, err := manifest.StripExcluded(blob.Hash(h), bs, staged)
+		if err != nil {
+			return nil, err
+		}
+		for _, rel := range dropped {
+			found[rel] = true
+		}
+		if stripped != blob.Hash(h) {
+			if _, err := tx.ExecContext(ctx, "UPDATE keyframes SET manifest_hash=? WHERE manifest_hash=?", string(stripped), h); err != nil {
+				return nil, err
+			}
+		}
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id,path FROM ops WHERE COALESCE(before_hash,'')!='' OR COALESCE(after_hash,'')!=''")
+	if err != nil {
+		return nil, err
+	}
+	var ops []string
+	for rows.Next() {
+		var id, rel string
+		if err := rows.Scan(&id, &rel); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if manifest.Excluded(rel) {
+			found[rel] = true
+			ops = append(ops, id)
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	if apply {
+		for _, id := range ops {
+			if _, err := tx.ExecContext(ctx, "UPDATE ops SET before_hash=NULL, after_hash=NULL WHERE id=?", id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Corrections recorded for operations snapshot the whole row, hashes
+	// included.
+	updates, err := tx.QueryContext(ctx, "SELECT id,data FROM sync_updates WHERE table_name='ops'")
+	if err != nil {
+		return nil, err
+	}
+	stripped := map[string]string{}
+	for updates.Next() {
+		var id, data string
+		if err := updates.Scan(&id, &data); err != nil {
+			updates.Close()
+			return nil, err
+		}
+		decoder := json.NewDecoder(strings.NewReader(data))
+		decoder.UseNumber()
+		var op map[string]any
+		if err := decoder.Decode(&op); err != nil {
+			updates.Close()
+			return nil, fmt.Errorf("decoding operation correction %s: %w", id, err)
+		}
+		if !manifest.StripOpContent(op) {
+			continue
+		}
+		rel, _ := op["path"].(string)
+		found[rel] = true
+		b, err := json.Marshal(op)
+		if err != nil {
+			updates.Close()
+			return nil, err
+		}
+		stripped[id] = string(b)
+	}
+	if err := errors.Join(updates.Err(), updates.Close()); err != nil {
+		return nil, err
+	}
+	if apply {
+		for id, data := range stripped {
+			if _, err := tx.ExecContext(ctx, "UPDATE sync_updates SET data=? WHERE id=?", data, id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	if apply && len(found) > 0 {
+		// secure_delete zeroes freed content, but rebuilding the file also
+		// drops slack in pages that stay in use.
+		if _, err := db.ExecContext(ctx, "VACUUM"); err != nil {
+			return nil, fmt.Errorf("compacting the bundle's history: %w", err)
+		}
+	}
+	paths := make([]string, 0, len(found))
+	for rel := range found {
+		paths = append(paths, rel)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func queryStrings(ctx context.Context, tx *sql.Tx, query string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, errors.Join(rows.Err(), rows.Close())
 }
 
 func bundlePath(name string) (string, error) {

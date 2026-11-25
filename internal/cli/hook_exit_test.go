@@ -75,3 +75,34 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// A full spool (no daemon has drained it) must not change what the agent
+// sees: the hook drops the event, counts it, exits 0 and prints nothing.
+func TestHookExitsZeroWhenSpoolIsFull(t *testing.T) {
+	bin := buildTrace(t)
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".trace"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "hook", "claude-code", "PostToolUse")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "TRACE_HOME="+t.TempDir(), "TRACE_MAX_SPOOL_BYTES=1")
+	cmd.Stdin = bytes.NewBufferString(fmt.Sprintf(`{"session_id":"s","cwd":%q,"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"a.go"}}`, root))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("hook failed: %v (stderr %q)", err, firstLine(stderr.String()))
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("hook printed %q", stdout.String())
+	}
+	if info, err := os.Stat(filepath.Join(root, ".trace", "spool-dropped")); err != nil || info.Size() != 1 {
+		t.Fatalf("dropped event not counted: %v %v", info, err)
+	}
+	if info, err := os.Stat(filepath.Join(root, ".trace", "spool.jsonl")); err == nil && info.Size() > 1 {
+		t.Fatalf("spool grew past its limit: %d bytes", info.Size())
+	}
+}

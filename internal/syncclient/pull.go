@@ -441,7 +441,7 @@ func (c *Client) Pull(ctx context.Context, traceDir, passphrase string) (int, in
 		db.Close()
 		return 0, 0, errors.New("download has no keyframes")
 	}
-	referenced, err := referencedHashes(db.DB, bs)
+	referenced, err := referencedHashes(db.DB, bs, false)
 	if err != nil {
 		db.Close()
 		return 0, 0, fmt.Errorf("checking recovered blobs: %w", err)

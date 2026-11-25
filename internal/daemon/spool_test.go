@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -860,21 +861,19 @@ func TestShortSpoolWriteKeepsNextFrame(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var old syscall.Rlimit
-			if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &old); err != nil {
-				t.Fatal(err)
-			}
-			limited := old
-			limited.Cur = uint64(info.Size()) + 40
-			if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &limited); err != nil {
-				t.Skipf("cannot lower RLIMIT_FSIZE: %v", err)
-			}
-			err = Send(filepath.Dir(spool), event.Event{Kind: event.TurnContext, Agent: "test", At: 2, Text: strings.Repeat("context ", 50)})
-			if restoreErr := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &old); restoreErr != nil {
-				t.Fatal(restoreErr)
-			}
-			if err == nil {
+			// RLIMIT_FSIZE is process-wide: lowering it here would also fail
+			// the test framework's own log writes. Write from a child process.
+			cmd := exec.Command(os.Args[0], "-test.run=^TestLimitedSpoolWriteHelper$")
+			cmd.Env = append(os.Environ(), fmt.Sprintf("TRACE_TEST_LIMITED_SPOOL=%s:%d", filepath.Dir(spool), info.Size()+40))
+			out, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			switch {
+			case errors.As(err, &exit) && exit.ExitCode() == limitedWriteSkipped:
+				t.Skipf("cannot lower RLIMIT_FSIZE: %s", out)
+			case errors.As(err, &exit) && exit.ExitCode() == limitedWriteSucceeded:
 				t.Fatal("the limited write did not fail")
+			case err != nil || !strings.Contains(string(out), "limited write failed as expected"):
+				t.Fatalf("limited write helper: %v: %s", err, out)
 			}
 		}, 0},
 		{"killed writer", func(t *testing.T, spool string) {
@@ -912,4 +911,39 @@ func TestShortSpoolWriteKeepsNextFrame(t *testing.T) {
 			}
 		})
 	}
+}
+
+const (
+	limitedWriteSucceeded = 3
+	limitedWriteSkipped   = 4
+)
+
+// TestLimitedSpoolWriteHelper runs in a child process for
+// TestShortSpoolWriteKeepsNextFrame: it lowers RLIMIT_FSIZE and sends one
+// frame that cannot fit, exiting 0 when the send fails as expected.
+func TestLimitedSpoolWriteHelper(t *testing.T) {
+	spec := os.Getenv("TRACE_TEST_LIMITED_SPOOL")
+	if spec == "" {
+		t.Skip("helper process only")
+	}
+	i := strings.LastIndexByte(spec, ':')
+	dir := spec[:i]
+	limit, err := strconv.ParseUint(spec[i+1:], 10, 64)
+	if err != nil {
+		os.Exit(2)
+	}
+	var rlimit syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &rlimit); err != nil {
+		os.Exit(2)
+	}
+	rlimit.Cur = limit
+	if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &rlimit); err != nil {
+		fmt.Println(err)
+		os.Exit(limitedWriteSkipped)
+	}
+	if err := Send(dir, event.Event{Kind: event.TurnContext, Agent: "test", At: 2, Text: strings.Repeat("context ", 50)}); err == nil {
+		os.Exit(limitedWriteSucceeded)
+	}
+	fmt.Println("limited write failed as expected")
+	os.Exit(0)
 }

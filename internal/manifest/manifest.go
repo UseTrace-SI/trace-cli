@@ -2,6 +2,8 @@ package manifest
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,24 +27,36 @@ type Ignorer interface {
 	Ignored(rel string, isDir bool) bool
 }
 
-// excluded reports paths Trace never captures or restores. Restored paths can
-// come from an imported bundle or a recovery server, so Git metadata is
-// protected at every depth (a nested repository's hooks run on its next
-// commit). Names are compared case-insensitively, as case-insensitive file
-// systems (the macOS default) resolve `.GIT` to `.git`.
+// excluded reports paths Trace never captures or restores: Trace's own and
+// agents' hook configuration (see protectedFolded) and secret files.
 func excluded(rel string) bool {
 	folded := foldPath(rel)
-	for _, part := range strings.Split(folded, "/") {
-		if part == ".git" {
-			return true
-		}
+	if protectedFolded(folded) {
+		return true
+	}
+	// Normalize as SecretPath does: a name written with backslashes or a
+	// leading ./ is still the secret file.
+	if strings.ContainsRune(folded, '\\') || strings.HasPrefix(folded, "./") {
+		folded = strings.TrimPrefix(strings.ReplaceAll(folded, "\\", "/"), "./")
+	}
+	return secretFolded(folded)
+}
+
+// protectedFolded reports Git metadata, Trace state and agent hook
+// configuration. Restored paths can come from an imported bundle or a recovery
+// server, so Git metadata is protected at every depth (a nested repository's
+// hooks run on its next commit). Names are compared case-insensitively, as
+// case-insensitive file systems (the macOS default) resolve `.GIT` to `.git`.
+func protectedFolded(folded string) bool {
+	if folded == ".git" || strings.HasPrefix(folded, ".git/") || strings.HasSuffix(folded, "/.git") || strings.Contains(folded, "/.git/") {
+		return true
 	}
 	for _, dir := range []string{".trace", ".trace-brain", ".trace-graph"} {
 		if folded == dir || strings.HasPrefix(folded, dir+"/") {
 			return true
 		}
 	}
-	return folded == ".mcp.json" || folded == ".claude/settings.local.json" || folded == ".cursor/hooks.json" || folded == ".gemini/settings.json" || folded == ".agents/hooks.json" || SecretPath(rel)
+	return folded == ".mcp.json" || folded == ".claude/settings.local.json" || folded == ".cursor/hooks.json" || folded == ".gemini/settings.json" || folded == ".agents/hooks.json"
 }
 
 // foldPath lowercases rel and drops the code points HFS+ ignores in names,
@@ -60,12 +74,36 @@ func foldPath(rel string) string {
 
 func Excluded(rel string) bool { return excluded(rel) }
 
+// WithoutExcluded drops the paths Trace never captures or restores. Keyframes
+// recorded before an exclusion was added can still list such a path.
+func (m Manifest) WithoutExcluded() Manifest {
+	var out Manifest
+	for rel := range m {
+		if !excluded(rel) {
+			continue
+		}
+		if out == nil {
+			out = make(Manifest, len(m))
+			for p, entry := range m {
+				out[p] = entry
+			}
+		}
+		delete(out, rel)
+	}
+	if out == nil {
+		return m
+	}
+	return out
+}
+
 // Portable reports whether a snapshot path from another history (an imported
-// bundle or a recovery server) is safe to keep: relative, canonical, inside
-// the repository and not excluded.
+// bundle or a recovery server) is structurally safe to keep: relative,
+// canonical, inside the repository and not Git metadata, Trace state or hook
+// configuration. It deliberately accepts secret files: history recorded before
+// a secret exclusion was added can list one, and restores skip them anyway.
 func Portable(rel string) bool {
 	return rel != "" && rel != "." && rel != ".." && !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "../") &&
-		!strings.ContainsAny(rel, "\\\x00") && rel == filepath.ToSlash(filepath.Clean(rel)) && !excluded(rel)
+		!strings.ContainsAny(rel, "\\\x00") && rel == filepath.ToSlash(filepath.Clean(rel)) && !protectedFolded(foldPath(rel))
 }
 
 func gitIgnored(root string, paths []string) (map[string]bool, error) {
@@ -292,6 +330,79 @@ func (m Manifest) Save(bs *blob.Store) (blob.Hash, error) {
 		return "", fmt.Errorf("encoding manifest: %w", err)
 	}
 	return bs.PutBytes(b)
+}
+
+// stripExcluded loads the manifest at h and returns it without the paths
+// Trace excludes, the encoding a store would hold, and the dropped paths.
+// A keyframe recorded before an exclusion was added can still list such a
+// file, and its bytes must not leave with the history.
+func stripExcluded(h blob.Hash, bs *blob.Store) ([]byte, []string, error) {
+	m, err := Load(h, bs)
+	if err != nil {
+		return nil, nil, err
+	}
+	var dropped []string
+	for rel := range m {
+		if excluded(rel) {
+			dropped = append(dropped, rel)
+		}
+	}
+	if len(dropped) == 0 {
+		return nil, nil, nil
+	}
+	for _, rel := range dropped {
+		delete(m, rel)
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encoding manifest: %w", err)
+	}
+	sort.Strings(dropped)
+	return b, dropped, nil
+}
+
+// StripExcluded returns the hash of the manifest at h (read from from)
+// without excluded paths, saving that manifest to to, with the dropped
+// paths. When nothing is excluded it returns h unchanged and saves nothing.
+func StripExcluded(h blob.Hash, from, to *blob.Store) (blob.Hash, []string, error) {
+	b, dropped, err := stripExcluded(h, from)
+	if err != nil || b == nil {
+		return h, nil, err
+	}
+	stripped, err := to.PutBytes(b)
+	if err != nil {
+		return "", nil, err
+	}
+	return stripped, dropped, nil
+}
+
+// StripOpContent removes the content hashes from a snapshot of an ops row
+// (a sync_updates record) whose path Trace excludes, as exports and uploads
+// do for the row itself. It reports whether it changed the snapshot.
+func StripOpContent(op map[string]any) bool {
+	rel, ok := op["path"].(string)
+	if !ok || !excluded(rel) {
+		return false
+	}
+	changed := false
+	for _, field := range []string{"before_hash", "after_hash"} {
+		if v, ok := op[field]; ok && v != nil {
+			op[field] = nil
+			changed = true
+		}
+	}
+	return changed
+}
+
+// StrippedHash is the hash StripExcluded would return, computed without
+// saving anything.
+func StrippedHash(h blob.Hash, bs *blob.Store) (blob.Hash, error) {
+	b, _, err := stripExcluded(h, bs)
+	if err != nil || b == nil {
+		return h, err
+	}
+	sum := sha256.Sum256(b)
+	return blob.Hash(hex.EncodeToString(sum[:])), nil
 }
 
 func Load(h blob.Hash, bs *blob.Store) (Manifest, error) {

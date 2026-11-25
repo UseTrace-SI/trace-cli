@@ -251,7 +251,7 @@ func (c *Client) Sync(ctx context.Context) (blobTotal int, rowTotal int, resultE
 			limit = rowBatchSize / 2
 		}
 		for {
-			rows, cursors, err := readRows(c.DB, table, state.Cursors[table], limit)
+			rows, cursors, err := readRows(c.DB, c.Blobs, table, state.Cursors[table], limit)
 			if err != nil {
 				return blobs, rowCount, err
 			}
@@ -323,7 +323,10 @@ func rowBatchEnd(rows []Row, start, headerBytes int) (int, error) {
 	return end, nil
 }
 
-func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, error) {
+// readRows reads rows to upload. Keyframes point at manifests without
+// since-excluded paths (see referencedHashes; bs may be nil only when no
+// keyframes are read), and operations on such paths reference no content.
+func readRows(db *sql.DB, bs *blob.Store, table, after string, limit int) ([]Row, []string, error) {
 	valid := table == "context_snapshots"
 	for _, t := range tables {
 		if table == t {
@@ -404,6 +407,26 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 				data[field] = (redact.Redactor{}).Text(text)
 			}
 		}
+		switch table {
+		case "keyframes":
+			if h, ok := data["manifest_hash"].(string); ok {
+				if bs == nil {
+					return nil, nil, errors.New("reading keyframes for sync requires the object store")
+				}
+				stripped, err := manifest.StrippedHash(blob.Hash(h), bs)
+				if err != nil {
+					return nil, nil, fmt.Errorf("leaving excluded paths out of keyframe: %w", err)
+				}
+				data["manifest_hash"] = string(stripped)
+			}
+		case "ops":
+			manifest.StripOpContent(data)
+		case "sync_updates":
+			// A correction snapshots the whole operation row, hashes included.
+			if snapshot, ok := data["data"].(map[string]any); ok && data["table_name"] == "ops" {
+				manifest.StripOpContent(snapshot)
+			}
+		}
 		id, _ := data["id"].(string)
 		cursor := id
 		if table == "commits" {
@@ -450,7 +473,7 @@ func readRows(db *sql.DB, table, after string, limit int) ([]Row, []string, erro
 }
 
 func (c *Client) syncBlobs(ctx context.Context) (int, error) {
-	hashes, err := referencedHashes(c.DB, c.Blobs)
+	hashes, err := referencedHashes(c.DB, c.Blobs, true)
 	if err != nil {
 		return 0, err
 	}
@@ -511,7 +534,14 @@ func (c *Client) syncBlobs(ctx context.Context) (int, error) {
 	return uploaded, nil
 }
 
-func referencedHashes(db *sql.DB, bs *blob.Store) ([]string, error) {
+// referencedHashes lists the objects a history needs. Content of paths Trace
+// now excludes (credential files captured before their exclusion was added)
+// is never needed: restores skip those paths. With strip, for an upload,
+// manifests listing such paths are replaced by stripped copies, as readRows
+// does for keyframe rows, so the upload is self-consistent and their bytes
+// stay local. Without it, for a recovery, the recorded manifests themselves
+// are required.
+func referencedHashes(db *sql.DB, bs *blob.Store, strip bool) ([]string, error) {
 	marked := map[string]bool{}
 	rows, err := db.Query("SELECT manifest_hash FROM keyframes")
 	if err != nil {
@@ -524,7 +554,6 @@ func referencedHashes(db *sql.DB, bs *blob.Store) ([]string, error) {
 			rows.Close()
 			return nil, err
 		}
-		marked[h] = true
 		manifests = append(manifests, h)
 	}
 	if err := rows.Err(); err != nil {
@@ -533,23 +562,36 @@ func referencedHashes(db *sql.DB, bs *blob.Store) ([]string, error) {
 	}
 	rows.Close()
 	for _, h := range manifests {
+		if strip {
+			stripped, _, err := manifest.StripExcluded(blob.Hash(h), bs, bs)
+			if err != nil {
+				return nil, err
+			}
+			h = string(stripped)
+		}
+		marked[h] = true
 		m, err := manifest.Load(blob.Hash(h), bs)
 		if err != nil {
 			return nil, err
 		}
-		for _, entry := range m {
-			marked[string(entry.Hash)] = true
+		for rel, entry := range m {
+			if !manifest.Excluded(rel) {
+				marked[string(entry.Hash)] = true
+			}
 		}
 	}
-	rows, err = db.Query("SELECT COALESCE(before_hash,''), COALESCE(after_hash,'') FROM ops")
+	rows, err = db.Query("SELECT path, COALESCE(before_hash,''), COALESCE(after_hash,'') FROM ops")
 	if err != nil {
 		return nil, fmt.Errorf("reading operations for sync: %w", err)
 	}
 	for rows.Next() {
-		var before, after string
-		if err := rows.Scan(&before, &after); err != nil {
+		var rel, before, after string
+		if err := rows.Scan(&rel, &before, &after); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if manifest.Excluded(rel) {
+			continue
 		}
 		if before != "" {
 			marked[before] = true

@@ -111,11 +111,12 @@ func ServeCheckedWithLogger(ctx context.Context, dir string, logger *slog.Logger
 			events, err := decodeFrame(raw)
 			if err != nil {
 				// Never silently discard a frame the sender believed it sent.
-				// Keep a redacted copy for inspection and log a redacted hint.
+				// Log a redacted hint, then keep a redacted copy for inspection;
+				// logging first means the hint exists once the copy does.
+				logger.Warn("discarding invalid socket frame", "reason", err, "preview", redactPreview(raw))
 				if qerr := quarantineFrame(dir, raw); qerr != nil {
 					logger.Error("quarantining invalid socket frame", "error", qerr)
 				}
-				logger.Warn("discarding invalid socket frame", "reason", err, "preview", redactPreview(raw))
 				continue
 			}
 			if err := delivery.socketBatch(events); err != nil {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,7 +26,74 @@ const (
 	// cannot accumulate files without bound.
 	spoolRetention       = 24 * time.Hour
 	maxQuarantinedFrames = 32
+	// The spool only grows while no daemon drains it. Past these bounds a
+	// hook drops its event, counts the drop and still returns at once.
+	defaultMaxSpoolBytes = 256 << 20
+	maxPendingFrames     = 4096
+	spoolDroppedName     = "spool-dropped"
+	// The drop counter adds one byte per dropped event; it stops growing here.
+	maxDropCounterBytes = 1 << 20
 )
+
+// ErrSpoolFull reports an event dropped because the spool is at its limit.
+var ErrSpoolFull = errors.New("event spool is full; event dropped")
+
+// maxSpoolBytes is the spool budget, TRACE_MAX_SPOOL_BYTES when set to a
+// positive byte count. It bounds spool.jsonl and, separately, the overflow
+// queue.
+func maxSpoolBytes() int64 {
+	if n, err := strconv.ParseInt(os.Getenv("TRACE_MAX_SPOOL_BYTES"), 10, 64); err == nil && n > 0 {
+		return n
+	}
+	return defaultMaxSpoolBytes
+}
+
+// dropFrame counts an event that did not fit. Each drop appends one byte, an
+// atomic O_APPEND write that needs no lock, so concurrent hooks never lose a
+// count or wait for each other.
+func dropFrame(dir string) error {
+	f, err := openStateFile(filepath.Join(dir, spoolDroppedName), os.O_CREATE|os.O_WRONLY|os.O_APPEND)
+	if err == nil {
+		if info, statErr := f.Stat(); statErr == nil && info.Size() < maxDropCounterBytes {
+			_, _ = f.Write([]byte{'x'})
+		}
+		_ = f.Close()
+	}
+	return ErrSpoolFull
+}
+
+// SpoolHealth describes the hook spool for diagnostics.
+type SpoolHealth struct {
+	Bytes        int64     `json:"bytes"`
+	PendingFiles int       `json:"pending_files"`
+	Limit        int64     `json:"limit"`
+	Dropped      int64     `json:"dropped"`
+	LastDrop     time.Time `json:"last_drop,omitzero"`
+}
+
+// ReadSpoolHealth reports the spool size and how many events hooks dropped
+// because it was full.
+func ReadSpoolHealth(dir string) SpoolHealth {
+	h := SpoolHealth{Limit: maxSpoolBytes()}
+	if info, err := os.Lstat(filepath.Join(dir, "spool.jsonl")); err == nil && info.Mode().IsRegular() {
+		h.Bytes = info.Size()
+	}
+	if entries, err := os.ReadDir(filepath.Join(dir, "spool-pending")); err == nil {
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), ".ready") || strings.HasSuffix(entry.Name(), ".tmp") {
+				h.PendingFiles++
+				if info, err := entry.Info(); err == nil {
+					h.Bytes += info.Size()
+				}
+			}
+		}
+	}
+	if info, err := os.Lstat(filepath.Join(dir, spoolDroppedName)); err == nil && info.Mode().IsRegular() {
+		h.Dropped = info.Size()
+		h.LastDrop = info.ModTime()
+	}
+	return h
+}
 
 func appendSpool(dir string, ev event.Event) error {
 	b, err := json.Marshal(ev.Sanitized())
@@ -69,6 +137,9 @@ func appendSpoolFrame(dir string, b []byte) error {
 	end, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return fmt.Errorf("finding spool end: %w", err)
+	}
+	if end+int64(len(b))+1 > maxSpoolBytes() {
+		return dropFrame(dir)
 	}
 	if end > 0 {
 		last := make([]byte, 1)
@@ -124,7 +195,12 @@ func appendOverflow(dir string, b []byte) error {
 	if err := ensureStateDir(pending); err != nil {
 		return fmt.Errorf("creating pending spool: %w", err)
 	}
-	f, err := os.CreateTemp(pending, fmt.Sprintf("%020d-*.tmp", time.Now().UnixNano()))
+	if overflowFull(pending, int64(len(b))) {
+		return dropFrame(dir)
+	}
+	// The name records the frame's size, so overflowFull can total the queue
+	// from a directory listing alone.
+	f, err := os.CreateTemp(pending, fmt.Sprintf("%020d-%d-*.tmp", time.Now().UnixNano(), len(b)))
 	if err != nil {
 		return fmt.Errorf("creating pending spool frame: %w", err)
 	}
@@ -141,6 +217,54 @@ func appendOverflow(dir string, b []byte) error {
 		return fmt.Errorf("publishing pending spool frame: %w", err)
 	}
 	return nil
+}
+
+// overflowFull reports whether one more frame of size bytes would exceed the
+// overflow queue's bounds. Writers hold the overflow lock, so they cannot
+// overshoot together. It reads names only, never file metadata: a hook must
+// stay fast even when a stuck queue holds thousands of frames.
+func overflowFull(pending string, size int64) bool {
+	d, err := os.Open(pending)
+	if err != nil {
+		return false
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(maxPendingFrames)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false
+	}
+	if len(names) >= maxPendingFrames {
+		return true
+	}
+	// Count down from the limit: a name can claim any size, and a sum could
+	// overflow past it.
+	remaining := maxSpoolBytes() - size
+	if remaining < 0 {
+		return true
+	}
+	for _, name := range names {
+		n := pendingFrameSize(name)
+		if n > remaining {
+			return true
+		}
+		remaining -= n
+	}
+	return false
+}
+
+// pendingFrameSize reads the size a pending frame's name records
+// ("<20-digit time>-<size>-<random>.ready"). Frames named by older versions
+// and quarantined frames, which are pruned separately, count as empty.
+func pendingFrameSize(name string) int64 {
+	fields := strings.SplitN(name, "-", 3)
+	if len(fields) != 3 || len(fields[0]) != 20 || strings.HasSuffix(name, ".invalid") {
+		return 0
+	}
+	n, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 func ingestSpool(dir string, consume func(event.Event)) error {

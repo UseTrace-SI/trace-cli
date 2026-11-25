@@ -157,9 +157,15 @@ func (e *Engine) recordManifest(next manifest.Manifest, tx *sql.Tx) (manifest.Ma
 	}
 	changed := make([]string, 0)
 	added, modified, deleted := manifest.Diff(e.current, next)
-	changed = append(changed, added...)
-	changed = append(changed, modified...)
-	changed = append(changed, deleted...)
+	// A keyframe recorded before a path was excluded can list it; scans now
+	// skip it, which must not be recorded as a deletion nobody made.
+	for _, group := range [][]string{added, modified, deleted} {
+		for _, p := range group {
+			if !manifest.Excluded(p) {
+				changed = append(changed, p)
+			}
+		}
+	}
 	if len(changed) == 0 {
 		if owned {
 			e.current = next

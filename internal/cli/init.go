@@ -35,6 +35,7 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
+	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
 	"github.com/spf13/cobra"
 )
@@ -152,6 +153,8 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			return err
 		}
 		defer e.Close()
+		// Create the per-install redaction key now, not in an agent's hook.
+		redact.EnsureMarkerKey()
 		if agent == "claude-code" {
 			if err := claudecode.Install(root); err != nil {
 				return err

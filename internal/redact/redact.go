@@ -1,8 +1,6 @@
 package redact
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"math"
 	"regexp"
 	"strings"
@@ -17,10 +15,24 @@ var patterns = []struct {
 	{"private-key", regexp.MustCompile(`(?s)(-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----)`)},
 	{"aws-key", regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)},
 	{"github-token", regexp.MustCompile(`\b(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}\b`)},
-	{"slack-token", regexp.MustCompile(`\bxox[abeprs]-[A-Za-z0-9-]{10,}\b`)},
-	{"stripe-key", regexp.MustCompile(`\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b`)},
+	{"slack-token", regexp.MustCompile(`\bxox[abeoprs]-[A-Za-z0-9-]{10,}\b|\bxapp-[0-9]-[A-Za-z0-9-]{10,}\b`)},
+	{"slack-webhook", regexp.MustCompile(`https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]{20,}`)},
+	{"stripe-key", regexp.MustCompile(`\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b|\bwhsec_[A-Za-z0-9+/=]{24,}`)},
 	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
+	// OpenAI (sk-..., sk-proj-..., sk-svcacct-...) and Anthropic (sk-ant-...)
+	// keys share this prefix.
 	{"api-key", regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`)},
+	{"google-api-key", regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}`)},
+	{"gitlab-token", regexp.MustCompile(`\b(?:glpat|glptt|gldt|glrt|glcbt|glft|glsoat)-[0-9A-Za-z_-]{20,}`)},
+	{"npm-token", regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`)},
+	{"huggingface-token", regexp.MustCompile(`\bhf_[A-Za-z0-9]{34,}\b`)},
+	{"sendgrid-key", regexp.MustCompile(`\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`)},
+	{"digitalocean-token", regexp.MustCompile(`\bdo[opr]_v1_[a-f0-9]{64}\b`)},
+	{"twilio-key", regexp.MustCompile(`\bSK[0-9a-fA-F]{32}\b`)},
+	{"shopify-token", regexp.MustCompile(`\bshp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}\b`)},
+	{"pypi-token", regexp.MustCompile(`\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}`)},
+	{"azure-client-secret", regexp.MustCompile(`\b[A-Za-z0-9_~.]{3}[0-9]Q~[A-Za-z0-9_~.-]{31,34}`)},
+	{"atlassian-token", regexp.MustCompile(`\bATATT3[A-Za-z0-9_=-]{180,}`)},
 	{"url-password", regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]*:[^\s@/]+@`)},
 	// An HTTP Authorization header value: the scheme and an RFC 6750 token
 	// (Basic credentials are base64, a subset). The credential needs a digit
@@ -32,15 +44,27 @@ var patterns = []struct {
 // Necessary literal fragments cheaply rule out patterns before invoking the
 // regexp engine on large transcripts. A fragment alone never causes redaction.
 var patternHints = map[string][]string{
-	"private-key":  {"PRIVATE KEY-----", "PGP PRIVATE KEY BLOCK-----"},
-	"aws-key":      {"AKIA", "ASIA"},
-	"github-token": {"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"},
-	"slack-token":  {"xox"},
-	"stripe-key":   {"sk_", "rk_"},
-	"jwt":          {"eyJ"},
-	"api-key":      {"sk-"},
-	"url-password": {"://"},
-	"auth-header":  {"uthorization", "UTHORIZATION"},
+	"private-key":         {"PRIVATE KEY-----", "PGP PRIVATE KEY BLOCK-----"},
+	"aws-key":             {"AKIA", "ASIA"},
+	"github-token":        {"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"},
+	"slack-token":         {"xox", "xapp-"},
+	"slack-webhook":       {"hooks.slack.com/"},
+	"stripe-key":          {"sk_", "rk_", "whsec_"},
+	"jwt":                 {"eyJ"},
+	"api-key":             {"sk-"},
+	"google-api-key":      {"AIza"},
+	"gitlab-token":        {"glpat-", "glptt-", "gldt-", "glrt-", "glcbt-", "glft-", "glsoat-"},
+	"npm-token":           {"npm_"},
+	"huggingface-token":   {"hf_"},
+	"sendgrid-key":        {"SG."},
+	"digitalocean-token":  {"_v1_"},
+	"twilio-key":          {"SK"},
+	"shopify-token":       {"shpat_", "shpca_", "shppa_", "shpss_"},
+	"pypi-token":          {"pypi-AgEIcHlwaS5vcmc"},
+	"azure-client-secret": {"Q~"},
+	"atlassian-token":     {"ATATT3"},
+	"url-password":        {"://"},
+	"auth-header":         {"uthorization", "UTHORIZATION"},
 }
 
 // envValue matches a secret-like name, an assignment or comparison operator
@@ -53,11 +77,6 @@ var email = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
 var phone = regexp.MustCompile(`\b\+?[0-9][0-9 ()-]{8,}[0-9]\b`)
 var candidate = regexp.MustCompile(`[A-Za-z0-9_+/=-]{12,}`)
 var keyContext = regexp.MustCompile(`(?i)(key|secret|token|password|passwd|api)`)
-
-func marker(kind, value string) string {
-	h := sha256.Sum256([]byte(value))
-	return "⟨redacted:" + kind + ":" + hex.EncodeToString(h[:])[:8] + "⟩"
-}
 
 func (r Redactor) Text(s string) string {
 	if s == "" {

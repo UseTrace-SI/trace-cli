@@ -207,3 +207,19 @@ func TestApplyKeepsIgnoredFileUnderReplacedDirectory(t *testing.T) {
 		t.Fatalf("ignored file was removed: %q, %v", content, err)
 	}
 }
+
+// Keyframes recorded before a path was excluded may list it. A plan never
+// writes or deletes such a path, in either direction.
+func TestPlanSkipsExcludedPaths(t *testing.T) {
+	a := manifest.Entry{Hash: "a", Mode: 0600}
+	b := manifest.Entry{Hash: "b", Mode: 0600}
+	current := manifest.Manifest{"app.go": a, ".git-credentials": a}
+	target := manifest.Manifest{"app.go": b, ".npmrc": b, "infra/terraform.tfstate": b}
+	got := Plan(current, target)
+	if len(got) != 1 || got[0] != "app.go" {
+		t.Fatalf("Plan = %v; want only app.go", got)
+	}
+	if got := Plan(target, current); len(got) != 1 || got[0] != "app.go" {
+		t.Fatalf("reverse Plan = %v; want only app.go", got)
+	}
+}

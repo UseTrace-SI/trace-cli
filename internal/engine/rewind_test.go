@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
 // rewindRepo creates a Git repository holding files, opens an engine on it and
@@ -191,5 +193,92 @@ func TestRewindReplacesCapturedPaths(t *testing.T) {
 				t.Fatalf("undo restored %s as %s, want %s", tc.path, got, before)
 			}
 		})
+	}
+}
+
+// A keyframe recorded before a path was excluded may still list it. Rewinding
+// to that keyframe restores everything else and leaves the excluded file, now
+// holding a newer credential, exactly as it is.
+func TestRewindLeavesNewlyExcludedPathsAlone(t *testing.T) {
+	root, e := rewindRepo(t, map[string]string{"app.txt": "old\n"})
+	legacy, err := e.ManifestAt(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := e.Blobs.PutBytes([]byte("//registry.example/:_authToken=old\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy[".npmrc"] = manifest.Entry{Hash: h, Mode: 0600}
+	saved, err := legacy.Save(e.Blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,created_at) VALUES('legacy',1,?,1)", saved); err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, root, map[string]string{"app.txt": "new\n", ".npmrc": "//registry.example/:_authToken=new\n"})
+	_, changed, err := e.Rewind(1, "", false)
+	if err != nil {
+		t.Fatalf("rewind to a keyframe listing a since-excluded path failed: %v", err)
+	}
+	for _, rel := range changed {
+		if rel == ".npmrc" {
+			t.Fatalf("rewind planned to restore excluded .npmrc: %v", changed)
+		}
+	}
+	if got := describePath(t, filepath.Join(root, "app.txt")); got != "file old\n" {
+		t.Fatalf("app.txt not restored: %s", got)
+	}
+	if got := describePath(t, filepath.Join(root, ".npmrc")); got != "file //registry.example/:_authToken=new\n" {
+		t.Fatalf("rewind touched excluded .npmrc: %s", got)
+	}
+	if latest := e.current; latest[".npmrc"] != (manifest.Entry{}) {
+		t.Fatal("restored keyframe claims the excluded .npmrc")
+	}
+}
+
+// After an upgrade adds an exclusion, the next capture must not attribute a
+// deletion of the now-excluded file to the active turn.
+func TestNewlyExcludedPathIsNotRecordedAsDeleted(t *testing.T) {
+	root, e := rewindRepo(t, map[string]string{"app.txt": "old\n"})
+	legacy, err := e.ManifestAt(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := e.Blobs.PutBytes([]byte("//registry.example/:_authToken=old\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy[".npmrc"] = manifest.Entry{Hash: h, Mode: 0600}
+	saved, err := legacy.Save(e.Blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,created_at) VALUES('legacy',1,?,1)", saved); err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, root, map[string]string{".npmrc": "//registry.example/:_authToken=old\n", "app.txt": "new\n"})
+	e.Close()
+	reopened, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if err := reopened.RecordChanges([]string{"app.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reopened.recordChanges(nil, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	var npmrcOps, appOps int
+	if err := reopened.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE path='.npmrc'").Scan(&npmrcOps); err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE path='app.txt'").Scan(&appOps); err != nil {
+		t.Fatal(err)
+	}
+	if npmrcOps != 0 || appOps == 0 {
+		t.Fatalf("ops: .npmrc %d (want 0), app.txt %d (want >0)", npmrcOps, appOps)
 	}
 }

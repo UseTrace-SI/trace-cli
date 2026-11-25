@@ -18,7 +18,9 @@ Revoking a device does not delete uploaded history.
 
 ## Text redaction
 
-Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys, tokens, HTTP `Authorization` header credentials, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
+Prompt text is redacted before it reaches the event spool or SQLite. Trace masks common API keys and tokens (including AWS, GitHub, GitLab, Google, OpenAI, Anthropic, Slack, Stripe, SendGrid, npm, PyPI, Hugging Face, DigitalOcean, Twilio, Shopify, Azure AD and Atlassian formats), HTTP `Authorization` header credentials, private-key blocks, credentialed URLs, high-entropy values near secret labels, and environment variable values with secret-like names. Optional PII masking covers email addresses and phone numbers.
+
+A redacted value becomes a marker such as `⟨redacted:api-key:1a2b3c4d⟩`. Its digits are an HMAC of the value under a random per-install key, `~/.trace/redaction.key` (mode 0600; under `$TRACE_HOME` when set), so equal secrets share a marker on one machine but a marker cannot be used to confirm a guessed secret. Markers from different machines differ. If the key cannot be created or read, each process uses its own temporary key and markers stop matching; `trace doctor` checks the key.
 
 For Claude Code and Antigravity CLI, the daemon reads newly appended assistant transcript records after a turn ends and redacts text before storing it. Tool call records keep names and safe repository paths; they do not store raw tool inputs or tool results.
 
@@ -26,7 +28,9 @@ Codex assistant output and reasoning summaries, Cursor Agent CLI response and th
 
 ## File exclusions and removal
 
-Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, or `.ssh/`; these names match in any letter case. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
+Trace does not read `.env*`, `*.pem`, `*.key`, SSH key files (`id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*`), `.aws/`, `.ssh/`, key stores (`*.p12`, `*.pfx`, `*.jks`, `*.keystore`), credential files (`.npmrc`, `.pypirc`, `.netrc`, `_netrc`, `.git-credentials`, `.pgpass`, `credentials.json`, `service-account*.json`), Terraform state (`*.tfstate`, `*.tfstate.backup`), or cluster and registry configs (`kubeconfig`, `kubeconfig.yaml`, `*.kubeconfig`, `.kube/config`, `.docker/config.json`); these names match in any directory and letter case. Excluded files are also never restored by rewind.
+
+History recorded before one of these exclusions existed can still hold such a file. It stays in local history, but by default it is left out of everything that leaves the machine: `trace export --format bundle` and `trace handoff` rewrite the bundle's copy of the history so snapshots no longer list the file and no record references its bytes, which are not included, and they list the paths they left out; sync uploads the same stripped history. The file's path can still appear in recorded operations. Importing such a bundle back into the history it came from (or an unstripped copy into a stripped one) keeps the local rows and reports duplicates. Pass `--include-excluded-history` to `trace export` or `trace handoff` to keep them; the command then warns that the bundle may hold credentials. History uploaded before this change is not erased from the server. File blobs for other paths are kept byte-exact so rewind can restore them. Do not put credentials in ordinary source files if you do not want those bytes in local snapshots.
 
 `trace uninstall` removes integrations while keeping history. `trace uninstall --purge` removes `.trace/` data as well.
 
@@ -45,8 +49,9 @@ indexes, even when tracked by Git. Use a relative filename, a directory prefix
 ending in `/`, or a single-level glob such as `secrets/*.json` or `*.local`.
 Blank lines and `#` comments are supported. Negation and `**` patterns are rejected.
 Built-in secret exclusions always apply. Existing snapshots and hosted history
-are not erased when this file changes; the preview identifies historical paths
-that are now excluded. Review or delete that history before connecting if needed.
+are not erased when `.traceignore` changes, and those snapshots are still exported and uploaded; the preview lists them as
+`historical_paths_still_uploaded`, and lists earlier credential files that
+uploads leave out as `historical_paths_left_out` (neither counted nor scanned). Review or delete that history before connecting if needed.
 
 Default capture budgets are 64 MiB per file, 512 MiB per scan/batch, and 64 MiB of
 free disk reserved beyond the source size. Positive byte-count environment
@@ -54,6 +59,13 @@ variables `TRACE_MAX_FILE_BYTES`, `TRACE_MAX_CAPTURE_BYTES` and
 `TRACE_MIN_FREE_BYTES` override them. Propagate these variables to the daemon
 process and restart it after changing them. Limit failures preserve the previous
 keyframe and surface as capture errors; hooks remain nonblocking.
+
+The daemon garbage-collects history older than 30 days, as `trace gc` does, at
+most once a day, and hourly while `.trace` exceeds `TRACE_MAX_STORE_BYTES`
+(default 5 GiB, which `trace doctor` also checks). Steps with commits, comments
+or trails and the baseline are kept, and the budget never shortens retention.
+It does not run while sync is configured, so history that has not been uploaded
+is never removed unattended; `TRACE_AUTO_GC=0` turns it off.
 
 Portable handoff bundles contain a consistent SQLite snapshot and referenced
 objects, with mode 0600. Runtime credentials, logs, hook configuration and manual
