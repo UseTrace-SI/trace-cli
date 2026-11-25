@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +95,41 @@ func TestObserverTurns(t *testing.T) {
 				t.Fatalf("execute = %+v", evs[2])
 			}
 		}},
+		{"locations are replaced, diffs accumulate", append(setup,
+			msg{FromClient, `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"edit","kind":"edit","status":"pending","locations":[{"path":"/w/guess.go"}]}}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t","content":[{"type":"diff","path":"/w/a.go","newText":"x"}],"locations":[{"path":"/w/real.go"}]}}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t","status":"completed","content":[{"type":"diff","path":"/w/b.go","newText":"y"}]}}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":2,"result":{"stopReason":"end_turn"}}`},
+		), "session_start,turn_start,tool_edit,turn_end,session_end", func(t *testing.T, evs []event.Event) {
+			if got := strings.Join(evs[2].Paths, ","); got != "/w/a.go,/w/b.go,/w/real.go" {
+				t.Fatalf("paths = %s", got)
+			}
+		}},
+		{"fs/write_text_file recorded only on success", append(setup,
+			msg{FromClient, `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":10,"method":"fs/write_text_file","params":{"sessionId":"s","path":"/w/denied.go","content":""}}`},
+			msg{FromClient, `{"jsonrpc":"2.0","id":10,"error":{"code":-32000,"message":"denied"}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":11,"method":"fs/write_text_file","params":{"sessionId":"s","path":"/w/ok.go","content":""}}`},
+			msg{FromClient, `{"jsonrpc":"2.0","id":11,"result":null}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":12,"method":"fs/write_text_file","params":{"sessionId":"s","path":"/w/late.go","content":""}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":2,"result":{"stopReason":"end_turn"}}`},
+			msg{FromClient, `{"jsonrpc":"2.0","id":12,"result":null}`},
+		), "session_start,turn_start,tool_edit,turn_end,session_end", func(t *testing.T, evs []event.Event) {
+			if evs[2].Paths[0] != "/w/ok.go" {
+				t.Fatalf("write = %+v", evs[2])
+			}
+		}},
+		{"cancelled in-progress edit asks for a scan", append(setup,
+			msg{FromClient, `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"Edit x","kind":"edit","status":"in_progress","locations":[{"path":"/w/x.go"}]}}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"f","title":"Edit y","kind":"edit","status":"failed"}}}`},
+			msg{FromAgent, `{"jsonrpc":"2.0","id":2,"result":{"stopReason":"cancelled"}}`},
+		), "session_start,turn_start,tool_edit,turn_context,turn_end,session_end", func(t *testing.T, evs []event.Event) {
+			if evs[2].ToolName != "Edit x" || len(evs[2].Paths) != 0 {
+				t.Fatalf("flushed edit = %+v", evs[2])
+			}
+		}},
 		{"open turn closed on exit", append(setup,
 			msg{FromClient, `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
 			msg{FromAgent, `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"partial"}}}}`},
@@ -124,5 +160,32 @@ func TestObserverResynchronizesAfterGap(t *testing.T) {
 	o.feed(chunk{dir: FromAgent, data: []byte(`{"jsonrpc":"2.0","id":1,"result":{"sessionId":"s"}}` + "\n")})
 	if kinds(got) != "session_start" {
 		t.Fatalf("events = %s", kinds(got))
+	}
+}
+
+func TestObserverPrunesUnansweredRequests(t *testing.T) {
+	o := newObserver("acp:test", time.Now, func(string, ...any) {})
+	o.emit = func(event.Event) {}
+	lines := []struct {
+		dir  Direction
+		line string
+	}{
+		{FromClient, `{"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/w"}}`},
+		{FromAgent, `{"jsonrpc":"2.0","id":1,"result":{"sessionId":"s"}}`},
+		{FromClient, `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
+		{FromAgent, `{"jsonrpc":"2.0","id":9,"method":"fs/read_text_file","params":{"sessionId":"s","path":"/w/a"}}`},
+		{FromClient, `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"s","prompt":[]}}`},
+	}
+	for _, l := range lines {
+		o.feed(chunk{dir: l.dir, data: []byte(l.line + "\n")})
+	}
+	if len(o.requests[FromAgent]) != 0 || len(o.requests[FromClient]) != 1 {
+		t.Fatalf("pending = %v", o.requests)
+	}
+	for i := 0; i < maxPending+10; i++ {
+		o.remember(FromClient, fmt.Sprint("x", i), pending{method: methodPrompt})
+	}
+	if len(o.requests[FromClient]) > maxPending {
+		t.Fatalf("pending grew to %d", len(o.requests[FromClient]))
 	}
 }

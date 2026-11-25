@@ -35,7 +35,13 @@ const (
 	observeQueue = 1024
 	// flushTimeout bounds how long the proxy waits for recorded events to be
 	// handed to the sink after the agent exits.
-	flushTimeout = 3 * time.Second
+	flushTimeout = 5 * time.Second
+	// stdinGrace is how long the agent may run on after the editor closes
+	// its stdin before it is stopped.
+	stdinGraceDefault = 5 * time.Second
+	// drainGrace bounds forwarding output after the agent exits, when a
+	// process it started still holds its stdout open.
+	drainGrace = 500 * time.Millisecond
 	// killGrace is how long the agent may take to exit after its editor
 	// disappears before it is killed.
 	killGrace = 2 * time.Second
@@ -61,6 +67,9 @@ type Config struct {
 	Now func() time.Time
 }
 
+// stdinGrace is a variable so tests can shorten it.
+var stdinGrace = stdinGraceDefault
+
 type chunk struct {
 	dir  Direction
 	data []byte
@@ -68,8 +77,12 @@ type chunk struct {
 	gap bool
 }
 
-// ExitError carries the agent's exit status.
-type ExitError struct{ Code int }
+// ExitError carries the agent's exit status. Signal is set when a signal
+// terminated the agent; Code is then 128 + the signal number.
+type ExitError struct {
+	Code   int
+	Signal syscall.Signal
+}
 
 func (e ExitError) Error() string { return fmt.Sprintf("agent exited with status %d", e.Code) }
 
@@ -90,30 +103,43 @@ func Run(cfg Config) error {
 	}
 	cmd := exec.Command(cfg.Args[0], cfg.Args[1:]...)
 	cmd.Stderr = cfg.Stderr
-	agentIn, err := cmd.StdinPipe()
+	cmd.SysProcAttr = agentSysProcAttr()
+	// Plain pipes rather than StdinPipe/StdoutPipe: Wait then returns when the
+	// agent exits, even if a grandchild keeps its stdout open.
+	inR, agentIn, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("creating agent stdin: %w", err)
 	}
-	agentOut, err := cmd.StdoutPipe()
+	agentOut, outW, err := os.Pipe()
 	if err != nil {
+		_ = inR.Close()
+		_ = agentIn.Close()
 		return fmt.Errorf("creating agent stdout: %w", err)
 	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting %s: %w", cfg.Args[0], err)
+	cmd.Stdin, cmd.Stdout = inR, outW
+	startErr := cmd.Start()
+	_ = inR.Close()
+	_ = outW.Close()
+	if startErr != nil {
+		_ = agentIn.Close()
+		_ = agentOut.Close()
+		return fmt.Errorf("starting %s: %w", cfg.Args[0], startErr)
 	}
+	defer agentOut.Close()
 
 	obs := newObserver(cfg.Name, cfg.Now, cfg.Logf)
 	queue := make(chan chunk, observeQueue)
 	done := make(chan struct{})
 	observed := make(chan struct{})
 	events := make(chan event.Event, 4096)
+	dropped := 0
 	go func() {
 		defer close(observed)
 		obs.run(queue, done, func(ev event.Event) {
 			select {
 			case events <- ev:
 			default:
-				cfg.Logf("event queue full; dropped %s event", ev.Kind)
+				dropped++
 			}
 		})
 		close(events)
@@ -126,62 +152,85 @@ func Run(cfg Config) error {
 		}
 	}()
 
-	var clientGone sync.Once
-	terminate := func() {
-		clientGone.Do(func() {
-			if cmd.Process == nil {
-				return
-			}
-			_ = cmd.Process.Signal(syscall.SIGTERM)
+	exited := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		close(exited)
+	}()
+
+	var stopping sync.Once
+	// terminate sends SIGTERM, then SIGKILL if the agent outlives killGrace.
+	terminate := func(after time.Duration) {
+		stopping.Do(func() {
 			go func() {
-				time.Sleep(killGrace)
-				_ = cmd.Process.Kill()
+				select {
+				case <-exited:
+					return
+				case <-time.After(after):
+				}
+				_ = cmd.Process.Signal(syscall.SIGTERM)
+				select {
+				case <-exited:
+				case <-time.After(killGrace):
+					_ = cmd.Process.Kill()
+				}
 			}()
 		})
 	}
 
 	// Editor -> agent. Closing the agent's stdin on editor EOF lets the agent
-	// shut down as it would without the proxy. This goroutine may stay blocked
-	// reading the editor after the agent exits; the process exits then.
+	// shut down as it would without the proxy; one that does not is stopped
+	// after stdinGrace. This goroutine may stay blocked reading the editor
+	// after the agent exits; the process exits then.
 	go func() {
 		err := forward(cfg.Stdin, agentIn, FromClient, queue, done)
 		_ = agentIn.Close()
 		if err != nil && !errors.Is(err, errReadSide) {
 			cfg.Logf("forwarding to agent: %v", err)
+			return
 		}
+		terminate(stdinGrace)
 	}()
-	stopSignals := make(chan struct{})
 	if cfg.Signals != nil {
 		go func() {
 			for {
 				select {
 				case sig := <-cfg.Signals:
 					_ = cmd.Process.Signal(sig)
-				case <-stopSignals:
+				case <-exited:
 					return
 				}
 			}
 		}()
 	}
 
-	// Agent -> editor, on this goroutine: the agent's output must be read to
-	// EOF before Wait.
-	if err := forward(agentOut, cfg.Stdout, FromAgent, queue, done); err != nil {
-		if !errors.Is(err, errReadSide) {
+	// Agent -> editor. Once the agent has exited, output still buffered in the
+	// pipe is forwarded; a grandchild holding the pipe open gets drainGrace.
+	forwarded := make(chan error, 1)
+	go func() { forwarded <- forward(agentOut, cfg.Stdout, FromAgent, queue, done) }()
+	select {
+	case err := <-forwarded:
+		if err != nil && !errors.Is(err, errReadSide) {
 			cfg.Logf("forwarding to editor: %v; stopping agent", err)
-			terminate()
+			terminate(0)
+			// Keep draining so the agent never blocks on a full pipe.
+			go func() { _, _ = io.Copy(io.Discard, agentOut) }()
 		}
-		// Keep draining so the agent never blocks on a full pipe while it exits.
-		_, _ = io.Copy(io.Discard, agentOut)
+		<-exited
+	case <-exited:
+		_ = agentOut.SetReadDeadline(time.Now().Add(drainGrace))
+		<-forwarded
 	}
-	waitErr := cmd.Wait()
-	close(stopSignals)
 	close(done)
 	<-observed
+	if dropped > 0 {
+		cfg.Logf("warning: %d recorded events were dropped because delivery fell behind", dropped)
+	}
 	select {
 	case <-sent:
 	case <-time.After(flushTimeout):
-		cfg.Logf("timed out delivering recorded events")
+		cfg.Logf("warning: timed out after %v delivering recorded events; later events were not recorded", flushTimeout)
 	}
 	return exitStatus(waitErr)
 }
@@ -237,7 +286,7 @@ func exitStatus(err error) error {
 		code := exit.ExitCode()
 		if code < 0 {
 			if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-				code = 128 + int(status.Signal())
+				return ExitError{Code: 128 + int(status.Signal()), Signal: status.Signal()}
 			} else {
 				code = 1
 			}

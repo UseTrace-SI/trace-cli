@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -40,6 +41,16 @@ func fakeAgent(mode string) int {
 	send := func(s string) { _, _ = io.WriteString(w, s+"\n") }
 	r := bufio.NewReaderSize(io.TeeReader(os.Stdin, in), 1<<20)
 	cwd := os.Getenv("ACP_FAKE_CWD")
+	if mode == "grandchild" {
+		// A process the agent started keeps the agent's stdout open.
+		child := exec.Command("sleep", "30")
+		child.Stdout = os.Stdout
+		if child.Start() == nil {
+			_ = os.WriteFile(os.Getenv("ACP_FAKE_OUT")+".pid", []byte(fmt.Sprint(child.Process.Pid)), 0o600)
+		}
+		send(`{"jsonrpc":"2.0","method":"hello"}`)
+		return 0
+	}
 	for {
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
@@ -78,6 +89,13 @@ func fakeAgent(mode string) int {
 				send(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess_abc123def456","update":{"sessionUpdate":"tool_call_update","toolCallId":"call_002","status":"completed","content":[{"type":"diff","path":"` + cwd + `/main.go","oldText":"package main\n","newText":"package main\n\nfunc main() {}\n"}]}}}`)
 				send(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess_abc123def456","update":{"sessionUpdate":"tool_call","toolCallId":"call_003","title":"Write .env","kind":"edit","status":"completed","content":[{"type":"diff","path":"` + cwd + `/.env","newText":"TOKEN=x"}]}}}`)
 				send(`{"jsonrpc":"2.0","id":7,"method":"fs/write_text_file","params":{"sessionId":"sess_abc123def456","path":"` + cwd + `/notes.txt","content":"notes"}}`)
+				// Like a real agent, wait for the editor to confirm the write.
+				for {
+					reply, err := r.ReadBytes('\n')
+					if bytes.Contains(reply, []byte(`"id":7`)) || err != nil {
+						break
+					}
+				}
 				send(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess_abc123def456","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Done: main.go now has a main function."}}}}`)
 				send(`{"jsonrpc":"2.0","id":` + id + `,"result":{"stopReason":"end_turn"}}`)
 			case "echo":
@@ -85,6 +103,9 @@ func fakeAgent(mode string) int {
 			}
 		}
 		if err != nil {
+			if mode == "ignore-eof" {
+				time.Sleep(time.Minute)
+			}
 			if mode == "exit7" {
 				return 7
 			}
@@ -166,6 +187,7 @@ type harness struct {
 	client  *client
 	rec     *recorder
 	sink    func(event.Event)
+	signals chan os.Signal
 	result  chan error
 	stdout  *io.PipeReader
 	logMu   sync.Mutex
@@ -196,6 +218,7 @@ func startProxy(t *testing.T, mode string, setup ...func(*harness)) *harness {
 	cfg := Config{
 		Args: []string{os.Args[0]}, Name: "acp:fake",
 		Stdin: stdinR, Stdout: stdoutW, Stderr: &lockedBuffer{b: &h.stderr, mu: &h.logMu},
+		Signals: h.signals,
 		Sink: func(ev event.Event) {
 			if h.sink != nil {
 				h.sink(ev)
@@ -362,7 +385,7 @@ func TestProxyStopsAgentWhenEditorDisconnects(t *testing.T) {
 	h.client.send(`{"jsonrpc":"2.0","method":"echo"}`)
 	select {
 	case err := <-h.result:
-		if exit, ok := err.(ExitError); !ok || exit.Code != 128+15 {
+		if exit, ok := err.(ExitError); !ok || exit.Code != 128+15 || exit.Signal != syscall.SIGTERM {
 			t.Fatalf("Run = %v, want SIGTERM exit", err)
 		}
 	case <-time.After(10 * time.Second):
@@ -441,4 +464,51 @@ func directRoundTrip(t *testing.T, msg string, n int) time.Duration {
 func median(d []time.Duration) time.Duration {
 	sort.Slice(d, func(i, j int) bool { return d[i] < d[j] })
 	return d[len(d)/2]
+}
+
+func TestProxyDoesNotWaitForGrandchildOutput(t *testing.T) {
+	h := startProxy(t, "grandchild")
+	t.Cleanup(func() {
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(h.dir), "agent-out.pid")); err == nil {
+			var pid int
+			if _, err := fmt.Sscan(string(b), &pid); err == nil && pid > 0 {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	start := time.Now()
+	if err := h.wait(); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("proxy waited %v for a grandchild holding stdout", elapsed)
+	}
+	if !strings.Contains(h.client.read.String(), `"hello"`) {
+		t.Fatalf("output before exit lost: %q", h.client.read.String())
+	}
+}
+
+func TestProxyStopsAgentThatIgnoresStdinEOF(t *testing.T) {
+	old := stdinGrace
+	stdinGrace = 100 * time.Millisecond
+	t.Cleanup(func() { stdinGrace = old })
+	h := startProxy(t, "ignore-eof")
+	_ = h.client.in.Close()
+	err := h.wait()
+	if exit, ok := err.(ExitError); !ok || exit.Signal != syscall.SIGTERM || exit.Code != 128+15 {
+		t.Fatalf("Run = %#v, want SIGTERM", err)
+	}
+}
+
+func TestProxyForwardsSignals(t *testing.T) {
+	signals := make(chan os.Signal, 1)
+	h := startProxy(t, "echo", func(h *harness) { h.signals = signals })
+	h.client.send(`{"jsonrpc":"2.0","method":"echo"}`)
+	if _, err := h.client.out.ReadBytes('\n'); err != nil {
+		t.Fatal(err)
+	}
+	signals <- syscall.SIGINT
+	if exit, ok := h.wait().(ExitError); !ok || exit.Signal != syscall.SIGINT {
+		t.Fatalf("want agent killed by forwarded SIGINT")
+	}
 }

@@ -25,6 +25,14 @@ func TestACPAgentName(t *testing.T) {
 	}
 }
 
+func TestACPNameFlagIsSanitized(t *testing.T) {
+	for in, want := range map[string]string{"Zed_Claude": "zed-claude", "zed.claude": "zed-claude", "ok-1": "ok-1", "@@": "agent"} {
+		if got := acpNameSafe(in); got != want {
+			t.Errorf("acpNameSafe(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestACPSinkSkipsUninitializedRepositories(t *testing.T) {
 	t.Setenv("TRACE_HOME", t.TempDir())
 	plain := t.TempDir()

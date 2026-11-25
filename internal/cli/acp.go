@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/acp"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
@@ -31,8 +32,12 @@ sessions, prompts, responses, tool calls and file edits in repositories where
 Trace is initialized are recorded as agent "acp:<name>".`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			// The recorded name must be a valid pause-marker name, or the
+			// daemon would treat the agent as paused and drop its events.
 			if name == "" {
 				name = acpAgentName(args[0])
+			} else {
+				name = acpNameSafe(name)
 			}
 			logger := newACPLogger()
 			defer logger.close()
@@ -49,6 +54,11 @@ Trace is initialized are recorded as agent "acp:<name>".`,
 				Sink: sink.emit, Logf: logger.logf, Signals: signals,
 			})
 			if exit, ok := err.(acp.ExitError); ok {
+				if exit.Signal != 0 {
+					signal.Stop(signals)
+					logger.close()
+					reraise(exit.Signal)
+				}
 				return agentExit{code: exit.Code}
 			}
 			if err != nil {
@@ -63,13 +73,32 @@ Trace is initialized are recorded as agent "acp:<name>".`,
 	return cmd
 }
 
+// reraise ends Trace with the signal that terminated the agent, so the
+// editor sees the same termination. Signals that would dump core, and any
+// that do not end the process, fall back to exit status 128 + N.
+func reraise(sig syscall.Signal) {
+	switch sig {
+	case syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGKILL, syscall.SIGPIPE:
+	default:
+		return
+	}
+	signal.Reset(sig)
+	_ = syscall.Kill(os.Getpid(), sig)
+	time.Sleep(100 * time.Millisecond)
+}
+
 // acpAgentName derives a stable agent name from the command, for example
 // "/usr/bin/claude-agent-acp" -> "claude-agent-acp".
 func acpAgentName(command string) string {
 	base := strings.ToLower(filepath.Base(command))
-	base = strings.TrimSuffix(base, filepath.Ext(base))
+	return acpNameSafe(strings.TrimSuffix(base, filepath.Ext(base)))
+}
+
+// acpNameSafe lowercases a name and keeps letters, digits and dashes, turning
+// "_", "." and spaces into dashes ("Zed_Claude" -> "zed-claude").
+func acpNameSafe(name string) string {
 	var b strings.Builder
-	for _, r := range base {
+	for _, r := range strings.ToLower(name) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
 			b.WriteRune(r)

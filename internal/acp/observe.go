@@ -81,13 +81,20 @@ type pending struct {
 	method    string
 	sessionID string
 	cwd       string
+	path      string
 }
+
+// maxPending bounds outstanding requests remembered per direction; a peer that
+// never answers cannot grow the observer without limit.
+const maxPending = 4096
 
 type toolState struct {
 	title, name, kind, status string
-	paths                     []string
-	diff                      bool
-	recorded                  bool
+	// locations is replaced by each update that carries locations;
+	// diffPaths accumulates every file a diff was reported for.
+	locations, diffPaths []string
+	diff                 bool
+	recorded             bool
 }
 
 type turn struct {
@@ -190,6 +197,9 @@ func (o *observer) feed(c chunk) {
 				o.line(c.dir, line)
 			}
 			lb.data = lb.data[:0]
+			if cap(lb.data) > 1<<20 {
+				lb.data = nil // release the buffer of a large message
+			}
 		}
 		data = data[i+1:]
 	}
@@ -272,7 +282,7 @@ func (o *observer) request(dir Direction, id, method string, params json.RawMess
 	switch method {
 	case methodNewSession, methodLoadSession, methodResumeSession:
 		if dir == FromClient {
-			o.requests[dir][id] = pending{method: method, sessionID: p.SessionID, cwd: p.Cwd}
+			o.remember(dir, id, pending{method: method, sessionID: p.SessionID, cwd: p.Cwd})
 		}
 	case methodPrompt:
 		if dir != FromClient {
@@ -284,7 +294,7 @@ func (o *observer) request(dir Direction, id, method string, params json.RawMess
 			return
 		}
 		o.endTurn(p.SessionID, s, "")
-		o.requests[dir][id] = pending{method: method, sessionID: p.SessionID}
+		o.remember(dir, id, pending{method: method, sessionID: p.SessionID})
 		s.turn = &turn{tools: map[string]*toolState{}}
 		s.promptID = id
 		o.send(event.Event{Kind: event.TurnStart, AgentSessionID: p.SessionID, Worktree: s.cwd, Prompt: promptText(p.Prompt)})
@@ -294,19 +304,34 @@ func (o *observer) request(dir Direction, id, method string, params json.RawMess
 			o.send(event.Event{Kind: event.SessionEnd, AgentSessionID: p.SessionID, Worktree: s.cwd})
 			delete(o.sessions, p.SessionID)
 		}
-	case methodWriteFile:
+	case methodWriteFile, methodReadFile:
+		// Recorded when the editor reports success.
 		if s := o.sessions[p.SessionID]; dir == FromAgent && s != nil && s.turn != nil && p.Path != "" {
-			o.send(event.Event{Kind: event.ToolEdit, AgentSessionID: p.SessionID, Worktree: s.cwd, Paths: []string{p.Path}})
-		}
-	case methodReadFile:
-		if s := o.sessions[p.SessionID]; dir == FromAgent && s != nil && s.turn != nil && p.Path != "" {
-			o.send(event.Event{Kind: event.FileRead, AgentSessionID: p.SessionID, Worktree: s.cwd, Paths: []string{p.Path}})
+			o.remember(dir, id, pending{method: method, sessionID: p.SessionID, path: p.Path})
 		}
 	}
 }
 
+func (o *observer) remember(dir Direction, id string, p pending) {
+	if len(o.requests[dir]) >= maxPending {
+		o.logf("too many unanswered requests; forgetting them")
+		o.requests[dir] = map[string]pending{}
+	}
+	o.requests[dir][id] = p
+}
+
 func (o *observer) response(id string, p pending, result json.RawMessage, failed bool) {
 	switch p.method {
+	case methodWriteFile, methodReadFile:
+		s := o.sessions[p.sessionID]
+		if failed || s == nil || s.turn == nil {
+			return
+		}
+		kind := event.ToolEdit
+		if p.method == methodReadFile {
+			kind = event.FileRead
+		}
+		o.send(event.Event{Kind: kind, AgentSessionID: p.sessionID, Worktree: s.cwd, Paths: []string{p.path}})
 	case methodNewSession, methodLoadSession, methodResumeSession:
 		if failed {
 			return
@@ -397,15 +422,18 @@ func (o *observer) update(sessionID string, s *session, u sessionUpdate) {
 		if u.Status != nil {
 			tool.status = *u.Status
 		}
-		for _, l := range u.Locations {
-			tool.addPath(l.Path)
+		if u.Locations != nil {
+			tool.locations = tool.locations[:0]
+			for _, l := range u.Locations {
+				tool.locations = addPath(tool.locations, l.Path)
+			}
 		}
 		var content []toolCallContent
 		if len(u.Content) > 0 && json.Unmarshal(u.Content, &content) == nil {
 			for _, c := range content {
 				if c.Type == "diff" {
 					tool.diff = true
-					tool.addPath(c.Path)
+					tool.diffPaths = addPath(tool.diffPaths, c.Path)
 				}
 			}
 		}
@@ -415,16 +443,24 @@ func (o *observer) update(sessionID string, s *session, u sessionUpdate) {
 	}
 }
 
-func (t *toolState) addPath(p string) {
+func addPath(paths []string, p string) []string {
 	if p == "" {
-		return
+		return paths
 	}
-	for _, have := range t.paths {
+	for _, have := range paths {
 		if have == p {
-			return
+			return paths
 		}
 	}
-	t.paths = append(t.paths, p)
+	return append(paths, p)
+}
+
+func (t *toolState) paths() []string {
+	out := append([]string(nil), t.diffPaths...)
+	for _, p := range t.locations {
+		out = addPath(out, p)
+	}
+	return out
 }
 
 func (t *toolState) label() string {
@@ -452,17 +488,17 @@ func (o *observer) recordTool(sessionID string, s *session, tool *toolState) {
 		if tool.status == "failed" && !tool.diff {
 			return
 		}
-		base.Kind, base.Paths = event.ToolEdit, tool.paths
+		base.Kind, base.Paths = event.ToolEdit, tool.paths()
 	case tool.kind == "execute" || tool.kind == "other" || tool.kind == "":
 		if tool.status == "failed" {
 			return
 		}
 		base.Kind = event.ToolEdit
 	case tool.kind == "read":
-		if len(tool.paths) == 0 {
+		if len(tool.paths()) == 0 {
 			return
 		}
-		base.Kind, base.Paths, base.ToolName = event.FileRead, tool.paths, ""
+		base.Kind, base.Paths, base.ToolName = event.FileRead, tool.paths(), ""
 	default:
 		return
 	}
@@ -476,8 +512,23 @@ func (o *observer) endTurn(sessionID string, s *session, stopReason string) {
 	}
 	s.turn, s.promptID = nil, ""
 	for _, id := range t.order {
-		if tool := t.tools[id]; tool.diff {
+		tool := t.tools[id]
+		switch {
+		case tool.recorded:
+		case tool.diff:
 			o.recordTool(sessionID, s, tool)
+		case (tool.kind == "edit" || tool.kind == "delete" || tool.kind == "move") && tool.status != "failed":
+			// Unfinished (pending, in progress, cancelled): whether and where
+			// it wrote is unknown, so ask the engine to scan the worktree.
+			tool.recorded = true
+			o.send(event.Event{Kind: event.ToolEdit, AgentSessionID: sessionID, Worktree: s.cwd, ToolName: tool.label()})
+		}
+	}
+	for dir := range o.requests {
+		for id, p := range o.requests[dir] {
+			if p.sessionID == sessionID && (p.method == methodPrompt || p.method == methodWriteFile || p.method == methodReadFile) {
+				delete(o.requests[dir], id)
+			}
 		}
 	}
 	base := event.Event{AgentSessionID: sessionID, Worktree: s.cwd}
