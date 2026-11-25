@@ -102,6 +102,20 @@ func TestGoldenCommands(t *testing.T) {
 		[]string{"review", "--agent", "cursor"},
 		[]string{"review", "--agent", "agy"},
 	)
+	// Judge, provenance and output formats. The stubs answer in prose, so
+	// structured output falls back to their raw text.
+	s.changedSteps(g, "review-structured", roots, root, env,
+		[]string{"review", "--agents", "claude-code,codex", "--judge", "codex"},
+		[]string{"--json", "review", "--agents", "claude-code,codex", "--judge", "claude-code"},
+		[]string{"review", "--agent", "codex", "--format", "markdown"},
+		[]string{"review", "--agent", "codex", "--format", "sarif"},
+		[]string{"review", "--no-launch", "--agent", "codex", "--judge", "claude-code"},
+		[]string{"--json", "review", "--no-launch", "--agent", "codex", "--with-provenance"},
+		[]string{"review", "--agent", "codex", "--judge", "cursor"},
+		[]string{"review", "--agent", "codex", "--format", "html"},
+		[]string{"--json", "review", "--agent", "codex", "--format", "sarif"},
+		[]string{"review", "--no-launch", "--format", "markdown"},
+	)
 
 	// Interoperability: opt-in trailers, exports and importers.
 	s = newSandbox(t)

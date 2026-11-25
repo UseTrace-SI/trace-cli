@@ -164,6 +164,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace blame FILE` | Show the origin, commit, confidence and rewrites of every line |
 | `trace fork STEP [--agent NAME] [--name SUFFIX] [--no-launch]` | Create a worktree at a step |
 | `trace resume STEP\|SESSION [--agent NAME] [--fork [--name SUFFIX]] [--no-rewind] [--no-launch] [--step\|--session] [--max-context-bytes N]` | Continue a recorded session in the same or another agent; see [Cross-agent resume](#cross-agent-resume) |
+| `trace review [--agent NAME\|--agents A,B] [--judge NAME] [--with-provenance] [--format text\|markdown\|sarif] [--staged] [--no-launch] [--timeout D]` | Review unstaged (or staged) changes with independent headless agents, optionally consolidated by a judge; see [independent review](#independent-review) |
 | `trace status` | Show daemon, session, and storage status |
 | `trace activity [--days N]` | Summarize local turns, sessions, changed files, and agent activity |
 | `trace search [TERMS...] [--scope all\|turns\|messages] [--edited-path GLOB] [--limit N]` | Search completed turns by text and edited path |
@@ -266,6 +267,36 @@ The handoff is written to `.trace/context.md` in the target worktree (Git-exclud
 | `agy` | `agy --prompt-interactive "<handoff>"` |
 
 Text output names the step, the undo command or fork path, the command (with the handoff shown as `<handoff context>`) and the context file; `--no-launch` then prints the handoff. `--json` returns `step`, `mode` (`rewind`, `fork` or `in-place`), `path`, `safety_step`, `session_id`, `source_agent`, `agent`, `command`, `context_file`, `context_bytes`, `truncated`, `files`, `todos` and `launched`, plus `context` with `--no-launch`. Rewinding still writes a safety keyframe even with `--no-launch`; use `--no-rewind --no-launch` for a plan without side effects other than the context file.
+
+## Independent review
+
+`trace review` sends the redacted diff of unstaged changes (`--staged`: the index) to one or more headless reviewers, each in its own session and process group:
+
+```sh
+trace review --agents claude-code,codex                          # independent reviews, printed as written
+trace review --agents claude-code,codex --judge claude-code      # plus one consolidated, ranked list
+trace review --agents claude-code,codex --format sarif > review.sarif
+trace review --agent codex --with-provenance --format markdown   # PR-comment-ready, with recorded intent
+```
+
+Claude reviews run with built-in tools and inherited MCP servers disabled (`--tools "" --strict-mcp-config`); Codex runs in its read-only sandbox. The judge runs the same way. Secret paths are excluded, file paths are literal, the diff is capped at 64 KiB, text that would open or close an evidence block (`<untrusted…`, `</untrusted…`, any letter case) is escaped, and each run (reviewer or judge) has the `--timeout` deadline.
+
+Reviewers are asked for JSON only with `--judge` or a `--format` other than `text` (structured mode); without them, the prompt and output keep their earlier shape. `--with-provenance` only adds the provenance block to the prompt and does not by itself request JSON. In structured mode reviewers answer in this schema:
+
+```json
+{"findings": [{"file": "a.go", "start_line": 4, "end_line": 6, "severity": "critical|high|medium|low|info",
+               "title": "one line", "detail": "explanation", "reviewers": ["claude-code", "codex"]}]}
+```
+
+Answers are parsed tolerantly (a bare array, a fenced block or JSON surrounded by prose; `path`/`line` aliases; numeric strings; severity synonyms such as `major` or `nit`; unknown severities become `medium`). A finding keeps its file only when it is one of the reviewed paths; any other repository path moves into its detail as text, and absolute paths, paths outside the repository, URLs or other `scheme:` values and secret paths are dropped. Line ranges are clamped to the file's new-side length, and a range that starts past the end (or any range on a deleted or binary file) is dropped. At most 200 findings per answer are kept. An answer that is not in the schema is kept as raw text and marked `unstructured`; an empty answer is reported as "no answer".
+
+`--judge NAME` runs one more agent after the reviewers finish. It receives the diff summary (paths and added/removed counts) and every completed reviewer's findings, or its raw text (an empty answer is marked as such), redacted and capped at 64 KiB in total (24 KiB per reviewer, dropping the least severe findings first), and returns a deduplicated, severity-ranked list. The judge is told only about the reviewers whose answers it received; any other reviewer name in its answer is discarded and agreement counts are recomputed from the rest, and its findings are constrained like the reviewers'. If no reviewer completed, the judge is skipped. If the judge fails or does not answer in the schema, reviewer findings are merged locally instead (same file, overlapping lines and the same normalized title) and `findings_source` is `merged`; the judge's raw text is still shown.
+
+`--with-provenance` requires recorded history. For each changed hunk it adds the recorded turns that wrote its added lines, explained as in `trace why`: step, agent, the share of added lines, and the turn's prompt, redacted and then capped at 1 KiB, each prompt shown once and referred to by later hunks. Each entry, including file paths and agent names, is redacted. At most two turns are listed per hunk, the whole block is capped at 16 KiB, and omitted hunks are counted. Reviewers are asked to compare that intent with the implementation. With `--staged`, a file whose index content differs from the working tree is listed as unavailable.
+
+`--format markdown` prints a pull request comment: a findings table with severity, location and agreement (for example `2/2`), collapsible details, failed runs and any raw answers. Model text is escaped so it cannot add HTML, Markdown links, table cells, `@` mentions, issue references (`#123`) or autolinked URLs, `www.` hosts and e-mail addresses (a zero-width joiner is inserted). Text output removes ANSI escape sequences, control characters and bidirectional overrides from model answers. `--format sarif` prints a SARIF 2.1.0 log (rule `trace-review/finding`; `critical`/`high` map to `error`, `medium` to `warning`, `low`/`info` to `note`; raw answers use `trace-review/unstructured`; failed runs set `executionSuccessful: false`). Locations are repository-relative URIs under `%SRCROOT%`. Both formats need launched reviewers and cannot be combined with `--json` or `--no-launch`.
+
+`--json` keeps the existing report and, in structured mode, adds `findings` (or `unstructured: true`) to each result, a `judge` result, the consolidated `findings` and `findings_source` (`judge` or `merged`). `--with-provenance` alone adds nothing to the JSON beyond the longer prompts in `--no-launch` plans. `--no-launch` prints the reviewer prompts and, with `--judge`, the judge prompt template. The command exits non-zero when any reviewer or the judge fails or times out; completed results are still printed.
 
 ## Automation
 

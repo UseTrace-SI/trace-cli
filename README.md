@@ -26,6 +26,14 @@ preserves successful results when another reviewer fails. Diffs are capped at
 64 KiB, secret paths are excluded and file paths are interpreted literally.
 Claude review disables built-in tools and inherited MCP servers; Codex uses its
 read-only sandbox. A per-reviewer timeout terminates the owned process group.
+`--judge NAME` adds one more sandboxed agent that consolidates the reviewers'
+findings into a deduplicated, severity-ranked list with agreement counts;
+`--with-provenance` adds each changed hunk's recorded prompt (redacted, capped);
+`--format markdown` prints a pull request comment and `--format sarif` a SARIF
+2.1.0 log checked against the official schema. Reviewers are asked for JSON
+findings only with `--judge` or a non-text `--format`; answers outside the
+schema stay raw text. See
+[independent review](docs/cli.md#independent-review).
 Offline subprocess regressions pass; live provider review acceptance is pending.
 
 `trace why` maps current lines back through recorded file states, including
@@ -234,7 +242,7 @@ The CLI records Claude Code, Codex, Cursor Agent, Antigravity CLI (`agy`), OpenC
 
 `trace acp -- <agent>` (preview) records Agent Client Protocol agents run by Zed, JetBrains IDEs and other ACP editors through a byte-for-byte stdio proxy; see [ACP](docs/acp.md).
 
-Security and storage hardening: `trace dashboard` serves only to the browser that opens its printed one-launch URL and refuses requests naming any other host; it renders history as text. Redaction recognizes more provider token formats and keys its markers per install. More credential files (`.npmrc`, `.netrc`, `.git-credentials`, key stores, `credentials.json`, Terraform state, kubeconfig and Docker configs) are never captured. The daemon collects history past `trace gc`'s 30-day retention once a day (sooner over `TRACE_MAX_STORE_BYTES`, never while sync is configured), the hook spool is capped with a drop counter, and `trace doctor` warns about both. See [privacy](docs/privacy.md).
+Security and storage hardening: `trace dashboard` serves only to the browser that opens its printed one-launch URL and refuses requests naming any other host; it renders history as text. Redaction recognizes more provider token formats and keys its markers per install. It also masks secret-named values in escaped JSON embedded in text and tokens glued to a preceding digit or underscore. More credential files (`.npmrc`, `.netrc`, `.git-credentials`, key stores, `credentials.json`, Terraform state, kubeconfig and Docker configs) are never captured. The daemon collects history past `trace gc`'s 30-day retention once a day (sooner over `TRACE_MAX_STORE_BYTES`, never while sync is configured), the hook spool is capped with a drop counter, and `trace doctor` warns about both. See [privacy](docs/privacy.md).
 
 ## Install
 
