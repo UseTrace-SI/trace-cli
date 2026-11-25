@@ -11,7 +11,7 @@
     "stdout": "{{BASE}}/repo-fork-0-fa\nstub agy output\n",
     "exit": 0,
     "files": {
-      "out/agy.log": "[0664] agy\n--prompt-interactive\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\nagy\n--prompt-interactive\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/agy.log": "[0664] agy\n--prompt-interactive\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nagy\n--prompt-interactive\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
     }
   },
   "fork/claude-code/00 fork 0 --agent claude-code --name fb": {
@@ -26,7 +26,7 @@
     "stdout": "{{BASE}}/repo-fork-0-fb\nstub claude output\n",
     "exit": 0,
     "files": {
-      "out/claude.log": "[0664] claude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\nclaude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\nclaude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/claude.log": "[0664] claude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
     }
   },
   "fork/codex/00 fork 0 --agent codex --name fc": {
@@ -41,7 +41,7 @@
     "stdout": "{{BASE}}/repo-fork-0-fc\nstub codex output\n",
     "exit": 0,
     "files": {
-      "out/codex.log": "[0664] codex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\ncodex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\ncodex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/codex.log": "[0664] codex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\ncodex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\ncodex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
     }
   },
   "fork/cursor/00 fork 0 --agent cursor --name fd": {
@@ -56,7 +56,7 @@
     "stdout": "{{BASE}}/repo-fork-0-fd\nstub agent output\n",
     "exit": 0,
     "files": {
-      "out/agent.log": "[0664] agent\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\nagent\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/agent.log": "[0664] agent\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nagent\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
     }
   },
   "fork/no-launch/00 --json fork 0 --agent codex --name nolaunch --no-launch": {
@@ -90,7 +90,7 @@
     "args": [
       "--help"
     ],
-    "stdout": "Local coding-agent history\n\nUsage:\n  trace [command]\n\nAvailable Commands:\n  acp          Run an Agent Client Protocol agent and record its turns\n  activity     Summarize local recorded activity\n  agent        \n  agent-help   \n  agents       List supported global integrations, detection and recording state\n  blame        Show who wrote each line of a file\n  clean        \n  cloud-run    Submit explicitly selected files to an approved isolated NUC job\n  comments     Manage anchored review comments\n  companions   Manage optional Brain and Graph integration\n  completion   Generate the autocompletion script for the specified shell\n  config       Read or change repository settings\n  connect      Connect this repository to your private hosted dashboard\n  context      Combine history, memory and code context\n  dag          Show the causal graph of edits (parent pointers)\n  dashboard    Serve a local read-only web dashboard\n  diff         \n  disable      Pause all recording/uploads or recording for selected agents\n  dispatch     \n  doctor       \n  enable       Enable selected agents or automatically detect supported installed CLI/desktop agents\n  experts      Rank agent provenance for code scopes\n  export       Export code attribution\n  fork         \n  gc           Remove expired local history\n  git-native   Manage opt-in git-native checkpoint storage\n  handoff      Export a portable handoff bundle with context for another machine/agent\n  help         Help about any command\n  import       Import history from another Trace database\n  init         \n  log          \n  login        Sign in once to connect this computer to your Trace dashboard\n  mcp          Serve read-only Trace tools over MCP stdio\n  messages     \n  plugin       Verify and manage explicitly trusted offline plugin bundles\n  resume       \n  review       Review changes independently with one or more selected agents\n  rewind       \n  run          Run a single headless agent prompt with Trace\n  search       \n  setup        Enable automatic recording across repositories\n  shadow       Manage shadow branches for in-session rewind\n  show         \n  stats        Summarize local Trace history\n  status       \n  sync         Upload local history after login\n  timeline     Show fine-grained edit timeline\n  tokens       Analyze token usage across sessions and checkpoints\n  trail        Manage named trails over recorded history\n  tui          \n  uninstall    \n  update-check Check for a newer release (opt-in)\n  version      \n  why          \n\nFlags:\n  -h, --help          help for trace\n      --json          machine-readable output\n      --repo string   repository root\n\nUse \"trace [command] --help\" for more information about a command.\n",
+    "stdout": "Local coding-agent history\n\nUsage:\n  trace [command]\n\nAvailable Commands:\n  acp          Run an Agent Client Protocol agent and record its turns\n  activity     Summarize local recorded activity\n  agent        \n  agent-help   \n  agents       List supported global integrations, detection and recording state\n  blame        Show who wrote each line of a file\n  clean        \n  cloud-run    Submit explicitly selected files to an approved isolated NUC job\n  comments     Manage anchored review comments\n  companions   Manage optional Brain and Graph integration\n  completion   Generate the autocompletion script for the specified shell\n  config       Read or change repository settings\n  connect      Connect this repository to your private hosted dashboard\n  context      Combine history, memory and code context\n  dag          Show the causal graph of edits (parent pointers)\n  dashboard    Serve a local read-only web dashboard\n  diff         \n  disable      Pause all recording/uploads or recording for selected agents\n  dispatch     \n  doctor       \n  enable       Enable selected agents or automatically detect supported installed CLI/desktop agents\n  experts      Rank agent provenance for code scopes\n  export       Export code attribution\n  fork         \n  gc           Remove expired local history\n  git-native   Manage opt-in git-native checkpoint storage\n  handoff      Export a portable handoff bundle with context for another machine/agent\n  help         Help about any command\n  import       Import history from another Trace database\n  init         \n  log          \n  login        Sign in once to connect this computer to your Trace dashboard\n  mcp          Serve read-only Trace tools over MCP stdio\n  messages     \n  plugin       Verify and manage explicitly trusted offline plugin bundles\n  resume       Continue a recorded session, in the same or another agent\n  review       Review changes independently with one or more selected agents\n  rewind       \n  run          Run a single headless agent prompt with Trace\n  search       \n  setup        Enable automatic recording across repositories\n  shadow       Manage shadow branches for in-session rewind\n  show         \n  stats        Summarize local Trace history\n  status       \n  sync         Upload local history after login\n  timeline     Show fine-grained edit timeline\n  tokens       Analyze token usage across sessions and checkpoints\n  trail        Manage named trails over recorded history\n  tui          \n  uninstall    \n  update-check Check for a newer release (opt-in)\n  version      \n  why          \n\nFlags:\n  -h, --help          help for trace\n      --json          machine-readable output\n      --repo string   repository root\n\nUse \"trace [command] --help\" for more information about a command.\n",
     "exit": 0
   },
   "help/01 setup --help": {
@@ -196,7 +196,7 @@
       "resume",
       "--help"
     ],
-    "stdout": "Usage:\n  trace resume \u003cstep\u003e [flags]\n\nFlags:\n      --agent string   agent to launch (default \"claude-code\")\n  -h, --help           help for resume\n      --no-launch      rewind and write context without launching\n\nGlobal Flags:\n      --json          machine-readable output\n      --repo string   repository root\n",
+    "stdout": "Resume rewinds the working tree to a step (or a session's latest step) and\nstarts an agent with a redacted, size-capped handoff: the original goal,\nthe turns, the files changed with line counts, open items from the last\nresponse and how to see more. The handoff is also written to\n.trace/context.md. --fork restores into a new worktree instead of\nrewinding, --no-rewind keeps the tree as it is, and --no-launch prints\nthe plan and the handoff without starting the agent (it still rewinds\nunless --no-rewind is set). A number is a step; when it also starts a\nsession ID, pass --step or --session.\n\nUsage:\n  trace resume \u003cstep|session\u003e [flags]\n\nFlags:\n      --agent string            agent to launch (default: the session's agent when it can be launched, else claude-code)\n      --fork                    restore the step into a new worktree instead of rewinding\n  -h, --help                    help for resume\n      --max-context-bytes int   cap on the handoff context size (1024 to 102400) (default 12288)\n      --name string             fork suffix (with --fork)\n      --no-launch               print the plan and handoff context without launching (still rewinds unless --no-rewind)\n      --no-rewind               keep the working tree as it is\n      --session                 read the argument as a session ID, prefix or agent session ID\n      --step                    read the argument as a step number\n\nGlobal Flags:\n      --json          machine-readable output\n      --repo string   repository root\n",
     "exit": 0
   },
   "help/14 hook --help": {
@@ -358,11 +358,11 @@
       "resume",
       "0"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\nstub claude output\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching claude-code: claude \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub claude output\n",
     "exit": 0,
     "files": {
-      "out/claude.log": "[0664] claude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n",
-      "root/.trace/context.md": "[0600] # Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n"
+      "out/claude.log": "[0664] claude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n",
+      "root/.trace/context.md": "[0600] # Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n"
     }
   },
   "resume/01 resume 0 --agent agy": {
@@ -372,10 +372,10 @@
       "--agent",
       "agy"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\nstub agy output\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching agy: agy --prompt-interactive \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub agy output\n",
     "exit": 0,
     "files": {
-      "out/agy.log": "[0664] agy\n--prompt-interactive\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/agy.log": "[0664] agy\n--prompt-interactive\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
     }
   },
   "resume/02 resume 0 --agent claude-code": {
@@ -385,10 +385,10 @@
       "--agent",
       "claude-code"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\nstub claude output\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching claude-code: claude \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub claude output\n",
     "exit": 0,
     "files": {
-      "out/claude.log": "[0664] claude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\nclaude\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/claude.log": "[0664] claude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
     }
   },
   "resume/03 resume 0 --agent codex": {
@@ -398,10 +398,10 @@
       "--agent",
       "codex"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\nstub codex output\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching codex: codex \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub codex output\n",
     "exit": 0,
     "files": {
-      "out/codex.log": "[0664] codex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/codex.log": "[0664] codex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
     }
   },
   "resume/04 resume 0 --agent cursor": {
@@ -411,10 +411,10 @@
       "--agent",
       "cursor"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\nstub agent output\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching cursor: agent \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub agent output\n",
     "exit": 0,
     "files": {
-      "out/agent.log": "[0664] agent\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/agent.log": "[0664] agent\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
     }
   },
   "resume/05 resume 0 --agent gemini": {
@@ -424,8 +424,8 @@
       "--agent",
       "gemini"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
-    "stderr": "unsupported agent \"gemini\"\n",
+    "stdout": "",
+    "stderr": "agent \"gemini\" cannot be launched; agents with a launch capability: agy, claude-code, codex, cursor\n",
     "exit": 1
   },
   "resume/06 resume 0 --agent nope": {
@@ -435,8 +435,8 @@
       "--agent",
       "nope"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
-    "stderr": "unsupported agent \"nope\"\n",
+    "stdout": "",
+    "stderr": "agent \"nope\" cannot be launched; agents with a launch capability: agy, claude-code, codex, cursor\n",
     "exit": 1
   },
   "resume/07 resume 0 --agent Claude-Code": {
@@ -446,8 +446,8 @@
       "--agent",
       "Claude-Code"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
-    "stderr": "unsupported agent \"Claude-Code\"\n",
+    "stdout": "",
+    "stderr": "agent \"Claude-Code\" cannot be launched; agents with a launch capability: agy, claude-code, codex, cursor\n",
     "exit": 1
   },
   "resume/08 resume 0 --agent cursor-global": {
@@ -457,8 +457,8 @@
       "--agent",
       "cursor-global"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
-    "stderr": "unsupported agent \"cursor-global\"\n",
+    "stdout": "",
+    "stderr": "agent \"cursor-global\" cannot be launched; agents with a launch capability: agy, claude-code, codex, cursor\n",
     "exit": 1
   },
   "resume/09 resume 0 --agent ": {
@@ -468,9 +468,11 @@
       "--agent",
       ""
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
-    "stderr": "unsupported agent \"\"\n",
-    "exit": 1
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nLaunching claude-code: claude \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\nstub claude output\n",
+    "exit": 0,
+    "files": {
+      "out/claude.log": "[0664] claude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\nclaude\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
+    }
   },
   "resume/10 --json resume 0 --agent codex": {
     "args": [
@@ -480,10 +482,10 @@
       "--agent",
       "codex"
     ],
-    "stdout": "{\"agent\":\"codex\",\"safety_step\":0,\"step\":0}\nstub codex output\n",
+    "stdout": "{\"agent\":\"codex\",\"command\":[\"codex\",\"\\u003chandoff context\\u003e\"],\"context_bytes\":446,\"context_file\":\"{{BASE}}/repo/.trace/context.md\",\"files\":[\"a.go\",\"sub/b.go\"],\"launched\":true,\"mode\":\"rewind\",\"path\":\"{{BASE}}/repo\",\"safety_step\":0,\"session_id\":\"\",\"source_agent\":\"\",\"step\":0,\"todos\":[],\"truncated\":false}\nstub codex output\n",
     "exit": 0,
     "files": {
-      "out/codex.log": "[0664] codex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\ncodex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\n"
+      "out/codex.log": "[0664] codex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\ncodex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
     }
   },
   "resume/11 resume 0 --agent codex --no-launch": {
@@ -494,7 +496,7 @@
       "codex",
       "--no-launch"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
+    "stdout": "Resumed at step 0; undo with trace rewind 0\nWould launch codex: codex \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\n\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n",
     "exit": 0
   },
   "resume/12 resume 0 --agent nope --no-launch": {
@@ -505,7 +507,36 @@
       "nope",
       "--no-launch"
     ],
-    "stdout": "Resumed at step 0; undo with trace rewind 0\n",
+    "stdout": "",
+    "stderr": "agent \"nope\" cannot be launched; agents with a launch capability: agy, claude-code, codex, cursor\n",
+    "exit": 1
+  },
+  "resume/fork/00 resume 0 --agent codex --fork --name resumed": {
+    "args": [
+      "resume",
+      "0",
+      "--agent",
+      "codex",
+      "--fork",
+      "--name",
+      "resumed"
+    ],
+    "stdout": "Forked step 0 into {{BASE}}/repo-fork-0-resumed\nLaunching codex: codex \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo-fork-0-resumed/.trace/context.md\nstub codex output\n",
+    "exit": 0,
+    "files": {
+      "out/codex.log": "[0664] codex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\ncodex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\ncodex\n# Trace context\n\nSource step: 0\nGit HEAD: 48346f00593d14cf903cdc99e16ee3c6b03a53c2\n\n## Recent turns\n\n## Files changed at step 0\n- a.go\n- sub/b.go\n\ncodex\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n\n"
+    }
+  },
+  "resume/plan/00 resume 0 --agent cursor --no-rewind --no-launch": {
+    "args": [
+      "resume",
+      "0",
+      "--agent",
+      "cursor",
+      "--no-rewind",
+      "--no-launch"
+    ],
+    "stdout": "Resuming from step 0 without rewinding\nWould launch cursor: agent \u003chandoff context\u003e\nHandoff context (446 bytes): {{BASE}}/repo/.trace/context.md\n\n# Trace handoff\n\nYou are continuing work recorded by Trace. The working tree is at Trace step 0 (git HEAD 48346f00593d). Review the summary below, then continue the task.\n\n## Files changed (2)\n\n- A a.go (+1 -0)\n- A sub/b.go (+1 -0)\n\n## More history\n\nRun `trace show 0` for this step's turn and diff, `trace log` for all steps, and `trace diff STEP STEP` to compare steps. With the Trace MCP server, use get_turn, get_messages and search_history.\n",
     "exit": 0
   },
   "review-missing/00 review --agent codex": {

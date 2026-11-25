@@ -159,6 +159,10 @@ func TestGoldenCommands(t *testing.T) {
 	fork := filepath.Join(s.base, "repo-fork-0-nolaunch")
 	s.changedSteps(g, "fork/no-launch", map[string]string{"root": root, "out": out}, root, env, []string{"--json", "fork", "0", "--agent", "codex", "--name", "nolaunch", "--no-launch"})
 	waitForDaemons(t, fork, true)
+	fork = filepath.Join(s.base, "repo-fork-0-resumed")
+	s.changedSteps(g, "resume/fork", map[string]string{"root": root, "out": out}, root, env, []string{"resume", "0", "--agent", "codex", "--fork", "--name", "resumed"})
+	waitForDaemons(t, fork, true)
+	s.changedSteps(g, "resume/plan", roots, root, env, []string{"resume", "0", "--agent", "cursor", "--no-rewind", "--no-launch"})
 	waitForDaemons(t, "", false)
 	g.check()
 }

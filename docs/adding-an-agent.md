@@ -65,7 +65,7 @@ interface in `adapter.go`:
 | `GlobalInstaller` | `trace setup`, `trace enable/disable`, `trace agents` (detection via `Integration`) |
 | `TranscriptReader` | The engine reads the transcript named by hook events when a turn ends: prompt, reasoning, tool calls, files read and written, tokens |
 | `ProjectEvidencer` | `trace doctor` recognizes the installed project integration |
-| `Launcher` | `trace fork` and `trace resume` start the agent with a context prompt |
+| `Launcher` | `trace fork` and `trace resume` start the agent interactively with a context prompt. `LaunchCommand` must pass the context as a prompt argument (or write it to a temporary file the agent reads); it must never write the project's instruction files. Add the command to the table in [Cross-agent resume](cli.md#cross-agent-resume) |
 | `Reviewer` | `trace review` runs the agent headless and read-only, with the prompt on stdin |
 | `Runner` | `trace run <agent> --prompt` runs one headless prompt |
 
