@@ -193,6 +193,16 @@ func (e *Engine) session(ev event.Event) (string, error) {
 	if err != sql.ErrNoRows {
 		return "", fmt.Errorf("finding session: %w", err)
 	}
+	// An ended session that sends more events, such as Codex rollout lines
+	// read after its SessionEnd hook or a resumed agent session, continues
+	// the same row instead of starting a duplicate one.
+	err = e.DB.QueryRow("SELECT id FROM sessions WHERE agent=? AND agent_sid=? AND worktree=? AND agent_sid<>'' ORDER BY started_at DESC LIMIT 1", ev.Agent, ev.AgentSessionID, e.Root).Scan(&sid)
+	if err == nil {
+		return sid, e.reopenSession(sid)
+	}
+	if err != sql.ErrNoRows {
+		return "", fmt.Errorf("finding ended session: %w", err)
+	}
 	sid, err = id.New()
 	if err != nil {
 		return "", err
@@ -206,6 +216,24 @@ func (e *Engine) session(ev event.Event) (string, error) {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
 	return sid, nil
+}
+
+func (e *Engine) reopenSession(sid string) error {
+	tx, err := e.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning session reopen: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("UPDATE sessions SET ended_at=NULL WHERE id=?", sid); err != nil {
+		return fmt.Errorf("reopening session: %w", err)
+	}
+	if err := store.RecordUpdate(tx, "sessions", sid); err != nil {
+		return fmt.Errorf("recording session reopen: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing session reopen: %w", err)
+	}
+	return nil
 }
 
 func (e *Engine) recordMessage(sessionID, turnID, role, content string, at int64) error {

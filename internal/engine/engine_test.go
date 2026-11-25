@@ -553,3 +553,34 @@ func TestUnknownEditDoesNotFinishIncompleteScan(t *testing.T) {
 		t.Fatal("file missing after scan retry")
 	}
 }
+
+// Codex rollout lines read after the SessionEnd hook continue the session row
+// instead of creating a second one for the same Codex session id.
+func TestEventsAfterSessionEndReuseSessionRow(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	ev := event.Event{Agent: "codex", AgentSessionID: "thread-1", Worktree: root, At: time.Now().UnixMilli()}
+	for _, kind := range []event.Kind{event.TurnStart, event.TurnEnd, event.SessionEnd, event.TurnStart} {
+		ev.Kind, ev.Prompt = kind, "prompt"
+		if err := e.Process(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var rows, open int
+	if err := e.DB.QueryRow("SELECT count(*), count(*) FILTER (WHERE ended_at IS NULL) FROM sessions WHERE agent_sid='thread-1'").Scan(&rows, &open); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 || open != 1 {
+		t.Fatalf("sessions = %d (open %d), want one reopened row", rows, open)
+	}
+}
