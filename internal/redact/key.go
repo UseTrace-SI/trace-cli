@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 
 	"github.com/UseTrace-SI/trace-cli/internal/userstate"
@@ -69,21 +68,51 @@ func randomMarkerKey() []byte {
 // loadMarkerKey reads the key at path, creating it with mode 0600 when it is
 // missing or damaged. Concurrent first runs agree on one key: a new key is
 // published with a hard link, which never replaces a key another process
-// published first.
+// published first. Replacing a damaged key is serialized by an advisory lock
+// on path+".lock": inside it the key is read again, and only a key that is
+// still damaged is moved aside before a new one is linked in its place.
 func loadMarkerKey(path string) ([]byte, error) {
 	key, err := readMarkerKey(path)
 	if err == nil {
 		return key, nil
 	}
-	damaged := !errors.Is(err, os.ErrNotExist)
-	if damaged && !errors.Is(err, errDamagedMarkerKey) {
+	if errors.Is(err, os.ErrNotExist) {
+		return publishMarkerKey(path)
+	}
+	if !errors.Is(err, errDamagedMarkerKey) {
 		return nil, err
 	}
+	unlock, err := lockMarkerKey(path + ".lock")
+	if err != nil {
+		return nil, fmt.Errorf("locking marker key: %w", err)
+	}
+	defer unlock()
+	// Another process may have repaired the key while this one waited.
+	key, err = readMarkerKey(path)
+	if err == nil {
+		return key, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, errDamagedMarkerKey) {
+		return nil, err
+	}
+	if errors.Is(err, errDamagedMarkerKey) {
+		// Keep the damaged file for inspection; never delete or overwrite a
+		// key in place, so a key published meanwhile is never lost.
+		if err := os.Rename(path, path+".damaged"); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("moving damaged marker key aside: %w", err)
+		}
+	}
+	return publishMarkerKey(path)
+}
+
+// publishMarkerKey writes a new random key to a private temporary file and
+// hard-links it to path. If a key appeared there first, that key is used.
+func publishMarkerKey(path string) ([]byte, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("creating state directory: %w", err)
 	}
-	key = randomMarkerKey()
+	key := randomMarkerKey()
 	tmp, err := os.CreateTemp(dir, markerKeyFile+".*.tmp")
 	if err != nil {
 		return nil, fmt.Errorf("creating marker key: %w", err)
@@ -105,16 +134,6 @@ func loadMarkerKey(path string) ([]byte, error) {
 	if err := tmp.Close(); err != nil {
 		return nil, fmt.Errorf("closing marker key: %w", err)
 	}
-	if damaged {
-		return replaceDamagedMarkerKey(path, name, key)
-	}
-	return publishMarkerKey(path, name, key)
-}
-
-// publishMarkerKey links the complete key file name at path. A link never
-// replaces an existing file, so when another process published first this
-// one adopts that key instead.
-func publishMarkerKey(path, name string, key []byte) ([]byte, error) {
 	if err := os.Link(name, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return readMarkerKey(path)
@@ -122,46 +141,6 @@ func publishMarkerKey(path, name string, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("publishing marker key: %w", err)
 	}
 	return key, nil
-}
-
-// replaceDamagedMarkerKey replaces a damaged key with the one in name. It
-// follows the same protocol as trace-brain's copy (internal/redact/key.go):
-// an flock on path+".lock", a reread, the damaged file moved to
-// path+".damaged", and a linked publish, so the two components interoperate.
-// Replacing is the only step that removes a key, so repairs are serialized
-// by a lock next to the key, and each one first rereads the key: a process
-// that waited adopts the key a previous repair published. The damaged file
-// is moved aside and the new key is published with a link, like a first
-// key, so a process that found the key missing in between wins instead.
-// Every process thus ends up with the same key.
-func replaceDamagedMarkerKey(path, name string, key []byte) ([]byte, error) {
-	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("opening marker key lock: %w", err)
-	}
-	defer lock.Close()
-	for {
-		err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
-		if err != syscall.EINTR {
-			break
-		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("locking marker key: %w", err)
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-	current, err := readMarkerKey(path)
-	switch {
-	case err == nil:
-		return current, nil
-	case errors.Is(err, errDamagedMarkerKey):
-		if err := os.Rename(path, path+".damaged"); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("moving damaged marker key aside: %w", err)
-		}
-	case !errors.Is(err, os.ErrNotExist):
-		return nil, err
-	}
-	return publishMarkerKey(path, name, key)
 }
 
 var errDamagedMarkerKey = errors.New("marker key is damaged")
