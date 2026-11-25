@@ -100,7 +100,7 @@ func TestAutoGCRunsDailyWithGCRetention(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 	now := time.Now()
-	ran, err := runAutoGC(root, e, logger, now)
+	ran, err := runAutoGC(&autoGCState{}, root, e, logger, now)
 	if err != nil || !ran {
 		t.Fatalf("first automatic GC: ran %v, %v", ran, err)
 	}
@@ -114,13 +114,13 @@ func TestAutoGCRunsDailyWithGCRetention(t *testing.T) {
 	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,tag,created_at) SELECT 'later',100,manifest_hash,'turn',1 FROM keyframes WHERE seq=0"); err != nil {
 		t.Fatal(err)
 	}
-	if ran, err := runAutoGC(root, e, logger, now.Add(time.Hour)); err != nil || ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, logger, now.Add(time.Hour)); err != nil || ran {
 		t.Fatalf("automatic GC ran again within a day: %v, %v", ran, err)
 	}
 	if !strings.Contains(keyframeIDs(t, e), "later") {
 		t.Fatal("expired step collected before the next window")
 	}
-	if ran, err := runAutoGC(root, e, logger, now.Add(autoGCInterval)); err != nil || !ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, logger, now.Add(autoGCInterval)); err != nil || !ran {
 		t.Fatalf("automatic GC did not run a day later: %v, %v", ran, err)
 	}
 	if strings.Contains(keyframeIDs(t, e), "later") {
@@ -137,7 +137,7 @@ func TestAutoGCSkipsSafetyKeyframeWhenNothingExpired(t *testing.T) {
 	if err := e.DB.QueryRow("SELECT COUNT(*) FROM keyframes").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if ran, err := runAutoGC(root, e, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now()); err != nil || ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now()); err != nil || ran {
 		t.Fatalf("ran %v, %v", ran, err)
 	}
 	var after int
@@ -154,11 +154,11 @@ func TestAutoGCBudgetBringsCollectionForward(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, autoGCStateName), []byte(strconv.FormatInt(recent.UnixMilli(), 10)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if ran, err := runAutoGC(root, e, logger, time.Now()); err != nil || ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, logger, time.Now()); err != nil || ran {
 		t.Fatalf("under budget, ran %v within the day: %v", ran, err)
 	}
 	t.Setenv("TRACE_MAX_STORE_BYTES", "1")
-	if ran, err := runAutoGC(root, e, logger, time.Now()); err != nil || !ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, logger, time.Now()); err != nil || !ran {
 		t.Fatalf("over budget, automatic GC did not run: %v, %v", ran, err)
 	}
 	if strings.Contains(keyframeIDs(t, e), "expired") {
@@ -168,7 +168,7 @@ func TestAutoGCBudgetBringsCollectionForward(t *testing.T) {
 		t.Fatal("the budget made collection more aggressive than trace gc")
 	}
 	t.Setenv("TRACE_MAX_STORE_BYTES", "-5")
-	if _, err := runAutoGC(root, e, logger, time.Now()); err == nil {
+	if _, err := runAutoGC(&autoGCState{}, root, e, logger, time.Now()); err == nil {
 		t.Fatal("invalid budget accepted")
 	}
 }
@@ -184,7 +184,7 @@ func TestAutoGCSkippedWhileSyncIsConfigured(t *testing.T) {
 	if err := os.WriteFile(loginPath(root), login, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if ran, err := runAutoGC(root, e, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now()); err != nil || ran {
+	if ran, err := runAutoGC(&autoGCState{}, root, e, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now()); err != nil || ran {
 		t.Fatalf("ran %v with sync configured: %v", ran, err)
 	}
 	if !strings.Contains(keyframeIDs(t, e), "expired") {
@@ -214,5 +214,39 @@ func TestAutoGCLoopStopsWithTheDaemon(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("automatic GC loop ignored cancellation")
+	}
+}
+
+// A store over budget with nothing old enough to collect is checked hourly;
+// its warning is logged once, and again only after the condition clears.
+func TestAutoGCOverBudgetWarningIsLoggedOncePerChange(t *testing.T) {
+	root, e := autoGCRepo(t)
+	if _, err := e.DB.Exec("DELETE FROM keyframes WHERE id='expired'"); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	var state autoGCState
+	const warning = "no history is old enough to collect"
+	t.Setenv("TRACE_MAX_STORE_BYTES", "1")
+	now := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := runAutoGC(&state, root, e, logger, now.Add(time.Duration(i)*autoGCOverBudgetEvery)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := strings.Count(logs.String(), warning); n != 1 {
+		t.Fatalf("warning logged %d times over three hourly checks; want 1:\n%s", n, logs.String())
+	}
+	t.Setenv("TRACE_MAX_STORE_BYTES", "")
+	if _, err := runAutoGC(&state, root, e, logger, now.Add(3*autoGCOverBudgetEvery)); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TRACE_MAX_STORE_BYTES", "1")
+	if _, err := runAutoGC(&state, root, e, logger, now.Add(4*autoGCOverBudgetEvery)); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(logs.String(), warning); n != 2 {
+		t.Fatalf("warning logged %d times after the condition recurred; want 2", n)
 	}
 }

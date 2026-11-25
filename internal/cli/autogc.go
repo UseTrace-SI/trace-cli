@@ -95,18 +95,33 @@ func readAutoGCLast(dir string) time.Time {
 	return time.UnixMilli(ms)
 }
 
+// autoGCState remembers which condition the last check logged.
+type autoGCState struct{ notice string }
+
+const (
+	autoGCNoticeSync       = "sync"
+	autoGCNoticeOverBudget = "over budget"
+)
+
 // runAutoGC performs one automatic collection if it is due. It reuses trace
 // gc's retention and protections unchanged, adds a grace period for fresh
 // objects, skips the safety keyframe and full scan when nothing has expired,
 // and never runs while sync is configured, so history that has not been
 // uploaded yet is never removed unattended.
-func runAutoGC(root string, e *engine.Engine, logger *slog.Logger, now time.Time) (ran bool, err error) {
+//
+// A check that cannot collect (sync configured, nothing expired while over
+// budget) repeats hourly; state logs each such condition once until it
+// changes.
+func runAutoGC(state *autoGCState, root string, e *engine.Engine, logger *slog.Logger, now time.Time) (ran bool, err error) {
 	dir := filepath.Join(root, ".trace")
 	budget, err := maxStoreBytes()
 	if err != nil {
 		return false, err
 	}
 	size := traceDirSize(dir)
+	if size <= budget && state.notice == autoGCNoticeOverBudget {
+		state.notice = ""
+	}
 	due, reason := autoGCDue(readAutoGCLast(dir), size, budget, now)
 	if !due {
 		return false, nil
@@ -116,7 +131,10 @@ func runAutoGC(root string, e *engine.Engine, logger *slog.Logger, now time.Time
 		return false, fmt.Errorf("recording automatic GC: %w", err)
 	}
 	if _, err := readSyncConfig(root); err == nil || !os.IsNotExist(err) {
-		logger.Info("automatic gc skipped: sync is configured; run trace gc after history is uploaded", "size_bytes", size, "budget_bytes", budget)
+		if state.notice != autoGCNoticeSync {
+			state.notice = autoGCNoticeSync
+			logger.Info("automatic gc skipped: sync is configured; run trace gc after history is uploaded", "size_bytes", size, "budget_bytes", budget)
+		}
 		return false, nil
 	}
 	preview, err := e.GCWith(engine.GCOptions{KeepDays: autoGCKeepDays, DryRun: true})
@@ -124,7 +142,8 @@ func runAutoGC(root string, e *engine.Engine, logger *slog.Logger, now time.Time
 		return false, fmt.Errorf("previewing automatic GC: %w", err)
 	}
 	if preview.RemovedKeyframes == 0 {
-		if size > budget {
+		if size > budget && state.notice != autoGCNoticeOverBudget {
+			state.notice = autoGCNoticeOverBudget
 			logger.Warn("trace store exceeds its budget but no history is old enough to collect", "size_bytes", size, "budget_bytes", budget, "keep_days", autoGCKeepDays)
 		}
 		return false, nil
@@ -133,6 +152,7 @@ func runAutoGC(root string, e *engine.Engine, logger *slog.Logger, now time.Time
 	if err != nil {
 		return false, fmt.Errorf("automatic GC: %w", err)
 	}
+	state.notice = ""
 	logger.Info("automatic gc", "reason", reason, "removed_keyframes", result.RemovedKeyframes, "removed_blobs", result.RemovedBlobs, "removed_sessions", result.RemovedSessions, "size_bytes_before", size)
 	return true, nil
 }
@@ -144,6 +164,7 @@ func autoGCLoop(ctx context.Context, root string, e *engine.Engine, logger *slog
 	if !autoGCEnabled() {
 		return
 	}
+	var state autoGCState
 	timer := time.NewTimer(autoGCStartDelay)
 	defer timer.Stop()
 	for {
@@ -152,7 +173,7 @@ func autoGCLoop(ctx context.Context, root string, e *engine.Engine, logger *slog
 			return
 		case <-timer.C:
 		}
-		if _, err := runAutoGC(root, e, logger, time.Now()); err != nil {
+		if _, err := runAutoGC(&state, root, e, logger, time.Now()); err != nil {
 			logger.Error("automatic gc", "error", err)
 		}
 		timer.Reset(autoGCCheckEvery)
