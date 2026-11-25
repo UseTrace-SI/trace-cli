@@ -34,3 +34,30 @@ func (agyAdapter) RemoveProject(root string) error  { return agy.Uninstall(root)
 func (agyAdapter) LaunchCommand(context string) (string, []string) {
 	return "agy", []string{"--prompt-interactive", context}
 }
+
+// TranscriptStart: the transcript's latest user request is the prompt, and
+// the turn begins after it.
+func (agyAdapter) TranscriptStart(path string) (string, int64) {
+	latest, offset, err := agy.LatestPrompt(path)
+	if err != nil {
+		return "", 0
+	}
+	return latest, offset
+}
+
+// ReadTranscript also recovers the prompt from the latest user request when
+// the turn's part of the transcript has none.
+func (agyAdapter) ReadTranscript(path string, offset int64, root string) (TranscriptTurn, int64) {
+	var turn TranscriptTurn
+	next := offset
+	if context, n, err := agy.ReadTranscript(path, offset, root); err == nil {
+		turn = TranscriptTurn{Prompt: context.Prompt, Reasoning: context.Reasoning, ToolCalls: context.ToolCalls, FilesRead: context.FilesRead, WrittenPaths: context.WrittenPaths, HasCommand: context.HasCommand}
+		next = n
+	}
+	if turn.Prompt == "" {
+		turn.Prompt, _, _ = agy.LatestPrompt(path)
+	}
+	return turn, next
+}
+
+func (agyAdapter) ResponseInReasoning() bool { return false }

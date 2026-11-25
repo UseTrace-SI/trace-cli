@@ -13,8 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
@@ -251,13 +250,13 @@ func (e *Engine) turnStart(ev event.Event) error {
 		return err
 	}
 	prompt := ev.Prompt
-	var agyOffset int64
-	if ev.Agent == "agy" && ev.TranscriptPath != "" {
-		if latest, offset, err := agy.LatestPrompt(ev.TranscriptPath); err == nil {
-			if latest != "" {
-				prompt = latest
-			}
-			agyOffset = offset
+	transcript, hasTranscript := transcriptReader(ev)
+	var transcriptOffset int64
+	if hasTranscript {
+		var latest string
+		latest, transcriptOffset = transcript.TranscriptStart(ev.TranscriptPath)
+		if latest != "" {
+			prompt = latest
 		}
 	}
 	_, err = e.DB.Exec("INSERT INTO turns(id,session_id,seq,prompt,started_at) VALUES(?,?,?,?,?)", tid, sid, seq, e.Redactor.Text(prompt), ev.At)
@@ -269,19 +268,31 @@ func (e *Engine) turnStart(ev event.Event) error {
 			return fmt.Errorf("recording user message: %w", err)
 		}
 	}
-	if (ev.Agent == "claude-code" || ev.Agent == "agy") && ev.TranscriptPath != "" {
-		var offset int64
-		if ev.Agent == "agy" {
-			offset = agyOffset
-		} else if info, err := os.Stat(ev.TranscriptPath); err == nil {
-			offset = info.Size()
-		}
+	if hasTranscript {
 		if _, err := e.DB.Exec(`INSERT INTO transcript_offsets(session_id,path,offset) VALUES(?,?,?)
-			ON CONFLICT(session_id) DO UPDATE SET path=excluded.path,offset=excluded.offset`, sid, ev.TranscriptPath, offset); err != nil {
+			ON CONFLICT(session_id) DO UPDATE SET path=excluded.path,offset=excluded.offset`, sid, ev.TranscriptPath, transcriptOffset); err != nil {
 			return fmt.Errorf("recording Claude transcript offset: %w", err)
 		}
 	}
 	return nil
+}
+
+// transcriptReader returns the adapter that reads the transcript of the
+// event's agent, when the event names a transcript.
+func transcriptReader(ev event.Event) (adapters.TranscriptReader, bool) {
+	if ev.TranscriptPath == "" {
+		return nil, false
+	}
+	return transcriptAdapter(ev.Agent)
+}
+
+func transcriptAdapter(agent string) (adapters.TranscriptReader, bool) {
+	a, ok := adapters.Lookup(agent)
+	if !ok {
+		return nil, false
+	}
+	reader, ok := a.(adapters.TranscriptReader)
+	return reader, ok
 }
 
 func (e *Engine) openTurn(ev event.Event) (string, error) {
@@ -535,7 +546,9 @@ func (e *Engine) turnEnd(ev event.Event) error {
 	var transcriptOffset int64
 	var transcriptPath string
 	var tokensIn, tokensOut int64
-	if (ev.Agent == "claude-code" || ev.Agent == "agy") && ev.TranscriptPath != "" {
+	// The transcript is a best-effort source. A missing or unreadable file never
+	// prevents a turn from receiving its keyframe.
+	if transcript, ok := transcriptReader(ev); ok {
 		var savedPath string
 		err := e.DB.QueryRow("SELECT path,offset FROM transcript_offsets WHERE session_id=?", sessionID).Scan(&savedPath, &transcriptOffset)
 		if err != nil && err != sql.ErrNoRows {
@@ -545,53 +558,38 @@ func (e *Engine) turnEnd(ev event.Event) error {
 		if savedPath != transcriptPath {
 			transcriptOffset = 0
 		}
-		if ev.Agent == "claude-code" {
-			context, next, readErr := claudecode.ReadTranscript(transcriptPath, transcriptOffset, e.Root)
-			if readErr == nil {
-				reasoning, toolCalls, filesRead, transcriptOffset = context.Reasoning, context.ToolCalls, context.FilesRead, next
-				tokensIn, tokensOut = context.TokensIn, context.TokensOut
-			}
-		} else {
-			context, next, readErr := agy.ReadTranscript(transcriptPath, transcriptOffset, e.Root)
-			if readErr == nil {
-				reasoning, toolCalls, filesRead, transcriptPrompt = context.Reasoning, context.ToolCalls, context.FilesRead, context.Prompt
-				writtenPaths, hasCommand, transcriptOffset = context.WrittenPaths, context.HasCommand, next
-			}
-		}
+		var turn adapters.TranscriptTurn
+		turn, transcriptOffset = transcript.ReadTranscript(transcriptPath, transcriptOffset, e.Root)
+		reasoning, toolCalls, filesRead, transcriptPrompt = turn.Reasoning, turn.ToolCalls, turn.FilesRead, turn.Prompt
+		writtenPaths, hasCommand, tokensIn, tokensOut = turn.WrittenPaths, turn.HasCommand, turn.TokensIn, turn.TokensOut
 	}
-	if ev.Agent == "claude-code" && ev.Text != "" && !strings.Contains(reasoning, ev.Text) {
+	if transcript, ok := transcriptAdapter(ev.Agent); ok && transcript.ResponseInReasoning() && ev.Text != "" && !strings.Contains(reasoning, ev.Text) {
 		if reasoning != "" {
 			reasoning += "\n\n"
 		}
 		reasoning += "Assistant response: " + e.Redactor.Text(ev.Text)
 	}
 	reasoning = mergeTurnContext(recordedContext, reasoning)
-	// The transcript is a best-effort source. A missing or unreadable file never
-	// prevents a turn from receiving its keyframe.
-	if ev.Agent == "agy" {
-		if transcriptPrompt == "" && transcriptPath != "" {
-			transcriptPrompt, _, _ = agy.LatestPrompt(transcriptPath)
+	// Edits the transcript shows but no hook reported.
+	for _, path := range writtenPaths {
+		var exists int
+		if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND source='tool' AND path=?", tid, path).Scan(&exists); err != nil {
+			return fmt.Errorf("checking Antigravity tool edit: %w", err)
 		}
-		for _, path := range writtenPaths {
-			var exists int
-			if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND source='tool' AND path=?", tid, path).Scan(&exists); err != nil {
-				return fmt.Errorf("checking Antigravity tool edit: %w", err)
-			}
-			if exists == 0 {
-				if err := e.toolEdit(event.Event{Agent: ev.Agent, AgentSessionID: ev.AgentSessionID, Paths: []string{filepath.Join(e.Root, path)}, At: ev.At}); err != nil {
-					return err
-				}
+		if exists == 0 {
+			if err := e.toolEdit(event.Event{Agent: ev.Agent, AgentSessionID: ev.AgentSessionID, Paths: []string{filepath.Join(e.Root, path)}, At: ev.At}); err != nil {
+				return err
 			}
 		}
-		if hasCommand {
-			var exists int
-			if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND source='tool' AND path=''", tid).Scan(&exists); err != nil {
-				return fmt.Errorf("checking Antigravity command: %w", err)
-			}
-			if exists == 0 {
-				if err := e.toolEdit(event.Event{Agent: ev.Agent, AgentSessionID: ev.AgentSessionID, At: ev.At}); err != nil {
-					return err
-				}
+	}
+	if hasCommand {
+		var exists int
+		if err := e.DB.QueryRow("SELECT COUNT(*) FROM ops WHERE turn_id=? AND source='tool' AND path=''", tid).Scan(&exists); err != nil {
+			return fmt.Errorf("checking Antigravity command: %w", err)
+		}
+		if exists == 0 {
+			if err := e.toolEdit(event.Event{Agent: ev.Agent, AgentSessionID: ev.AgentSessionID, At: ev.At}); err != nil {
+				return err
 			}
 		}
 	}

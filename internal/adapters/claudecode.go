@@ -66,3 +66,23 @@ func (claudeCode) LaunchCommand(context string) (string, []string) {
 func (claudeCode) ReviewCommand() (string, []string) {
 	return "claude", []string{"--print", "--output-format", "text", "--tools", "", "--strict-mcp-config", "--no-session-persistence"}
 }
+
+// TranscriptStart: the turn's part of the transcript begins at its size
+// when the turn starts.
+func (claudeCode) TranscriptStart(path string) (string, int64) {
+	if info, err := os.Stat(path); err == nil {
+		return "", info.Size()
+	}
+	return "", 0
+}
+
+func (claudeCode) ReadTranscript(path string, offset int64, root string) (TranscriptTurn, int64) {
+	context, next, err := claudecode.ReadTranscript(path, offset, root)
+	if err != nil {
+		return TranscriptTurn{}, offset
+	}
+	return TranscriptTurn{Reasoning: context.Reasoning, ToolCalls: context.ToolCalls, FilesRead: context.FilesRead, TokensIn: context.TokensIn, TokensOut: context.TokensOut}, next
+}
+
+// ResponseInReasoning: the Stop hook carries the final assistant message.
+func (claudeCode) ResponseInReasoning() bool { return true }

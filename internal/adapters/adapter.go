@@ -1,8 +1,9 @@
 // Package adapters is the registry of coding-agent integrations. Each agent
 // is one file in this package that implements Adapter and the capability
-// interfaces it supports; the CLI iterates the registry instead of naming
-// agents. The agent-specific parsers and installers stay in the
-// subpackages (internal/adapters/<agent>).
+// interfaces it supports, plus one entry in registry.go; the CLI, daemon
+// and engine iterate the registry instead of naming agents. The
+// agent-specific parsers and installers stay in the subpackages
+// (internal/adapters/<agent>). docs/adding-an-agent.md lists the steps.
 package adapters
 
 import (
@@ -28,7 +29,10 @@ const (
 	Preview Verification = "preview"
 )
 
-// Capabilities is documentation metadata about an agent.
+// Capabilities is documentation metadata about an agent. No command prints
+// it, so it can never change CLI output; TestVerifiedAgentsMatchReadme
+// keeps the README's integration table consistent with it, and
+// docs/adding-an-agent.md asks new adapters to fill it in.
 type Capabilities struct {
 	// DisplayName is the agent's product name.
 	DisplayName string
@@ -168,7 +172,43 @@ type Launcher interface {
 // Reviewer runs the agent headless as a read-only reviewer that reads the
 // prompt from stdin.
 type Reviewer interface {
+	Adapter
 	ReviewCommand() (string, []string)
+}
+
+// TranscriptTurn is what an agent's transcript adds to a finished turn.
+type TranscriptTurn struct {
+	// Prompt recovers the user prompt when the hook did not record one.
+	Prompt    string
+	Reasoning string
+	ToolCalls string
+	FilesRead string
+	// WrittenPaths are files the transcript shows the agent wrote; each
+	// one without a tool edit in the turn is recorded as one.
+	WrittenPaths []string
+	// HasCommand records an unknown-path tool edit when the turn has none,
+	// since a command may have changed any file.
+	HasCommand bool
+	TokensIn   int64
+	TokensOut  int64
+}
+
+// TranscriptReader is an agent whose hook events carry a transcript path
+// that the engine reads when a turn ends.
+type TranscriptReader interface {
+	Adapter
+	// TranscriptStart is called when a turn starts: the prompt the
+	// transcript records (empty keeps the hook's prompt) and the offset
+	// at which the turn's part of the transcript begins.
+	TranscriptStart(path string) (prompt string, offset int64)
+	// ReadTranscript reads the turn from offset and returns the next
+	// offset. The transcript is best effort: on failure it returns what it
+	// recovered and offset unchanged.
+	ReadTranscript(path string, offset int64, root string) (TranscriptTurn, int64)
+	// ResponseInReasoning reports whether the final assistant text of the
+	// turn-end event is appended to the reasoning when the transcript lacks
+	// it.
+	ResponseInReasoning() bool
 }
 
 // HookCall is one `trace hook` invocation.
