@@ -139,3 +139,32 @@ func TestReviewTimeoutKillsTheOwnedProcessGroup(t *testing.T) {
 		t.Fatal("a review subprocess survived cancellation")
 	}
 }
+
+func TestReviewerTextComesFromRegistry(t *testing.T) {
+	for _, tc := range []struct {
+		names []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"a"}, "a"},
+		{[]string{"a", "b"}, "a or b"},
+		{[]string{"a", "b", "c"}, "a, b or c"},
+	} {
+		if got := orList(tc.names); got != tc.want {
+			t.Errorf("orList(%v) = %q, want %q", tc.names, got, tc.want)
+		}
+	}
+	if got := strings.Join(reviewerNames(), ","); got != "claude-code,codex" {
+		t.Fatalf("reviewers %s", got)
+	}
+	cmd := reviewCommand(new(string), new(bool))
+	if got := cmd.Flags().Lookup("agent").Usage; got != "reviewer (claude-code or codex)" {
+		t.Fatalf("--agent usage %q", got)
+	}
+	if got := cmd.Flags().Lookup("agents").Usage; got != "independent reviewers, e.g. claude-code,codex" {
+		t.Fatalf("--agents usage %q", got)
+	}
+	if _, _, err := reviewAgentCommand("cursor"); err == nil || err.Error() != `headless review is not supported for "cursor"; choose claude-code or codex` {
+		t.Fatalf("error %v", err)
+	}
+}

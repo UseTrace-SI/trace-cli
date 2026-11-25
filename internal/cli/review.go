@@ -159,8 +159,9 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		return errors.Join(failures...)
 	}}
-	cmd.Flags().StringVar(&agent, "agent", "claude-code", "reviewer (claude-code or codex)")
-	cmd.Flags().StringSliceVar(&agents, "agents", nil, "independent reviewers, e.g. claude-code,codex")
+	names := reviewerNames()
+	cmd.Flags().StringVar(&agent, "agent", "claude-code", "reviewer ("+orList(names)+")")
+	cmd.Flags().StringSliceVar(&agents, "agents", nil, "independent reviewers, e.g. "+strings.Join(names, ","))
 	cmd.Flags().BoolVar(&noLaunch, "no-launch", false, "print the redacted review plan without invoking providers")
 	cmd.Flags().BoolVar(&staged, "staged", false, "review staged changes instead of unstaged changes")
 	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Minute, "deadline per reviewer (1s–10m)")
@@ -174,5 +175,21 @@ func reviewAgentCommand(agent string) (string, []string, error) {
 			return name, args, nil
 		}
 	}
-	return "", nil, fmt.Errorf("headless review is not supported for %q; choose claude-code or codex", agent)
+	return "", nil, fmt.Errorf("headless review is not supported for %q; choose %s", agent, orList(reviewerNames()))
+}
+
+func reviewerNames() []string {
+	var names []string
+	for _, reviewer := range adapters.Reviewers() {
+		names = append(names, reviewer.Name())
+	}
+	return names
+}
+
+// orList joins names as "a, b or c".
+func orList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
 }

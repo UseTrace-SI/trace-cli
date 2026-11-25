@@ -173,3 +173,14 @@ func Runners() []Runner {
 	}
 	return out
 }
+
+// Reviewers returns the agents `trace review` accepts, in registry order.
+func Reviewers() []Reviewer {
+	var out []Reviewer
+	for _, a := range registry {
+		if r, ok := a.(Reviewer); ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
