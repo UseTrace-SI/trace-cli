@@ -172,7 +172,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace doctor [--bundle FILE]` | Check setup, store size against `TRACE_MAX_STORE_BYTES` and recently dropped hook events; bundle contains check results, not daemon log contents |
 | `trace clean [--force]` | Preview removal of unlinked local history; apply with `--force` |
 | `trace tui` | Open the local timeline viewer |
-| `trace dashboard [--port N]` | Serve a read-only web view on 127.0.0.1; open the printed URL, whose one-launch token is required for history and is set as a strict HttpOnly cookie. Requests naming any other host are refused |
+| `trace dashboard [--port N]` | Serve a read-only web view on 127.0.0.1; open the printed URL, whose one-launch token is required for history and is set as an HttpOnly, SameSite=Lax cookie. Requests naming any other host are refused |
 | `trace worktree gc` | Remove eligible Trace-created worktrees |
 | `trace gc [--keep-days N] [--dry-run]` | Remove expired history and unused blobs. The daemon also runs it automatically with the default 30-day retention at most once a day (hourly while `.trace` exceeds `TRACE_MAX_STORE_BYTES`, default 5 GiB), never while sync is configured; `TRACE_AUTO_GC=0` turns that off |
 | `trace update-check` | Check for a release, at most once per day |

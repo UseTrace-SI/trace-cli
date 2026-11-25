@@ -102,7 +102,7 @@ func TestDashboardRequiresLaunchToken(t *testing.T) {
 	}
 }
 
-func TestDashboardURLTokenSetsStrictHttpOnlyCookie(t *testing.T) {
+func TestDashboardURLTokenSetsLaxHttpOnlyCookie(t *testing.T) {
 	h := dashboardTestHandler(t)
 	rec := dashboardRequest(h, http.MethodGet, "/?token="+testDashboardToken, "localhost:8787", nil)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
@@ -113,8 +113,8 @@ func TestDashboardURLTokenSetsStrictHttpOnlyCookie(t *testing.T) {
 		t.Fatalf("cookies %v", cookies)
 	}
 	c := cookies[0]
-	if c.Name != "trace_dashboard_8787" || c.Value != testDashboardToken || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/" {
-		t.Fatalf("cookie %+v is not a strict HttpOnly session cookie", c)
+	if c.Name != "trace_dashboard_8787" || c.Value != testDashboardToken || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" {
+		t.Fatalf("cookie %+v is not a Lax HttpOnly session cookie", c)
 	}
 	if rec.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatal("the token URL may leak through the Referer header")

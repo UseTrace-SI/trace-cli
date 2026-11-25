@@ -185,7 +185,12 @@ func newDashboardHandler(db *sql.DB, port int, token string) http.Handler {
 					http.Error(w, "invalid dashboard token; open the URL printed by trace dashboard", http.StatusForbidden)
 					return
 				}
-				http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
+				// Lax, not Strict: a Strict cookie is withheld when the URL is
+				// opened from a link on another site, and the redirect below
+				// would then fail. Lax is as safe here: other sites' subresource
+				// and fetch requests still carry no cookie, every route is
+				// GET-only and read-only, and the Host check stops rebinding.
+				http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
