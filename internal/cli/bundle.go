@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,14 +17,38 @@ import (
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
+	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
 
 const maxBundleBytes int64 = 4 << 30
 const maxBundleEntries = 100000
 
-// A portable bundle contains a consistent history snapshot and immutable
-// objects only. Credentials, logs, hooks and companion databases stay local.
+// bundleOptions selects what a bundle carries beyond the default.
+type bundleOptions struct {
+	// IncludeExcludedHistory keeps snapshots of paths Trace now excludes, such
+	// as credential files captured before their exclusion was added.
+	IncludeExcludedHistory bool
+}
+
 func writeBundle(root, out string) error {
+	_, err := exportBundle(root, out, bundleOptions{})
+	return err
+}
+
+// exportBundle writes a bundle and returns the since-excluded paths its
+// history listed: left out by default, kept with IncludeExcludedHistory.
+func exportBundle(root, out string, opts bundleOptions) ([]string, error) {
+	var found []string
+	err := buildBundle(root, out, opts, &found)
+	return found, err
+}
+
+// A portable bundle contains a consistent history snapshot and immutable
+// objects only. Credentials, logs, hooks and companion databases stay local,
+// and by default so do snapshots of paths Trace now excludes: the bundle's
+// copy of the history is rewritten so neither their names nor their bytes
+// are exported.
+func buildBundle(root, out string, opts bundleOptions, found *[]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	stage, err := os.MkdirTemp(filepath.Join(root, ".trace"), ".export-*")
@@ -34,15 +60,20 @@ func writeBundle(root, out string) error {
 	if err := snapshotHistory(ctx, filepath.Join(root, ".trace", "trace.db"), snapshot); err != nil {
 		return fmt.Errorf("snapshotting history: %w", err)
 	}
+	// Stripped manifests are new objects; they are saved beside the history's
+	// own, where GC removes them once nothing references them.
+	bs, err := blob.Open(filepath.Join(root, ".trace", "objects"))
+	if err != nil {
+		return err
+	}
+	if *found, err = stripBundleHistory(ctx, snapshot, bs, !opts.IncludeExcludedHistory); err != nil {
+		return fmt.Errorf("leaving excluded paths out of the bundle: %w", err)
+	}
 	db, err := openHistoryReadOnly(snapshot)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	bs, err := blob.OpenReadOnly(filepath.Join(root, ".trace", "objects"))
-	if err != nil {
-		return err
-	}
 	hashes, err := historyHashes(db, bs)
 	if err != nil {
 		return err
@@ -143,6 +174,113 @@ func writeBundle(root, out string) error {
 		return err
 	}
 	return os.Rename(f.Name(), out)
+}
+
+// stripBundleHistory finds the since-excluded paths a history snapshot still
+// lists, in keyframe manifests or in operations that stored their bytes.
+// With apply it rewrites the snapshot: keyframes point at manifests without
+// those paths, and such operations keep their metadata but no longer
+// reference content. The history stays self-consistent, so the bundle still
+// imports, rewinds and explains lines; restores skip these paths anyway.
+func stripBundleHistory(ctx context.Context, snapshot string, bs *blob.Store, apply bool) ([]string, error) {
+	abs, err := filepath.Abs(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: abs}).String())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	found := map[string]bool{}
+	manifests, err := queryStrings(ctx, tx, "SELECT DISTINCT manifest_hash FROM keyframes")
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range manifests {
+		if !apply {
+			m, err := manifest.Load(blob.Hash(h), bs)
+			if err != nil {
+				return nil, err
+			}
+			for rel := range m {
+				if manifest.Excluded(rel) {
+					found[rel] = true
+				}
+			}
+			continue
+		}
+		stripped, dropped, err := manifest.StripExcluded(blob.Hash(h), bs)
+		if err != nil {
+			return nil, err
+		}
+		for _, rel := range dropped {
+			found[rel] = true
+		}
+		if stripped != blob.Hash(h) {
+			if _, err := tx.ExecContext(ctx, "UPDATE keyframes SET manifest_hash=? WHERE manifest_hash=?", string(stripped), h); err != nil {
+				return nil, err
+			}
+		}
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id,path FROM ops WHERE COALESCE(before_hash,'')!='' OR COALESCE(after_hash,'')!=''")
+	if err != nil {
+		return nil, err
+	}
+	var ops []string
+	for rows.Next() {
+		var id, rel string
+		if err := rows.Scan(&id, &rel); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if manifest.Excluded(rel) {
+			found[rel] = true
+			ops = append(ops, id)
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	if apply {
+		for _, id := range ops {
+			if _, err := tx.ExecContext(ctx, "UPDATE ops SET before_hash=NULL, after_hash=NULL WHERE id=?", id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(found))
+	for rel := range found {
+		paths = append(paths, rel)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func queryStrings(ctx context.Context, tx *sql.Tx, query string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, errors.Join(rows.Err(), rows.Close())
 }
 
 func bundlePath(name string) (string, error) {

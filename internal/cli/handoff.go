@@ -12,6 +12,7 @@ import (
 
 func handoffCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var out string
+	var includeExcluded bool
 	cmd := &cobra.Command{Use: "handoff", Short: "Export a portable handoff bundle with context for another machine/agent", RunE: func(c *cobra.Command, _ []string) error {
 		root, err := initializedRoot(*repoPath)
 		if err != nil {
@@ -20,7 +21,8 @@ func handoffCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if out == "" {
 			out = filepath.Join(root, "trace-handoff.tar.gz")
 		}
-		if err := writeBundle(root, out); err != nil {
+		excluded, err := exportBundle(root, out, bundleOptions{IncludeExcludedHistory: includeExcluded})
+		if err != nil {
 			return err
 		}
 		e, err := engine.Open(root)
@@ -49,11 +51,12 @@ func handoffCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			fmt.Fprintf(f, "- symbol %s:%d %s %s\n", s.File, s.Line, s.Kind, s.Name)
 		}
 		if *jsonOutput {
-			return nil
+			return reportExcludedHistory(nil, c.ErrOrStderr(), excluded, includeExcluded)
 		}
 		fmt.Fprintf(c.OutOrStdout(), "handoff bundle: %s\ncontext: %s\n", out, ctxFile)
-		return nil
+		return reportExcludedHistory(c.OutOrStdout(), c.ErrOrStderr(), excluded, includeExcluded)
 	}}
 	cmd.Flags().StringVar(&out, "out", "", "output bundle path")
+	cmd.Flags().BoolVar(&includeExcluded, "include-excluded-history", false, "keep snapshots of since-excluded credential files instead of leaving them out")
 	return cmd
 }

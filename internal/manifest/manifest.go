@@ -322,6 +322,37 @@ func (m Manifest) Save(bs *blob.Store) (blob.Hash, error) {
 	return bs.PutBytes(b)
 }
 
+// StripExcluded returns the manifest stored at h without the paths Trace
+// excludes, for sharing history beyond this machine. A keyframe recorded
+// before an exclusion was added can still list such a file, and its bytes
+// must not leave with the history. When nothing is excluded it returns h
+// unchanged; otherwise it saves the stripped manifest to bs and returns its
+// hash with the dropped paths.
+func StripExcluded(h blob.Hash, bs *blob.Store) (blob.Hash, []string, error) {
+	m, err := Load(h, bs)
+	if err != nil {
+		return "", nil, err
+	}
+	var dropped []string
+	for rel := range m {
+		if excluded(rel) {
+			dropped = append(dropped, rel)
+		}
+	}
+	if len(dropped) == 0 {
+		return h, nil, nil
+	}
+	for _, rel := range dropped {
+		delete(m, rel)
+	}
+	stripped, err := m.Save(bs)
+	if err != nil {
+		return "", nil, err
+	}
+	sort.Strings(dropped)
+	return stripped, dropped, nil
+}
+
 func Load(h blob.Hash, bs *blob.Store) (Manifest, error) {
 	r, err := bs.Get(h)
 	if err != nil {

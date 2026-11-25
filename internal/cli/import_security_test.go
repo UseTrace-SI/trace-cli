@@ -2,9 +2,11 @@ package cli
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
@@ -314,12 +317,12 @@ func TestBundleRejectsSnapshotPathsIntoGitMetadata(t *testing.T) {
 	}
 }
 
-// History recorded before a secret exclusion was added can list the file
-// (here a committed .npmrc). Export, handoff bundles and import must still
-// work; a later rewind restores everything else and leaves the file alone.
-func TestBundleCarriesHistoryListingSinceExcludedFiles(t *testing.T) {
-	source := competitiveRepo(t)
-	e, err := engine.Open(source)
+// sinceExcludedHistory returns a repository whose step 1 was recorded before
+// .npmrc was excluded: its snapshot and an operation hold the file's bytes.
+func sinceExcludedHistory(t *testing.T) (root string, secret blob.Hash) {
+	t.Helper()
+	root = competitiveRepo(t)
+	e, err := engine.Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,34 +330,106 @@ func TestBundleCarriesHistoryListingSinceExcludedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	npmrc, err := e.Blobs.PutBytes([]byte("registry=https://registry.example/\n"))
+	secret, err = e.Blobs.PutBytes([]byte("//registry.example/:_authToken=npm_old0123456789\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mh, err := (manifest.Manifest{"app.go": {Hash: app, Mode: 0644}, ".npmrc": {Hash: npmrc, Mode: 0644}}).Save(e.Blobs)
+	mh, err := (manifest.Manifest{"app.go": {Hash: app, Mode: 0644}, ".npmrc": {Hash: secret, Mode: 0644}}).Save(e.Blobs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,tag,created_at) VALUES('k-legacy',1,?,'turn',2)", mh); err != nil {
-		t.Fatal(err)
+	for _, stmt := range []struct {
+		query string
+		args  []any
+	}{
+		{"INSERT INTO sessions(id,agent,worktree,started_at) VALUES('s','codex',?,1)", []any{root}},
+		{"INSERT INTO turns(id,session_id,seq,prompt,started_at,ended_at) VALUES('t','s',1,'add the app',1,2)", nil},
+		{"INSERT INTO keyframes(id,turn_id,seq,manifest_hash,tag,created_at) VALUES('k-legacy','t',1,?,'turn',2)", []any{mh}},
+		{"INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,after_hash,source,at) VALUES('o-app','t','s','app.go','add',1,1,?,'hook',2)", []any{app}},
+		{"INSERT INTO ops(id,turn_id,session_id,path,kind,start_line,end_line,after_hash,source,at) VALUES('o-npmrc','t','s','.npmrc','add',1,1,?,'hook',2)", []any{secret}},
+	} {
+		if _, err := e.DB.Exec(stmt.query, stmt.args...); err != nil {
+			t.Fatalf("%s: %v", stmt.query, err)
+		}
 	}
 	if err := e.Close(); err != nil {
 		t.Fatal(err)
 	}
+	return root, secret
+}
+
+func bundleEntries(t *testing.T, archive string) map[string]bool {
+	t.Helper()
+	f, err := os.Open(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	names := map[string]bool{}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return names
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		names[h.Name] = true
+	}
+}
+
+// History recorded before a secret exclusion was added can list the file
+// (here a committed .npmrc with a token). By default export and handoff
+// leave its name and bytes out of the bundle, which still imports, rewinds
+// and explains lines. --include-excluded-history keeps them, with a warning.
+func TestBundleLeavesOutSinceExcludedHistory(t *testing.T) {
+	source, secret := sinceExcludedHistory(t)
+	secretEntry := ".trace/objects/" + string(secret[:2]) + "/" + string(secret[2:])
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
-	if err := writeBundle(source, archive); err != nil {
-		t.Fatalf("export of history listing .npmrc failed: %v", err)
-	}
 	jsonOutput := false
-	handoff := handoffCommand(&source, &jsonOutput)
-	handoff.SetArgs([]string{"--out", filepath.Join(t.TempDir(), "handoff.tar.gz")})
-	handoff.SetOut(io.Discard)
-	if err := handoff.Execute(); err != nil {
-		t.Fatalf("handoff of history listing .npmrc failed: %v", err)
+	export := exportCommand(&source, &jsonOutput)
+	export.SetArgs([]string{"--format", "bundle", "--out", archive})
+	var exportOut bytes.Buffer
+	export.SetOut(&exportOut)
+	if err := export.Execute(); err != nil {
+		t.Fatalf("export: %v", err)
 	}
+	if !strings.Contains(exportOut.String(), "Left out earlier snapshots of 1 excluded path(s): .npmrc") {
+		t.Fatalf("export did not report the stripped path: %q", exportOut.String())
+	}
+	if bundleEntries(t, archive)[secretEntry] {
+		t.Fatal("bundle carries the .npmrc bytes")
+	}
+	handoffOut := filepath.Join(t.TempDir(), "handoff.tar.gz")
+	handoff := handoffCommand(&source, &jsonOutput)
+	handoff.SetArgs([]string{"--out", handoffOut})
+	var handoffText bytes.Buffer
+	handoff.SetOut(&handoffText)
+	if err := handoff.Execute(); err != nil {
+		t.Fatalf("handoff: %v", err)
+	}
+	if bundleEntries(t, handoffOut)[secretEntry] || !strings.Contains(handoffText.String(), ".npmrc") {
+		t.Fatalf("handoff carried .npmrc or did not report it: %q", handoffText.String())
+	}
+	// The local history is unchanged.
+	local, err := engine.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m, err := local.ManifestAt(1); err != nil || m[".npmrc"].Hash != secret {
+		t.Fatalf("export changed local history: %v %v", m, err)
+	}
+	local.Close()
+
 	target := competitiveRepo(t)
 	if err := readBundle(target, archive); err != nil {
-		t.Fatalf("import of history listing .npmrc failed: %v", err)
+		t.Fatalf("import of a stripped bundle: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(target, ".npmrc"), []byte("//registry.example/:_authToken=local\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -363,18 +438,65 @@ func TestBundleCarriesHistoryListingSinceExcludedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer got.Close()
+	m, err := got.ManifestAt(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m[".npmrc"]; ok || m["app.go"].Hash == "" {
+		t.Fatalf("imported snapshot: %v", m)
+	}
+	var before, after sql.NullString
+	if err := got.DB.QueryRow("SELECT before_hash,after_hash FROM ops WHERE id='o-npmrc'").Scan(&before, &after); err != nil || before.Valid || after.Valid {
+		t.Fatalf("imported .npmrc operation still references content: %v %v %v", before, after, err)
+	}
+	if _, err := got.Blobs.Get(secret); err == nil {
+		t.Fatal("import stored the .npmrc bytes")
+	}
 	if _, _, err := got.Rewind(1, "", false); err != nil {
 		t.Fatalf("rewind to imported step: %v", err)
 	}
+	if _, err := got.GC(0, true); err != nil {
+		t.Fatalf("GC over imported history: %v", err)
+	}
+	got.Close()
 	if b, err := os.ReadFile(filepath.Join(target, "app.go")); err != nil || string(b) != "package app\n" {
 		t.Fatalf("app.go not restored: %q %v", b, err)
 	}
 	if b, err := os.ReadFile(filepath.Join(target, ".npmrc")); err != nil || string(b) != "//registry.example/:_authToken=local\n" {
 		t.Fatalf("rewind touched excluded .npmrc: %q %v", b, err)
 	}
-	dbTarget := competitiveRepo(t)
-	if _, err := importDatabase(context.Background(), dbTarget, filepath.Join(source, ".trace", "trace.db")); err != nil {
+	whyJSON := true
+	why := whyCommand(&target, &whyJSON)
+	why.SetArgs([]string{"app.go:1"})
+	var whyOut bytes.Buffer
+	why.SetOut(&whyOut)
+	if err := why.Execute(); err != nil {
+		t.Fatalf("why on imported history: %v", err)
+	}
+	var lines []whyResult
+	if err := json.Unmarshal(whyOut.Bytes(), &lines); err != nil || len(lines) != 1 || lines[0].Step != 1 {
+		t.Fatalf("why app.go:1 = %s (%v)", whyOut.String(), err)
+	}
+
+	// Opting in keeps the bytes and warns.
+	kept := filepath.Join(t.TempDir(), "kept.tar.gz")
+	include := exportCommand(&source, &jsonOutput)
+	include.SetArgs([]string{"--format", "bundle", "--out", kept, "--include-excluded-history"})
+	var stderr bytes.Buffer
+	include.SetOut(io.Discard)
+	include.SetErr(&stderr)
+	if err := include.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !bundleEntries(t, kept)[secretEntry] || !strings.Contains(stderr.String(), "warning") || !strings.Contains(stderr.String(), ".npmrc") {
+		t.Fatalf("opt-in bundle: secret kept %v, warning %q", bundleEntries(t, kept)[secretEntry], stderr.String())
+	}
+	keptTarget := competitiveRepo(t)
+	if err := readBundle(keptTarget, kept); err != nil {
+		t.Fatalf("import of a bundle keeping .npmrc: %v", err)
+	}
+	// A direct database import (a local copy, not an export) is unchanged.
+	if _, err := importDatabase(context.Background(), competitiveRepo(t), filepath.Join(source, ".trace", "trace.db")); err != nil {
 		t.Fatalf("database import of history listing .npmrc failed: %v", err)
 	}
 }

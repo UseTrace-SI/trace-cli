@@ -3,8 +3,10 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
@@ -14,7 +16,7 @@ import (
 
 func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var format, out string
-	var publish bool
+	var publish, includeExcluded bool
 	cmd := &cobra.Command{Use: "export", Short: "Export code attribution", RunE: func(c *cobra.Command, _ []string) error {
 		if format == "bundle" {
 			root, err := initializedRoot(*repoPath)
@@ -24,14 +26,20 @@ func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			if out == "" {
 				return fmt.Errorf("--out is required")
 			}
-			if err := writeBundle(root, out); err != nil {
+			excluded, err := exportBundle(root, out, bundleOptions{IncludeExcludedHistory: includeExcluded})
+			if err != nil {
 				return err
 			}
 			if *jsonOutput {
-				return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"path": out, "format": "bundle"})
+				if err := reportExcludedHistory(nil, c.ErrOrStderr(), excluded, includeExcluded); err != nil {
+					return err
+				}
+				return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"path": out, "format": "bundle", "historical_paths_now_excluded": nonNil(excluded), "excluded_history_included": includeExcluded})
 			}
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Exported bundle to %s\n", out)
-			return err
+			if _, err := fmt.Fprintf(c.OutOrStdout(), "Exported bundle to %s\n", out); err != nil {
+				return err
+			}
+			return reportExcludedHistory(c.OutOrStdout(), c.ErrOrStderr(), excluded, includeExcluded)
 		}
 		if format != "agent-trace" {
 			return fmt.Errorf("unsupported export format %q", format)
@@ -90,5 +98,31 @@ func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "agent-trace", "export format")
 	cmd.Flags().StringVar(&out, "out", "", "output path")
 	cmd.Flags().BoolVar(&publish, "publish", false, "write a commit-ready (redacted) session log under trace-history/")
+	cmd.Flags().BoolVar(&includeExcluded, "include-excluded-history", false, "bundle: keep snapshots of since-excluded credential files instead of leaving them out")
 	return cmd
+}
+
+func nonNil(paths []string) []string {
+	if paths == nil {
+		return []string{}
+	}
+	return paths
+}
+
+// reportExcludedHistory lists the since-excluded paths a bundle left out on
+// stdout (skipped when stdout is nil, for JSON output) or, when asked to keep
+// them, always warns on stderr that the bundle contains them.
+func reportExcludedHistory(stdout, stderr io.Writer, paths []string, included bool) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	if included {
+		_, err := fmt.Fprintf(stderr, "warning: the bundle includes earlier snapshots of %d excluded path(s), which may hold credentials: %s\n", len(paths), strings.Join(paths, ", "))
+		return err
+	}
+	if stdout == nil {
+		return nil
+	}
+	_, err := fmt.Fprintf(stdout, "Left out earlier snapshots of %d excluded path(s): %s (keep them with --include-excluded-history)\n", len(paths), strings.Join(paths, ", "))
+	return err
 }
