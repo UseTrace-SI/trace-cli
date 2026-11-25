@@ -130,3 +130,17 @@ func TestPendingFrameSizeComesFromTheName(t *testing.T) {
 		}
 	}
 }
+
+// A pending name can claim any size. Claimed sizes that would overflow a
+// running total must still count as over the limit.
+func TestOverflowFullResistsHugeClaimedSizes(t *testing.T) {
+	pending := t.TempDir()
+	for _, name := range []string{"00000000000000000001-9223372036854775807-1.ready", "00000000000000000002-9223372036854775807-2.ready"} {
+		if err := os.WriteFile(filepath.Join(pending, name), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !overflowFull(pending, 1) {
+		t.Fatal("overflowed size total let a frame through")
+	}
+}

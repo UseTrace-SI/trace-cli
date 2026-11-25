@@ -236,12 +236,18 @@ func overflowFull(pending string, size int64) bool {
 	if len(names) >= maxPendingFrames {
 		return true
 	}
-	total, limit := size, maxSpoolBytes()
+	// Count down from the limit: a name can claim any size, and a sum could
+	// overflow past it.
+	remaining := maxSpoolBytes() - size
+	if remaining < 0 {
+		return true
+	}
 	for _, name := range names {
-		total += pendingFrameSize(name)
-		if total > limit {
+		n := pendingFrameSize(name)
+		if n > remaining {
 			return true
 		}
+		remaining -= n
 	}
 	return false
 }
