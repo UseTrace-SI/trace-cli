@@ -23,6 +23,7 @@ func Execute(version, commit, date string) int {
 	root.AddCommand(agentsCommand(&jsonOutput))
 	root.AddCommand(disableCommand(&jsonOutput))
 	root.AddCommand(runCommand(&repoPath))
+	root.AddCommand(acpCommand(&repoPath))
 	root.AddCommand(uninstallCommand(&repoPath, &jsonOutput))
 	root.AddCommand(logCommand(&repoPath, &jsonOutput))
 	root.AddCommand(showCommand(&repoPath, &jsonOutput))

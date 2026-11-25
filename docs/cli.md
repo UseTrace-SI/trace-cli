@@ -75,6 +75,8 @@ The observer queues events on a background thread to avoid delaying Hermes. Fail
 
 ## Continue, Vibe, Crush, and Aider headless preview
 
+Record an [Agent Client Protocol](acp.md) agent by launching `trace acp [--name NAME] -- <agent command> [args...]` from the editor in place of the agent. The proxy forwards stdio unchanged and records sessions in initialized repositories as agent `acp:<name>`.
+
 Run a single headless prompt with `trace run <agent> --prompt "..."` inside a Git repository, where agent is `continue`, `vibe`, `crush`, or `aider`. Trace takes a baseline before launching `cn -p`, `vibe -p`, `crush run`, or `aider --message`, records the end of the invocation, and preserves the agent's output and exit status. The Aider launcher passes `--no-auto-commits --no-dirty-commits` to prevent its default automatic commits. If recording cannot start, the agent still runs. These launchers accept no extra agent options and do not cover interactive sessions, native resume attribution, or assistant transcript import. A failed run is recorded as an ended execution, without a distinct failure status. Interrupting Trace itself may leave the execution unfinished.
 
 ## Zoo Code task observer preview
