@@ -61,6 +61,9 @@ func Open(root string) (*Engine, error) {
 			db.Close()
 			return nil, err
 		}
+		// A keyframe from before a path was excluded can list it. Dropping it
+		// here keeps the next capture from recording a deletion nobody made.
+		e.current = e.current.WithoutExcluded()
 	} else if err != sql.ErrNoRows {
 		db.Close()
 		return nil, fmt.Errorf("loading latest keyframe: %w", err)
