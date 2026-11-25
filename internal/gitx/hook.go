@@ -112,6 +112,16 @@ func InstallHook(root string) error {
 			return err
 		}
 	}
+	if TrailerEnabled(root) {
+		// Refresh the opt-in block so it names the current executable.
+		err := installHook(root, prepareCommitMsgHook)
+		var one *ManualHookError
+		if errors.As(err, &one) {
+			manual.Hooks = append(manual.Hooks, one.Hooks...)
+		} else if err != nil {
+			return err
+		}
+	}
 	if len(manual.Hooks) > 0 {
 		return manual
 	}
@@ -121,7 +131,7 @@ func InstallHook(root string) error {
 // UninstallHook removes what InstallHook added and restores the original hooks.
 func UninstallHook(root string) error {
 	var errs []error
-	for _, h := range traceHooks {
+	for _, h := range append(traceHooks, prepareCommitMsgHook) {
 		errs = append(errs, uninstallHook(root, h))
 	}
 	return errors.Join(errs...)

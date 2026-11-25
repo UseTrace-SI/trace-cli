@@ -25,6 +25,9 @@ func Path() string {
 }
 
 // Command returns a shell command for one agent hook.
+// TracePath is the Trace executable quoted for a POSIX shell.
+func TracePath() string { return shellPath(Path()) }
+
 func Command(agent, event string) string {
 	return shellPath(Path()) + " hook " + agent + " " + event
 }
