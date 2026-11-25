@@ -115,3 +115,18 @@ func TestDropCounterRefusesSymlink(t *testing.T) {
 		t.Fatal("drop counter was written through a symlink")
 	}
 }
+
+func TestPendingFrameSizeComesFromTheName(t *testing.T) {
+	for name, want := range map[string]int64{
+		"00000000000000000001-512-12345.ready":         512,
+		"00000000000000000001-512-12345.tmp":           512,
+		"00000000000000000001-12345.ready":             0, // named by an older version
+		"00000000000000000001-512-12345.ready.invalid": 0, // pruned separately
+		"1.ready":                        0,
+		"00000000000000000001-x-1.ready": 0,
+	} {
+		if got := pendingFrameSize(name); got != want {
+			t.Errorf("pendingFrameSize(%q) = %d; want %d", name, got, want)
+		}
+	}
+}

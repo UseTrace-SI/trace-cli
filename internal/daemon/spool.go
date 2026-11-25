@@ -198,7 +198,9 @@ func appendOverflow(dir string, b []byte) error {
 	if overflowFull(pending, int64(len(b))) {
 		return dropFrame(dir)
 	}
-	f, err := os.CreateTemp(pending, fmt.Sprintf("%020d-*.tmp", time.Now().UnixNano()))
+	// The name records the frame's size, so overflowFull can total the queue
+	// from a directory listing alone.
+	f, err := os.CreateTemp(pending, fmt.Sprintf("%020d-%d-*.tmp", time.Now().UnixNano(), len(b)))
 	if err != nil {
 		return fmt.Errorf("creating pending spool frame: %w", err)
 	}
@@ -219,31 +221,44 @@ func appendOverflow(dir string, b []byte) error {
 
 // overflowFull reports whether one more frame of size bytes would exceed the
 // overflow queue's bounds. Writers hold the overflow lock, so they cannot
-// overshoot together; the queue is normally a handful of files, so listing it
-// stays cheap, and the entry count bounds the work when it is not.
+// overshoot together. It reads names only, never file metadata: a hook must
+// stay fast even when a stuck queue holds thousands of frames.
 func overflowFull(pending string, size int64) bool {
 	d, err := os.Open(pending)
 	if err != nil {
 		return false
 	}
 	defer d.Close()
-	entries, err := d.ReadDir(maxPendingFrames)
+	names, err := d.Readdirnames(maxPendingFrames)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return false
 	}
-	if len(entries) >= maxPendingFrames {
+	if len(names) >= maxPendingFrames {
 		return true
 	}
 	total, limit := size, maxSpoolBytes()
-	for _, entry := range entries {
-		if info, err := entry.Info(); err == nil {
-			total += info.Size()
-		}
+	for _, name := range names {
+		total += pendingFrameSize(name)
 		if total > limit {
 			return true
 		}
 	}
 	return false
+}
+
+// pendingFrameSize reads the size a pending frame's name records
+// ("<20-digit time>-<size>-<random>.ready"). Frames named by older versions
+// and quarantined frames, which are pruned separately, count as empty.
+func pendingFrameSize(name string) int64 {
+	fields := strings.SplitN(name, "-", 3)
+	if len(fields) != 3 || len(fields[0]) != 20 || strings.HasSuffix(name, ".invalid") {
+		return 0
+	}
+	n, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 func ingestSpool(dir string, consume func(event.Event)) error {
