@@ -59,7 +59,7 @@ keyframe and surface as capture errors; hooks remain nonblocking.
 
 The daemon garbage-collects history older than 30 days, as `trace gc` does, at
 most once a day, and hourly while `.trace` exceeds `TRACE_MAX_STORE_BYTES`
-(default 5 GiB). Steps with commits, comments
+(default 5 GiB, which `trace doctor` also checks). Steps with commits, comments
 or trails and the baseline are kept, and the budget never shortens retention.
 It does not run while sync is configured, so unuploaded history is never
 removed unattended; `TRACE_AUTO_GC=0` turns it off.

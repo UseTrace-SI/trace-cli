@@ -169,7 +169,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace agent add NAME` | Enable one agent adapter in an initialized repository |
 | `trace agent remove NAME` | Remove one agent adapter and its installed hooks |
 | `trace agent-help` | Print commands available to coding agents |
-| `trace doctor [--bundle FILE]` | Check setup; bundle contains check results, not daemon log contents |
+| `trace doctor [--bundle FILE]` | Check setup, store size against `TRACE_MAX_STORE_BYTES` and recently dropped hook events; bundle contains check results, not daemon log contents |
 | `trace clean [--force]` | Preview removal of unlinked local history; apply with `--force` |
 | `trace tui` | Open the local timeline viewer |
 | `trace dashboard [--port N]` | Serve a read-only web view on 127.0.0.1; open the printed URL, whose one-launch token is required for history and is set as a strict HttpOnly cookie. Requests naming any other host are refused |
