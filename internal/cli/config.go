@@ -75,7 +75,7 @@ func onOff(on bool) string {
 // commitTrailerHookCommand runs from the prepare-commit-msg hook. It never
 // fails: a commit must not depend on Trace.
 func commitTrailerHookCommand(repoPath *string) *cobra.Command {
-	return &cobra.Command{Use: "commit-trailer-hook MSGFILE [SOURCE]", Hidden: true, Args: cobra.RangeArgs(1, 3),
+	return &cobra.Command{Use: "trailer-hook MSGFILE [SOURCE]", Hidden: true, Args: cobra.RangeArgs(1, 3),
 		SilenceErrors: true, SilenceUsage: true, RunE: func(_ *cobra.Command, args []string) error {
 			source := ""
 			if len(args) > 1 {

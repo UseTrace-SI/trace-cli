@@ -39,7 +39,10 @@ Every phase must end with `make lint test` passing.
    `post-commit` and `post-rewrite` hooks and `git worktree add` in `fork`. An opt-in git-native mode
    (`git_native = true` in `.trace/config.toml`) may create and update a dedicated hidden
    branch `trace/checkpoints/v1` and short-lived `trace/shadow/*` branches for rewind; these
-   never touch the user's working branch or its history.
+   never touch the user's working branch or its history. The opt-in commit trailer
+   (`trace config set commit-trailer on`) merges a `prepare-commit-msg` hook that adds
+   `Trace-Turn:` trailers; when off it is not installed and messages are never changed.
+   Importers (`trace import --from git-ai`) only read other tools' notes and refs.
 3. **Never store secrets.** Text (prompts, reasoning, tool calls) passes through `internal/redact`
    before any DB write. Files matching the secret path excludes are never read or stored.
 4. **Local by default.** The daemon listens only on a Unix socket with mode 0600. Network

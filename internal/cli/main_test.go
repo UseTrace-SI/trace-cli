@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 		runTestHook(os.Args[2:])
 		os.Exit(0)
 	}
-	if len(os.Args) > 2 && os.Args[1] == "commit-trailer-hook" {
+	if len(os.Args) > 2 && os.Args[1] == "trailer-hook" {
 		source := ""
 		if len(os.Args) > 3 {
 			source = os.Args[3]

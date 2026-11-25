@@ -29,7 +29,7 @@ var prepareCommitMsgHook = hookSpec{
 		// marker the block does nothing and never starts Trace; it never fails
 		// the commit.
 		return "if [ -f .trace/" + trailerMarker + " ]; then\n" +
-			"\t" + hookcmd.TracePath() + " commit-trailer-hook \"$1\" \"$2\" >/dev/null 2>&1 || true\n" +
+			"\t" + hookcmd.TracePath() + " trailer-hook \"$1\" \"$2\" >/dev/null 2>&1 || true\n" +
 			"fi\n"
 	},
 	// A failing original prepare-commit-msg hook aborts the commit, as before.
