@@ -297,8 +297,12 @@ hosted installer. The former `usetrace-si/tap` standalone tap is unavailable.
 | Path | Purpose |
 | --- | --- |
 | `cmd/trace`, `internal/` | Go CLI, daemon, and local storage |
+| `internal/adapters` | Agent integrations: one file per agent implementing `adapters.Adapter`, listed in `registry.go`; parsers and installers live in `internal/adapters/<agent>` |
+| `cmd/trace/testdata/golden` | Recorded hook, install and setup behaviour of every agent, checked against the built binary |
 | `docs/` | CLI, sync, privacy, and release guides |
 | `scripts/` | Install, end-to-end, performance, and Homebrew tooling |
+
+To add an agent, add its file to `internal/adapters` and an entry to `registry.go`; the CLI's hook, init, agent, uninstall, setup, enable and agents commands pick it up from the registry. After an intended behaviour change, regenerate the golden results with `go test ./cmd/trace -run Golden -update-golden` and review their diff.
 
 The Go module and project Makefile live at the repository root. Run `make lint test` for the CLI and `make test-sync` for its sync client. When the private `trace-platform` repository is checked out beside this one, `make test-sync-integration` exercises both sides of the protocol.
 
