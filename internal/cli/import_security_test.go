@@ -615,6 +615,27 @@ func TestReimportingStrippedHistoryKeepsLocalRows(t *testing.T) {
 	if m, err := e.ManifestAt(1); err != nil || m[".npmrc"].Hash != "" {
 		t.Fatalf("reverse import replaced the stripped local row: %v %v", m, err)
 	}
+	// The kept rows' excluded content was not copied in unreferenced.
+	var unstripped string
+	if err := e.DB.QueryRow("SELECT manifest_hash FROM keyframes WHERE seq=1").Scan(&unstripped); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Blobs.Get(secret); err == nil {
+		t.Fatal("reverse import copied the .npmrc bytes into B's object store")
+	}
+	if source, err := engine.Open(a); err == nil {
+		var original string
+		err = source.DB.QueryRow("SELECT manifest_hash FROM keyframes WHERE seq=1").Scan(&original)
+		source.Close()
+		if err != nil || original == unstripped {
+			t.Fatalf("A's manifest %q, B's %q: %v", original, unstripped, err)
+		}
+		if _, err := e.Blobs.Get(blob.Hash(original)); err == nil {
+			t.Fatal("reverse import copied the unstripped manifest into B's object store")
+		}
+	} else {
+		t.Fatal(err)
+	}
 
 	// A genuinely different row still conflicts.
 	if _, err := e.DB.Exec("UPDATE ops SET kind='delete' WHERE id='o-npmrc'"); err != nil {

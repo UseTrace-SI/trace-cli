@@ -215,6 +215,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 		return report, err
 	}
 	remap := stepRemap{tx: write, steps: map[string]map[int64]int64{}, shifted: map[string]bool{}}
+	kept := map[string]bool{}
 	objects := &historyObjects{source: filepath.Join(filepath.Dir(source), "objects"), destination: filepath.Join(root, ".trace", "objects")}
 	for _, table := range store.ImportTables() {
 		if len(available[table]) == 0 {
@@ -341,6 +342,11 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 						rows.Close()
 						return report, fmt.Errorf("conflicting %s row; import into a fresh checkout to preserve both histories", table)
 					}
+					// The local row stays; the incoming row's excluded content
+					// must not be copied in unreferenced.
+					if id, ok := rowID.(string); ok {
+						kept[table+":"+id] = true
+					}
 				}
 				report.Skipped++
 			}
@@ -350,7 +356,7 @@ func mergeHistory(ctx context.Context, root, source string) (importReport, error
 			return report, err
 		}
 	}
-	if err := copyHistoryObjects(ctx, read, filepath.Join(filepath.Dir(source), "objects"), filepath.Join(root, ".trace", "objects")); err != nil {
+	if err := copyHistoryObjects(ctx, read, filepath.Join(filepath.Dir(source), "objects"), filepath.Join(root, ".trace", "objects"), kept); err != nil {
 		return report, err
 	}
 	if err := write.Commit(); err != nil {
@@ -524,7 +530,12 @@ func historyHashes(db interface {
 	return hashes, nil
 }
 
-func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination string) error {
+// copyHistoryObjects validates every object the source history references
+// and copies the ones the merged history uses. Rows in kept ("table:id")
+// were not imported because the local row differs only by excluded content;
+// objects only they reference (such as a credential file's bytes from an
+// --include-excluded-history bundle) are not copied.
+func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination string, kept map[string]bool) error {
 	bs, err := blob.OpenReadOnly(source)
 	if err != nil {
 		return err
@@ -536,6 +547,11 @@ func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination str
 	hashes, err := historyHashes(tx, bs)
 	if err != nil {
 		return fmt.Errorf("validating imported objects: %w", err)
+	}
+	if len(kept) > 0 {
+		if hashes, err = usedHistoryHashes(tx, bs, kept); err != nil {
+			return fmt.Errorf("selecting imported objects: %w", err)
+		}
 	}
 	for _, h := range hashes {
 		if err := ctx.Err(); err != nil {
@@ -555,6 +571,67 @@ func copyHistoryObjects(ctx context.Context, tx *sql.Tx, source, destination str
 		}
 	}
 	return nil
+}
+
+// usedHistoryHashes is historyHashes over the source rows not listed in kept.
+func usedHistoryHashes(tx *sql.Tx, bs *blob.Store, kept map[string]bool) ([]blob.Hash, error) {
+	set := map[blob.Hash]bool{}
+	rows, err := tx.Query("SELECT id, manifest_hash FROM keyframes")
+	if err != nil {
+		return nil, err
+	}
+	var manifests []blob.Hash
+	for rows.Next() {
+		var id string
+		var h blob.Hash
+		if err := rows.Scan(&id, &h); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if !kept["keyframes:"+id] {
+			manifests = append(manifests, h)
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	for _, h := range manifests {
+		set[h] = true
+		m, err := manifest.Load(h, bs)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range m {
+			set[entry.Hash] = true
+		}
+	}
+	rows, err = tx.Query("SELECT id, COALESCE(before_hash,''), COALESCE(after_hash,'') FROM ops")
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id, before, after string
+		if err := rows.Scan(&id, &before, &after); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if kept["ops:"+id] {
+			continue
+		}
+		for _, h := range []string{before, after} {
+			if h != "" {
+				set[blob.Hash(h)] = true
+			}
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	hashes := make([]blob.Hash, 0, len(set))
+	for h := range set {
+		hashes = append(hashes, h)
+	}
+	return hashes, nil
 }
 
 // snapshotHistory includes committed WAL content without copying mutable
