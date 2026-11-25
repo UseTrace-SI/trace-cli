@@ -180,6 +180,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace update-check` | Check for a release, at most once per day |
 | `trace config get\|set commit-trailer [on\|off]` | Opt in to (or out of) `Trace-Turn:` commit trailers; off by default |
 | `trace export --format agent-trace [--rev COMMIT\|A..B] [--out FILE]` | Export line attribution as [Agent Trace](https://agent-trace.dev) JSONL (stdout without `--out`) |
+| `trace export --format markdown --out DIR [--session ID]` | Write one redacted Markdown file per session: prompts, last response per turn, files touched |
 | `trace export --format bundle --out FILE [--include-excluded-history]` / `trace handoff [--out FILE] [--include-excluded-history]` | Write a portable history bundle. Earlier snapshots of since-excluded credential files are left out and listed unless the flag keeps them |
 | `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL [--auto-sync] [--device-auth]` | Sign in with GitHub in a browser; opt into background upload |
 | `trace sync [--watch]` | Upload local history to the configured sync server |
@@ -212,6 +213,10 @@ Committed lines are followed through `git blame` and the rewrites Trace recorded
 `trace export --format agent-trace` writes [Agent Trace](https://agent-trace.dev) 0.1.0 records, one JSON object per line, built from the same line attribution as `trace why` and `trace blame`. Without `--rev` it writes one record for the working copy of every file with recorded edits; that record has no `vcs` entry because its line numbers refer to the working copy (`metadata["dev.usetrace"].head` names `HEAD`). `--rev SHA` writes one record for the lines that commit added or changed, and `--rev A..B` one record per non-merge commit in the range (at most 1000), with `vcs.revision` set to the commit and a record `id` derived from it, so re-exporting a commit gives the same record.
 
 Each file groups its ranges into conversations. A line written by a recorded agent turn becomes contributor type `ai` with the conversation `url` `trace://turn/<turn-id>`; `metadata["dev.usetrace"].turns` maps that URL to the agent name and step. Lines you edited become `human`; lines present before Trace started, or whose origin cannot be established, become `unknown`. Trace does not record model names, so `model_id` is omitted. Records hold paths, line numbers and IDs only, never file contents or prompts. Secret paths and `.traceignore`d paths are never exported. The schema in the specification requires `version` to match `^[0-9]+\.[0-9]+$` while its examples show `0.1.0`; Trace writes `"0.1"`, which validates. With `--out`, the file is written with mode 0600 and `--json` prints `path` and `records`.
+
+## Markdown session export
+
+`trace export --format markdown --out DIR` writes `DIR/<session-id>.md` (mode 0600) for every recorded session, or only the one named by `--session`. Each file lists the agent and times, then for each turn its step, prompt (up to 4000 characters), a response summary (the turn's last recorded assistant message, up to 1500 characters) and the files its recorded edits touched with their edit kinds. Prompts and responses are passed through the redactor again on export; secret paths and `.traceignore`d paths are left out. No file contents, reasoning or tool inputs are written. `--json` prints the written `files`.
 
 ## Commit trailers
 

@@ -20,6 +20,8 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
+var redactedMarker = regexp.MustCompile(`⟨redacted:([a-z-]+):[0-9a-f]+⟩`)
+
 var (
 	versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 	uuidPattern    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

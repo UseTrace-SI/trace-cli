@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
-	var format, out, rev string
+	var format, out, rev, session string
 	var publish, includeExcluded bool
 	cmd := &cobra.Command{Use: "export", Short: "Export code attribution", RunE: func(c *cobra.Command, _ []string) error {
 		if format == "bundle" {
@@ -40,6 +41,9 @@ func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return err
 			}
 			return reportExcludedHistory(c.OutOrStdout(), c.ErrOrStderr(), excluded, includeExcluded)
+		}
+		if format == "markdown" {
+			return exportMarkdown(c, *repoPath, out, session, *jsonOutput)
 		}
 		if format != "agent-trace" {
 			return fmt.Errorf("unsupported export format %q (want agent-trace, markdown or bundle)", format)
@@ -93,8 +97,9 @@ func exportCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		return err
 	}}
-	cmd.Flags().StringVar(&format, "format", "agent-trace", "export format")
+	cmd.Flags().StringVar(&format, "format", "agent-trace", "export format: agent-trace, markdown or bundle")
 	cmd.Flags().StringVar(&out, "out", "", "output path (agent-trace: stdout when omitted or -)")
+	cmd.Flags().StringVar(&session, "session", "", "markdown: export only this session ID")
 	cmd.Flags().StringVar(&rev, "rev", "", "agent-trace: commit or A..B range to export (default: the working tree)")
 	cmd.Flags().BoolVar(&publish, "publish", false, "write a commit-ready (redacted) session log under trace-history/")
 	cmd.Flags().BoolVar(&includeExcluded, "include-excluded-history", false, "bundle: keep snapshots of since-excluded credential files instead of leaving them out")
@@ -149,4 +154,48 @@ func writePrivateFile(out string, write func(io.Writer) error) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), out)
+}
+
+var safeSessionID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+// exportMarkdown writes one redacted Markdown file per session into dir.
+func exportMarkdown(c *cobra.Command, repoPath, dir, session string, jsonOutput bool) error {
+	root, err := initializedRoot(repoPath)
+	if err != nil {
+		return err
+	}
+	if dir == "" {
+		return fmt.Errorf("--out DIR is required for markdown")
+	}
+	e, err := engine.Open(root)
+	if err != nil {
+		return err
+	}
+	defer e.Close()
+	sessions := []string{session}
+	if session == "" {
+		if sessions, err = traceexport.Sessions(e.DB); err != nil {
+			return err
+		}
+	}
+	files := []string{}
+	for _, id := range sessions {
+		if !safeSessionID.MatchString(id) {
+			return fmt.Errorf("invalid session ID %q", id)
+		}
+		text, err := traceexport.SessionMarkdown(e.DB, root, id)
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(dir, id+".md")
+		if err := writePrivateFile(path, func(w io.Writer) error { _, err := io.WriteString(w, text); return err }); err != nil {
+			return err
+		}
+		files = append(files, path)
+	}
+	if jsonOutput {
+		return json.NewEncoder(c.OutOrStdout()).Encode(map[string]any{"dir": dir, "format": "markdown", "files": files})
+	}
+	_, err = fmt.Fprintf(c.OutOrStdout(), "Exported %d session(s) to %s\n", len(files), dir)
+	return err
 }
