@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/UseTrace-SI/trace-cli/internal/event"
 )
 
 func TestRegistryNamesAreUnique(t *testing.T) {
@@ -64,6 +66,8 @@ func TestCapabilityLookups(t *testing.T) {
 		{"kimi", false, true},
 		{"zoo", false, true},
 		{"git", false, false},
+		{"continue", false, false},
+		{"vibe", false, false},
 		{"nope", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -178,6 +182,44 @@ func TestVerifiedAgentsMatchReadme(t *testing.T) {
 		row := "| " + caps.DisplayName + " | Real "
 		if got := strings.Contains(string(b), row); got != (caps.Verification == Verified) {
 			t.Errorf("%s: verification %s, README row with live coverage present=%t", a.Name(), caps.Verification, got)
+		}
+	}
+}
+
+// `trace run` names its agents in this order.
+func TestRunners(t *testing.T) {
+	var got []string
+	for _, r := range Runners() {
+		got = append(got, r.Name())
+	}
+	if want := []string{"continue", "vibe", "crush", "aider"}; !slices.Equal(got, want) {
+		t.Fatalf("runners %v, want %v", got, want)
+	}
+}
+
+// An agent registered only for `trace run` handles hooks exactly like an
+// unregistered name.
+func TestRunnerOnlyAgentsUseGenericHooks(t *testing.T) {
+	for _, name := range []string{"continue", "vibe", "crush"} {
+		a, global := ForHook(name)
+		if global || a.Name() != name {
+			t.Fatalf("ForHook(%q) = %T, %t", name, a, global)
+		}
+		generic := genericAdapter{name: name}
+		c := NewHookCall(name, name, "turn_start", false, strings.NewReader(""))
+		body := []byte(`{"session_id":"s","prompt":"p","at":1}`)
+		want, wantErr := generic.DecodeHook(c, body, "/r")
+		got, err := a.DecodeHook(c, body, "/r")
+		if !slices.EqualFunc(got, want, func(x, y event.Event) bool {
+			return x.Kind == y.Kind && x.Agent == y.Agent && x.Prompt == y.Prompt && x.At == y.At
+		}) || (err == nil) != (wantErr == nil) {
+			t.Fatalf("%s decoded %+v, %v; want %+v, %v", name, got, err, want, wantErr)
+		}
+		if a.InvalidPayloadMessage() != generic.InvalidPayloadMessage() || a.FramePerEvent() || a.StartsDaemon("turn_start") {
+			t.Fatalf("%s hook behaviour differs from the generic adapter", name)
+		}
+		if _, ok := a.HookResponse("Stop"); ok {
+			t.Fatalf("%s answers hooks", name)
 		}
 	}
 }

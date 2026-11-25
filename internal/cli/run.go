@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/id"
@@ -80,23 +81,19 @@ func (w *boundedOutput) text() string {
 
 func runCommand(repoPath *string) *cobra.Command {
 	var prompt string
-	cmd := &cobra.Command{Use: "run <continue|vibe|crush|aider>", Short: "Run a single headless agent prompt with Trace", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
-		var binary string
-		switch args[0] {
-		case "continue":
-			binary = "cn"
-		case "vibe":
-			binary = "vibe"
-		case "crush":
-			binary = "crush"
-		case "aider":
-			binary = "aider"
-		default:
+	var names []string
+	for _, runner := range adapters.Runners() {
+		names = append(names, runner.Name())
+	}
+	cmd := &cobra.Command{Use: "run <" + strings.Join(names, "|") + ">", Short: "Run a single headless agent prompt with Trace", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
+		runner, ok := headlessRunner(args[0])
+		if !ok {
 			return fmt.Errorf("unsupported headless agent %q", args[0])
 		}
 		if prompt == "" {
 			return fmt.Errorf("--prompt is required")
 		}
+		binary, agentArgs := runner.RunCommand(prompt)
 		path, err := exec.LookPath(binary)
 		if err != nil {
 			return fmt.Errorf("finding %s: %w", binary, err)
@@ -119,18 +116,10 @@ func runCommand(repoPath *string) *cobra.Command {
 				}
 			}
 		}
-		agentArgs := []string{"-p", prompt}
-		if args[0] == "crush" {
-			agentArgs = []string{"run", "--", prompt}
-		} else if args[0] == "aider" {
-			// Aider normally commits edits and dirty files automatically. Keep
-			// a Trace-launched run from creating git history on the user's behalf.
-			agentArgs = []string{"--no-auto-commits", "--no-dirty-commits", "--message=" + prompt}
-		}
 		process := exec.Command(path, agentArgs...)
 		process.Stdin, process.Stdout, process.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
 		var output boundedOutput
-		if started && args[0] == "vibe" && !characterDevice(c.OutOrStdout()) && !characterDevice(c.ErrOrStderr()) {
+		if started && runner.RunCapturesOutput() && !characterDevice(c.OutOrStdout()) && !characterDevice(c.ErrOrStderr()) {
 			var outputMu sync.Mutex
 			process.Stdout = synchronizedWriter{mu: &outputMu, w: io.MultiWriter(c.OutOrStdout(), &output)}
 			process.Stderr = synchronizedWriter{mu: &outputMu, w: c.ErrOrStderr()}
@@ -175,4 +164,13 @@ func runCommand(repoPath *string) *cobra.Command {
 	}}
 	cmd.Flags().StringVar(&prompt, "prompt", "", "prompt for one headless agent run")
 	return cmd
+}
+
+func headlessRunner(name string) (adapters.Runner, bool) {
+	a, ok := adapters.Lookup(name)
+	if !ok {
+		return nil, false
+	}
+	runner, ok := a.(adapters.Runner)
+	return runner, ok
 }

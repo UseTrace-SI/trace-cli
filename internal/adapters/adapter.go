@@ -178,6 +178,17 @@ type Reviewer interface {
 	ReviewCommand() (string, []string)
 }
 
+// Runner runs one headless prompt with the agent (`trace run`).
+type Runner interface {
+	Adapter
+	// RunCommand is the program, looked up on PATH, and its arguments.
+	RunCommand(prompt string) (string, []string)
+	// RunCapturesOutput reports whether `trace run` records the agent's
+	// bounded output as turn context when neither output stream is a
+	// terminal.
+	RunCapturesOutput() bool
+}
+
 // SessionReader is a marker-enabled agent whose sessions the daemon reads
 // from the agent's own files while the marker exists.
 type SessionReader interface {

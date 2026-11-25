@@ -1,7 +1,8 @@
 package adapters
 
 // registry lists every adapter. Global integrations appear first, in the
-// order `trace agents` lists them and `trace setup --help` names them.
+// order `trace agents` lists them and `trace setup --help` names them;
+// headless runners appear in the order `trace run --help` names them.
 var registry = []Adapter{
 	claudeCode{},
 	codexAdapter{},
@@ -30,6 +31,9 @@ var registry = []Adapter{
 	gooseAdapter{},
 	langgraphAdapter{},
 	crewaiAdapter{},
+	continueAdapter{},
+	vibeAdapter{},
+	crushAdapter{},
 	aiderAdapter{},
 	codebuffAdapter{},
 	gitAdapter{},
@@ -153,6 +157,17 @@ func SessionReaders() []SessionReader {
 	var out []SessionReader
 	for _, a := range registry {
 		if r, ok := a.(SessionReader); ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Runners returns the agents `trace run` accepts, in registry order.
+func Runners() []Runner {
+	var out []Runner
+	for _, a := range registry {
+		if r, ok := a.(Runner); ok {
 			out = append(out, r)
 		}
 	}
