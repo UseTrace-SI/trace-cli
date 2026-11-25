@@ -41,6 +41,18 @@ func fakeAgent(mode string) int {
 	send := func(s string) { _, _ = io.WriteString(w, s+"\n") }
 	r := bufio.NewReaderSize(io.TeeReader(os.Stdin, in), 1<<20)
 	cwd := os.Getenv("ACP_FAKE_CWD")
+	if mode == "bigexit" {
+		// Exit right after writing more than the pipe buffers.
+		send(`{"jsonrpc":"2.0","method":"big","params":"` + strings.Repeat("y", 200001) + `"}`)
+		return 0
+	}
+	if mode == "tree" {
+		child := exec.Command("sleep", "30")
+		if child.Start() == nil {
+			_ = os.WriteFile(os.Getenv("ACP_FAKE_OUT")+".pid", []byte(fmt.Sprint(child.Process.Pid)), 0o600)
+		}
+		mode = "echo"
+	}
 	if mode == "grandchild" {
 		// A process the agent started keeps the agent's stdout open.
 		child := exec.Command("sleep", "30")
@@ -181,19 +193,20 @@ func (c *client) until(id string) {
 }
 
 type harness struct {
-	t       *testing.T
-	prompt  string
-	dir     string
-	client  *client
-	rec     *recorder
-	sink    func(event.Event)
-	signals chan os.Signal
-	result  chan error
-	stdout  *io.PipeReader
-	logMu   sync.Mutex
-	logs    []string
-	stderr  bytes.Buffer
-	stdinIn *io.PipeReader
+	t         *testing.T
+	prompt    string
+	dir       string
+	client    *client
+	rec       *recorder
+	sink      func(event.Event)
+	signals   chan os.Signal
+	stopGrace time.Duration
+	result    chan error
+	stdout    *io.PipeReader
+	logMu     sync.Mutex
+	logs      []string
+	stderr    bytes.Buffer
+	stdinIn   *io.PipeReader
 }
 
 func startProxy(t *testing.T, mode string, setup ...func(*harness)) *harness {
@@ -218,7 +231,7 @@ func startProxy(t *testing.T, mode string, setup ...func(*harness)) *harness {
 	cfg := Config{
 		Args: []string{os.Args[0]}, Name: "acp:fake",
 		Stdin: stdinR, Stdout: stdoutW, Stderr: &lockedBuffer{b: &h.stderr, mu: &h.logMu},
-		Signals: h.signals,
+		Signals: h.signals, StopGrace: h.stopGrace,
 		Sink: func(ev event.Event) {
 			if h.sink != nil {
 				h.sink(ev)
@@ -489,10 +502,7 @@ func TestProxyDoesNotWaitForGrandchildOutput(t *testing.T) {
 }
 
 func TestProxyStopsAgentThatIgnoresStdinEOF(t *testing.T) {
-	old := stdinGrace
-	stdinGrace = 100 * time.Millisecond
-	t.Cleanup(func() { stdinGrace = old })
-	h := startProxy(t, "ignore-eof")
+	h := startProxy(t, "ignore-eof", func(h *harness) { h.stopGrace = 100 * time.Millisecond })
 	_ = h.client.in.Close()
 	err := h.wait()
 	if exit, ok := err.(ExitError); !ok || exit.Signal != syscall.SIGTERM || exit.Code != 128+15 {
@@ -502,13 +512,66 @@ func TestProxyStopsAgentThatIgnoresStdinEOF(t *testing.T) {
 
 func TestProxyForwardsSignals(t *testing.T) {
 	signals := make(chan os.Signal, 1)
-	h := startProxy(t, "echo", func(h *harness) { h.signals = signals })
+	h := startProxy(t, "tree", func(h *harness) { h.signals = signals })
+	pidFile := filepath.Join(filepath.Dir(h.dir), "agent-out.pid")
+	var pid int
+	t.Cleanup(func() {
+		if pid > 0 {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
 	h.client.send(`{"jsonrpc":"2.0","method":"echo"}`)
 	if _, err := h.client.out.ReadBytes('\n'); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fmt.Sscan(string(b), &pid); err != nil {
 		t.Fatal(err)
 	}
 	signals <- syscall.SIGINT
 	if exit, ok := h.wait().(ExitError); !ok || exit.Signal != syscall.SIGINT {
 		t.Fatalf("want agent killed by forwarded SIGINT")
 	}
+	// The agent's own child is in its process group and gets the signal too.
+	deadline := time.Now().Add(5 * time.Second)
+	for !processGone(pid) {
+		if time.Now().After(deadline) {
+			t.Fatalf("grandchild %d survived the forwarded SIGINT", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// A slow editor must still receive all output an agent wrote before exiting.
+func TestProxyDeliversEverythingToSlowEditorAfterExit(t *testing.T) {
+	h := startProxy(t, "bigexit")
+	var got bytes.Buffer
+	buf := make([]byte, 16<<10)
+	for {
+		n, err := h.client.out.Read(buf)
+		got.Write(buf[:n])
+		if err != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err := <-h.result; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want, _ := os.ReadFile(filepath.Join(filepath.Dir(h.dir), "agent-out"))
+	if len(want) < 200001 || !bytes.Equal(got.Bytes(), want) {
+		t.Fatalf("slow editor got %d of %d bytes", got.Len(), len(want))
+	}
+}
+
+// processGone reports whether pid has exited (or is a zombie awaiting reaping).
+func processGone(pid int) bool {
+	if syscall.Kill(pid, 0) != nil {
+		return true
+	}
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	return err == nil && strings.Contains(string(b), ") Z ")
 }

@@ -4,8 +4,8 @@ package acp
 
 import "syscall"
 
-// agentSysProcAttr puts the agent in its own process group, so a terminal's
-// SIGINT reaches it once (forwarded by Trace) rather than twice.
-func agentSysProcAttr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{Setpgid: true}
+// agentSysProcAttr puts the agent in its own process group when group is
+// set, so signals reach it and its children exactly once.
+func agentSysProcAttr(group bool) *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{Setpgid: group}
 }

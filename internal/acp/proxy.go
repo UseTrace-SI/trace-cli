@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -63,12 +64,16 @@ type Config struct {
 	Logf func(format string, args ...any)
 	// Signals, when set, delivers signals to forward to the agent.
 	Signals <-chan os.Signal
+	// StopGrace is how long the agent may run on after the editor closes
+	// its stdin before it is stopped; zero means 5 seconds.
+	StopGrace time.Duration
+	// Interactive is set when Trace runs in a terminal. The agent then stays
+	// in the terminal's process group, which already delivers Ctrl-C to it,
+	// so SIGINT is not forwarded.
+	Interactive bool
 	// Now overrides the clock in tests.
 	Now func() time.Time
 }
-
-// stdinGrace is a variable so tests can shorten it.
-var stdinGrace = stdinGraceDefault
 
 type chunk struct {
 	dir  Direction
@@ -103,7 +108,10 @@ func Run(cfg Config) error {
 	}
 	cmd := exec.Command(cfg.Args[0], cfg.Args[1:]...)
 	cmd.Stderr = cfg.Stderr
-	cmd.SysProcAttr = agentSysProcAttr()
+	cmd.SysProcAttr = agentSysProcAttr(!cfg.Interactive)
+	if cfg.StopGrace <= 0 {
+		cfg.StopGrace = stdinGraceDefault
+	}
 	// Plain pipes rather than StdinPipe/StdoutPipe: Wait then returns when the
 	// agent exits, even if a grandchild keeps its stdout open.
 	inR, agentIn, err := os.Pipe()
@@ -159,6 +167,14 @@ func Run(cfg Config) error {
 		close(exited)
 	}()
 
+	// signal reaches the agent's whole process group, including processes it
+	// started, unless the agent shares Trace's terminal group.
+	signal := func(sig syscall.Signal) {
+		if !cfg.Interactive && syscall.Kill(-cmd.Process.Pid, sig) == nil {
+			return
+		}
+		_ = cmd.Process.Signal(sig)
+	}
 	var stopping sync.Once
 	// terminate sends SIGTERM, then SIGKILL if the agent outlives killGrace.
 	terminate := func(after time.Duration) {
@@ -169,11 +185,11 @@ func Run(cfg Config) error {
 					return
 				case <-time.After(after):
 				}
-				_ = cmd.Process.Signal(syscall.SIGTERM)
+				signal(syscall.SIGTERM)
 				select {
 				case <-exited:
 				case <-time.After(killGrace):
-					_ = cmd.Process.Kill()
+					signal(syscall.SIGKILL)
 				}
 			}()
 		})
@@ -190,14 +206,18 @@ func Run(cfg Config) error {
 			cfg.Logf("forwarding to agent: %v", err)
 			return
 		}
-		terminate(stdinGrace)
+		terminate(cfg.StopGrace)
 	}()
 	if cfg.Signals != nil {
 		go func() {
 			for {
 				select {
 				case sig := <-cfg.Signals:
-					_ = cmd.Process.Signal(sig)
+					sysSig, ok := sig.(syscall.Signal)
+					if !ok || (cfg.Interactive && sysSig == syscall.SIGINT) {
+						continue
+					}
+					signal(sysSig)
 				case <-exited:
 					return
 				}
@@ -208,7 +228,8 @@ func Run(cfg Config) error {
 	// Agent -> editor. Once the agent has exited, output still buffered in the
 	// pipe is forwarded; a grandchild holding the pipe open gets drainGrace.
 	forwarded := make(chan error, 1)
-	go func() { forwarded <- forward(agentOut, cfg.Stdout, FromAgent, queue, done) }()
+	out := &drainReader{f: agentOut}
+	go func() { forwarded <- forward(out, cfg.Stdout, FromAgent, queue, done) }()
 	select {
 	case err := <-forwarded:
 		if err != nil && !errors.Is(err, errReadSide) {
@@ -219,8 +240,10 @@ func Run(cfg Config) error {
 		}
 		<-exited
 	case <-exited:
-		_ = agentOut.SetReadDeadline(time.Now().Add(drainGrace))
-		<-forwarded
+		out.drain()
+		if err := <-forwarded; errors.Is(err, os.ErrDeadlineExceeded) {
+			cfg.Logf("agent exited but its stdout stayed open with no output for %v; stopped forwarding it", drainGrace)
+		}
 	}
 	close(done)
 	<-observed
@@ -272,7 +295,7 @@ func forward(src io.Reader, dst io.Writer, dir Direction, queue chan<- chunk, do
 			if rerr == io.EOF {
 				return nil
 			}
-			return fmt.Errorf("%w: %v", errReadSide, rerr)
+			return fmt.Errorf("%w: %w", errReadSide, rerr)
 		}
 	}
 }
@@ -294,4 +317,25 @@ func exitStatus(err error) error {
 		return ExitError{Code: code}
 	}
 	return fmt.Errorf("waiting for agent: %w", err)
+}
+
+// drainReader reads the agent's stdout. After the agent exits, each Read may
+// wait at most drainGrace for data: an idle timeout, so time spent writing to
+// a slow editor never counts and buffered output is never cut off.
+type drainReader struct {
+	f        *os.File
+	draining atomic.Bool
+}
+
+func (r *drainReader) drain() {
+	r.draining.Store(true)
+	// Bound a Read that is already waiting.
+	_ = r.f.SetReadDeadline(time.Now().Add(drainGrace))
+}
+
+func (r *drainReader) Read(p []byte) (int, error) {
+	if r.draining.Load() {
+		_ = r.f.SetReadDeadline(time.Now().Add(drainGrace))
+	}
+	return r.f.Read(p)
 }

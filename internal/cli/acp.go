@@ -21,6 +21,7 @@ import (
 
 func acpCommand(repoPath *string) *cobra.Command {
 	var name string
+	var stopGrace time.Duration
 	cmd := &cobra.Command{
 		Use:   "acp [--name NAME] -- <agent command> [args...]",
 		Short: "Run an Agent Client Protocol agent and record its turns",
@@ -52,6 +53,7 @@ Trace is initialized are recorded as agent "acp:<name>".`,
 				Args: args, Name: "acp:" + name,
 				Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 				Sink: sink.emit, Logf: logger.logf, Signals: signals,
+				StopGrace: stopGrace, Interactive: characterDevice(os.Stdin),
 			})
 			if exit, ok := err.(acp.ExitError); ok {
 				if exit.Signal != 0 {
@@ -69,6 +71,7 @@ Trace is initialized are recorded as agent "acp:<name>".`,
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "agent name recorded as acp:<name> (default: the command's base name)")
+	cmd.Flags().DurationVar(&stopGrace, "stop-grace", 5*time.Second, "how long the agent may keep running after the editor closes its input before it is stopped")
 	cmd.Flags().SetInterspersed(false)
 	return cmd
 }

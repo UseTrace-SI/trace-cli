@@ -5,7 +5,7 @@ agent that an editor such as Zed or a JetBrains IDE runs, including agents from
 the ACP registry (`claude-agent-acp`, `codex-acp`, `gemini --acp`, ...).
 
 ```sh
-trace acp [--name NAME] -- <agent command> [args...]
+trace acp [--name NAME] [--stop-grace 5s] -- <agent command> [args...]
 ```
 
 Configure the editor to launch `trace acp -- <agent>` instead of `<agent>`.
@@ -18,18 +18,24 @@ directions. Trace never alters, reorders, drops or injects a message, and
 never writes to its own stdout. The agent's stderr goes straight to the
 editor.
 
-- The agent runs in its own process group. SIGINT, SIGTERM and SIGHUP sent to
-  Trace (by the editor, or Ctrl-C in a terminal) reach the agent exactly once.
-  On Linux the agent is also killed if Trace itself dies.
+- Launched by an editor, the agent runs in its own process group. SIGINT,
+  SIGTERM and SIGHUP sent to Trace reach the agent and the processes it
+  started, exactly once. On Linux the agent is also killed if Trace itself
+  dies.
+- Run by hand with a terminal on stdin, the agent stays in the terminal's
+  process group instead. Ctrl-C then reaches it directly from the terminal,
+  so Trace does not forward SIGINT, and an agent that uses `/dev/tty` is not
+  stopped by SIGTTIN or SIGTTOU as a background process group would be.
 - When the editor closes stdin, the agent's stdin is closed. An agent still
-  running five seconds later gets SIGTERM, then SIGKILL two seconds after
-  that. The same happens immediately when writing to the editor fails.
+  running five seconds later (`--stop-grace`, for example `--stop-grace 30s`)
+  gets SIGTERM, then SIGKILL two seconds after that, sent to its process
+  group. The same happens immediately when writing to the editor fails.
 - Trace exits with the agent's status. When a signal killed the agent, Trace
   ends with the same signal (SIGINT, SIGTERM, SIGHUP, SIGKILL), or with status
   128 + the signal number for others.
 - Trace returns when the agent exits, even if a process the agent started
-  still holds its stdout; output already written is forwarded for up to half
-  a second.
+  still holds its stdout. Output keeps being forwarded, however slowly the
+  editor reads it, until no more arrives for half a second.
 
 In `TestProxyLatency` the proxy adds a median of 10 to 30 µs per round trip
 (two hops, on Linux).
