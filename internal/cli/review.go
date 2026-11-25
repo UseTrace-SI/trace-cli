@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/spf13/cobra"
@@ -167,12 +168,11 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 }
 
 func reviewAgentCommand(agent string) (string, []string, error) {
-	switch agent {
-	case "claude-code":
-		return "claude", []string{"--print", "--output-format", "text", "--tools", "", "--strict-mcp-config", "--no-session-persistence"}, nil
-	case "codex":
-		return "codex", []string{"exec", "--sandbox", "read-only", "--ephemeral", "--color", "never", "-"}, nil
-	default:
-		return "", nil, fmt.Errorf("headless review is not supported for %q; choose claude-code or codex", agent)
+	if a, ok := adapters.Lookup(agent); ok {
+		if reviewer, ok := a.(adapters.Reviewer); ok {
+			name, args := reviewer.ReviewCommand()
+			return name, args, nil
+		}
 	}
+	return "", nil, fmt.Errorf("headless review is not supported for %q; choose claude-code or codex", agent)
 }
