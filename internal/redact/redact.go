@@ -87,10 +87,11 @@ var patternHints = map[string][]string{
 // envValue matches a secret-like name, an assignment or comparison operator
 // (group 2) and its value (group 3). A quoted, JSON-style name must end with
 // the secret word; group 1 holds its closing quote, which may be escaped when
-// the JSON is itself inside a string (`{\"password\": \"…\"}`), and such a
-// value runs to the next escaped quote. Multi-character operators come first
-// so their trailing character is never taken as the value.
-var envValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)(?:[A-Z0-9_]*|(\\*["']))\s*(===?|!==?|:=|=>|[:=])\s*(\\+"[^"\n]*?\\+"|"[^"\n]*"|'[^'\n]*'|["']?[^\s,"']+)`)
+// the JSON is itself inside a string (`{\"password\": \"…\"}`). Group 4 then
+// holds the escaped opening quote of the value, whose end escapedValueEnd
+// finds. Multi-character operators come first so their trailing character is
+// never taken as the value.
+var envValue = regexp.MustCompile(`(?im)\b[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)(?:[A-Z0-9_]*|(\\*["']))\s*(===?|!==?|:=|=>|[:=])\s*((\\+")|"[^"\n]*"|'[^'\n]*'|["']?[^\s,"']+)`)
 var redactionMarker = regexp.MustCompile(`⟨redacted:[a-z-]+:[0-9a-f]{8}⟩`)
 var email = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b`)
 var phone = regexp.MustCompile(`\b\+?[0-9][0-9 ()-]{8,}[0-9]\b`)
@@ -199,18 +200,15 @@ func redactEnvValues(s string) string {
 		}
 		start, end := match[6], match[7]
 		value := s[start:end]
-		if value[0] == '\\' {
-			// An escaped string literal: mask what lies between the
-			// escaped quotes and keep the escapes.
-			open := strings.IndexByte(value, '"') + 1
-			close := strings.LastIndexByte(value, '\\')
-			for close > open && value[close-1] == '\\' {
-				close--
-			}
-			if close <= open {
+		if match[8] >= 0 {
+			// An escaped string literal: mask up to the matching escaped
+			// quote, keeping the escapes; unterminated, to the end of the line.
+			start = match[9]
+			end = escapedValueEnd(s, start, match[9]-match[8]-1)
+			value = s[start:end]
+			if value == "" {
 				continue
 			}
-			start, end, value = start+open, start+close, value[open:close]
 			if location := redactionMarker.FindStringIndex(value); location != nil && location[0] == 0 && location[1] == len(value) {
 				continue
 			}
@@ -245,6 +243,27 @@ func redactEnvValues(s string) string {
 	}
 	out.WriteString(s[last:])
 	return out.String()
+}
+
+// escapedValueEnd returns where a string value opened by a quote escaped with
+// n backslashes ends: before the first quote escaped with exactly n
+// backslashes (a quote with more is escaped content), or at the line end.
+func escapedValueEnd(s string, from, n int) int {
+	for i := from; i < len(s); i++ {
+		switch s[i] {
+		case '\n':
+			return i
+		case '"':
+			j := i
+			for j > from && s[j-1] == '\\' {
+				j--
+			}
+			if i-j == n {
+				return j
+			}
+		}
+	}
+	return len(s)
 }
 
 func entropy(s string) float64 {

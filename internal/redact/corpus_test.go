@@ -181,6 +181,8 @@ func TestEscapedJSONCredentialValues(t *testing.T) {
 		{"double escaped token", `{\\\"access_token\\\": \\\"abc123\\\"}`, `{\\\"access_token\\\": \\\"` + env("abc123") + `\\\"}`},
 		{"escaped value after a plain assignment", `DB_PASSWORD=\"Summer2024!\"`, `DB_PASSWORD=\"` + env("Summer2024!") + `\"`},
 		{"tool call arguments", `{"command":"curl -d '{\"client_secret\": \"s3cr3t value\"}'"}`, `{"command":"curl -d '{\"client_secret\": \"` + env("s3cr3t value") + `\"}'"}`},
+		{"inner escaped quote stays masked", `{\"password\": \"ab\\\"cdLEAKED\"}`, `{\"password\": \"` + env(`ab\\\"cdLEAKED`) + `\"}`},
+		{"unterminated escaped value masks to the line end", "{\\\"token\\\": \\\"abc def\nnext line", "{\\\"token\\\": \\\"" + env("abc def") + "\nnext line"},
 		{"escaped null is unchanged", `{\"password\": null}`, `{\"password\": null}`},
 		{"escaped empty value is unchanged", `{\"password\": \"\"}`, `{\"password\": \"\"}`},
 		{"escaped number is unchanged", `{\"max_tokens\": 4096}`, `{\"max_tokens\": 4096}`},
@@ -216,6 +218,30 @@ func TestRelaxedBoundaryFalsePositives(t *testing.T) {
 	} {
 		if got := (Redactor{}).Text(input); got != input {
 			t.Errorf("false positive: %q -> %q", input, got)
+		}
+	}
+}
+
+// Bare values that merely start with a backslash are ordinary values, not
+// escaped strings, and must be masked whole as before.
+func TestBareValuesStartingWithABackslash(t *testing.T) {
+	env := func(value string) string { return marker("env", value) }
+	for _, tc := range []struct{ input, want string }{
+		{`export DB_PASSWORD=\$hunter\$two`, `export DB_PASSWORD=` + env(`\$hunter\$two`)},
+		{`PASSWORD=\!pass`, `PASSWORD=` + env(`\!pass`)},
+		{`API_KEY=\x41hello`, `API_KEY=` + env(`\x41hello`)},
+		{`set "TOKEN=\\host\pw"`, `set "TOKEN=` + env(`\\host\pw`) + `"`},
+		{`password=\\fileserver\share$pw99`, `password=` + env(`\\fileserver\share$pw99`)},
+		// Go source from archive/tar tests: a value that is just "\n".
+		{`{"3 somelongkey=\n", nil, false},`, `{"3 somelongkey=` + env(`\n`) + `", nil, false},`},
+		{`{"13 key1=val1\n13 key2=val2\n8 key1=\n",`, `{"13 key1=` + env(`val1\n13`) + ` key2=` + env(`val2\n8`) + ` key1=` + env(`\n`) + `",`},
+	} {
+		got := (Redactor{}).Text(tc.input)
+		if got != tc.want {
+			t.Errorf("Text(%q) = %q; want %q", tc.input, got, tc.want)
+		}
+		if twice := (Redactor{}).Text(got); twice != got {
+			t.Errorf("second pass changed %q -> %q", got, twice)
 		}
 	}
 }
