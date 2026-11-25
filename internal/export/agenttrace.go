@@ -75,10 +75,18 @@ type Line struct {
 	Agent  string
 	TurnID string
 	Step   int64
+	// Type, when set, overrides the contributor type derived from Agent; it
+	// marks a line explained only by an imported hint. ModelID is that
+	// hint's model.
+	Type    string
+	ModelID string
 }
 
 // contributorType maps a Trace origin to an Agent Trace contributor type.
 func contributorType(l Line) string {
+	if l.Type != "" {
+		return l.Type
+	}
 	switch l.Agent {
 	case "human":
 		return "human"
@@ -91,7 +99,7 @@ func contributorType(l Line) string {
 // TurnURL is the conversation URL of a recorded turn.
 func TurnURL(turnID string) string { return "trace://turn/" + turnID }
 
-type convKey struct{ kind, turn string }
+type convKey struct{ kind, turn, model string }
 
 // FileRecord groups one file's per-line origins (index 0 is line first) into
 // conversations of contiguous ranges. It returns the file and turn details for
@@ -100,13 +108,13 @@ func FileRecord(path string, first int, lines []Line, turns map[string]map[strin
 	f := File{Path: path}
 	index := map[convKey]int{}
 	for i, l := range lines {
-		k := convKey{contributorType(l), l.TurnID}
+		k := convKey{contributorType(l), l.TurnID, l.ModelID}
 		if k.kind != "ai" {
 			k.turn = ""
 		}
 		at, ok := index[k]
 		if !ok {
-			c := Conversation{Contributor: &Contributor{Type: k.kind}}
+			c := Conversation{Contributor: &Contributor{Type: k.kind, ModelID: k.model}}
 			if k.turn != "" {
 				c.URL = TurnURL(k.turn)
 				if turns != nil {
@@ -134,7 +142,7 @@ func MergeFile(f *File, other File) {
 		merged := false
 		for i := range f.Conversations {
 			c := &f.Conversations[i]
-			if c.URL == oc.URL && c.Contributor.Type == oc.Contributor.Type {
+			if c.URL == oc.URL && *c.Contributor == *oc.Contributor {
 				c.Ranges = append(c.Ranges, oc.Ranges...)
 				merged = true
 				break

@@ -15,8 +15,40 @@ import (
 	"github.com/UseTrace-SI/trace-cli/internal/attribution"
 	"github.com/UseTrace-SI/trace-cli/internal/blob"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
+	"github.com/UseTrace-SI/trace-cli/internal/interop"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 )
+
+// applyHints explains lines Trace has no origin for (unknown or baseline)
+// from imported git-ai hints for the same commit and path.
+func applyHints(db attribution.Querier, sha, path string, lines []int, out []Line) (int, error) {
+	hints, err := interop.HintsFor(db, sha, path)
+	if err != nil || len(hints) == 0 {
+		return 0, err
+	}
+	n := 0
+	for i, line := range lines {
+		if contributorType(out[i]) != "unknown" {
+			continue
+		}
+		for _, h := range hints {
+			if line >= h.StartLine && line <= h.EndLine {
+				out[i] = Line{Agent: h.Tool, Type: h.Contributor, ModelID: textModel(h.Model)}
+				n++
+				break
+			}
+		}
+	}
+	return n, nil
+}
+
+// textModel bounds a model ID to the 250 characters Agent Trace allows.
+func textModel(m string) string {
+	if len(m) > 250 {
+		return ""
+	}
+	return m
+}
 
 // MaxCommits bounds the commits one export walks.
 const MaxCommits = 1000
@@ -128,6 +160,7 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 		return Record{}, err
 	}
 	turns := map[string]map[string]any{}
+	imported := 0
 	var files []File
 	for _, ch := range changes {
 		if ch.Status == 'D' || !exportable(root, ch.Path) {
@@ -144,10 +177,16 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 		if err != nil {
 			return Record{}, err
 		}
+		resolved := toLines(origins)
+		if hinted, err := applyHints(db, sha, ch.Path, lines, resolved); err != nil {
+			return Record{}, err
+		} else if hinted > 0 {
+			imported += hinted
+		}
 		var file File
 		for i, start := 0, 0; i <= len(lines); i++ {
 			if i == len(lines) || (i > start && lines[i] != lines[i-1]+1) {
-				f := FileRecord(ch.Path, lines[start], toLines(origins[start:i]), turns)
+				f := FileRecord(ch.Path, lines[start], resolved[start:i], turns)
 				if file.Path == "" {
 					file = f
 				} else {
@@ -158,7 +197,11 @@ func CommitRecord(db attribution.Querier, blobs *blob.Store, root, sha string) (
 		}
 		files = append(files, file)
 	}
-	return NewRecord(sha, at, files, metadata("commit", turns))
+	m := metadata("commit", turns)
+	if imported > 0 {
+		m["imported_hint_lines"] = map[string]int{interop.SourceGitAI: imported}
+	}
+	return NewRecord(sha, at, files, m)
 }
 
 func metadata(scope string, turns map[string]map[string]any) map[string]any {

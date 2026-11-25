@@ -181,6 +181,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace config get\|set commit-trailer [on\|off]` | Opt in to (or out of) `Trace-Turn:` commit trailers; off by default |
 | `trace export --format agent-trace [--rev COMMIT\|A..B] [--out FILE]` | Export line attribution as [Agent Trace](https://agent-trace.dev) JSONL (stdout without `--out`) |
 | `trace export --format markdown --out DIR [--session ID]` | Write one redacted Markdown file per session: prompts, last response per turn, files touched |
+| `trace import --from git-ai` | Read git-ai authorship notes (`refs/notes/ai`) read-only as attribution hints for Agent Trace export |
 | `trace export --format bundle --out FILE [--include-excluded-history]` / `trace handoff [--out FILE] [--include-excluded-history]` | Write a portable history bundle. Earlier snapshots of since-excluded credential files are left out and listed unless the flag keeps them |
 | `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL [--auto-sync] [--device-auth]` | Sign in with GitHub in a browser; opt into background upload |
 | `trace sync [--watch]` | Upload local history to the configured sync server |
@@ -217,6 +218,12 @@ Each file groups its ranges into conversations. A line written by a recorded age
 ## Markdown session export
 
 `trace export --format markdown --out DIR` writes `DIR/<session-id>.md` (mode 0600) for every recorded session, or only the one named by `--session`. Each file lists the agent and times, then for each turn its step, prompt (up to 4000 characters), a response summary (the turn's last recorded assistant message, up to 1500 characters) and the files its recorded edits touched with their edit kinds. Prompts and responses are passed through the redactor again on export; secret paths and `.traceignore`d paths are left out. No file contents, reasoning or tool inputs are written. `--json` prints the written `files`.
+
+## Importing other tools' attribution
+
+`trace import --from git-ai` reads the authorship logs that [git-ai](https://github.com/git-ai-project/git-ai) attaches as Git notes under `refs/notes/ai`, following the [Git AI Standard v3.0.0](https://github.com/git-ai-project/git-ai/blob/main/specs/git_ai_standard_v3.0.0.md) (`schema_version` `authorship/3.*`). It runs only read-only Git commands (`rev-parse`, `notes list`, `cat-file`): it never writes notes, refs or commits. Each attested range becomes a local hint in `.trace/trace.db` with its contributor (`ai` for session and legacy prompt keys, `human` for human keys), the agent's tool and model, and the git-ai session key; human names and emails are not kept, and secret paths are skipped. Notes that do not parse, use another schema version, or are attached to something other than a commit are listed as skipped. Importing again adds nothing. Hints are not synced or exported in bundles. `trace export --format agent-trace --rev ...` uses a hint for a line of the same commit and path only when Trace itself has no origin for it (lines recorded before Trace started, or unknown), emitting git-ai's model as `model_id`; `metadata["dev.usetrace"].imported_hint_lines` counts such lines. Hint line numbers are taken to refer to the annotated commit.
+
+`trace import --from entire` is refused: Entire's documentation names its checkpoint refs (`refs/entire/checkpoints/<shard>/<id>`, or the `entire/checkpoints/v1` branch) and its `Entire-Checkpoint` commit trailer, but not the files inside a checkpoint or the trailer's value format, so Trace does not guess at them. A Trace database file named `git-ai` or `entire` can still be imported as `./git-ai`.
 
 ## Commit trailers
 

@@ -282,3 +282,28 @@ func TestCommitRecordGolden(t *testing.T) {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
 }
+
+func TestCommitRecordUsesImportedHints(t *testing.T) {
+	root, db, bs := fixture(t)
+	run(t, root, "git", "add", "f.txt")
+	run(t, root, "git", "commit", "-q", "-m", "work")
+	sha := run(t, root, "git", "rev-parse", "HEAD")
+	// Line 1 has no Trace origin; line 2 is a recorded turn and keeps it.
+	if _, err := db.Exec(`INSERT INTO imported_attributions(source,commit_sha,path,start_line,end_line,contributor,tool,model,conversation,imported_at)
+		VALUES('git-ai',?,'f.txt',1,2,'ai','cursor','claude-sonnet-4-5','s_1',1)`, sha); err != nil {
+		t.Fatal(err)
+	}
+	r, err := CommitRecord(db, bs, root, sha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(r)
+	if err := validate(b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `{"contributor":{"type":"ai","model_id":"claude-sonnet-4-5"},"ranges":[{"start_line":1,"end_line":1}]}`) ||
+		!strings.Contains(string(b), `"url":"trace://turn/t1","contributor":{"type":"ai"},"ranges":[{"start_line":2,"end_line":3}]`) ||
+		!strings.Contains(string(b), `"imported_hint_lines":{"git-ai":1}`) {
+		t.Fatalf("record: %s", b)
+	}
+}
