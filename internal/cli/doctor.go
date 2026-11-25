@@ -67,18 +67,24 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			add(".trace in git exclude", false, "run: trace init")
 		}
 		// daemon
-		daemonUp := false
+		daemonUp, daemonUnverified := false, false
 		pidBytes, _ := os.ReadFile(filepath.Join(td, "daemon.pid"))
 		if len(pidBytes) > 0 {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil {
-				if daemon.ProcessIsTraceDaemon(pid, root) {
+				switch daemon.CheckTraceDaemon(pid, root) {
+				case daemon.DaemonConfirmed:
 					daemonUp = true
+				case daemon.DaemonUnknown:
+					daemonUnverified = true
 				}
 			}
 		}
 		add("daemon running", daemonUp, func() string {
 			if daemonUp {
 				return "pid " + strings.TrimSpace(string(pidBytes))
+			}
+			if daemonUnverified {
+				return "pid " + strings.TrimSpace(string(pidBytes)) + " is running but could not be identified (is ps installed?)"
 			}
 			return "run: trace daemon start (or any hook will auto-start it)"
 		}())

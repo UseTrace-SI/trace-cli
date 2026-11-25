@@ -41,7 +41,15 @@ func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		pidBytes, err := os.ReadFile(filepath.Join(root, ".trace", "daemon.pid"))
 		if err == nil {
-			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil && daemon.ProcessIsTraceDaemon(pid, root) {
+			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+			identity := daemon.DaemonAbsent
+			if err == nil {
+				identity = daemon.CheckTraceDaemon(pid, root)
+			}
+			if identity == daemon.DaemonUnknown {
+				return fmt.Errorf("cannot confirm that process %d is the Trace daemon (is ps installed?); stop it manually and run uninstall again", pid)
+			}
+			if identity == daemon.DaemonConfirmed {
 				if p, err := os.FindProcess(pid); err == nil {
 					_ = p.Signal(syscall.SIGTERM)
 					// Wait for the daemon to release the SQLite database and
