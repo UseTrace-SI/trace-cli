@@ -1,0 +1,2360 @@
+[
+ {
+  "agent": "openhands",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:153"
+ },
+ {
+  "agent": "openhands",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"oh-1\",\"event_type\":\"UserPromptSubmit\",\"working_dir\":\"{{ROOT}}\",\"message\":\"fix the parser\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:154"
+ },
+ {
+  "agent": "openhands",
+  "event": "user_prompt_submit",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\",\"message\":\"fix the parser\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:154"
+ },
+ {
+  "agent": "openhands",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"file_editor\",\"tool_input\":{\"command\":\"view\",\"path\":\"a.go\"}}",
+  "source": "internal/adapters/openhands/adapter_test.go:155"
+ },
+ {
+  "agent": "openhands",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"file_editor\",\"tool_input\":{\"command\":\"create\",\"path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/openhands/adapter_test.go:156"
+ },
+ {
+  "agent": "openhands",
+  "event": "post_tool_use",
+  "stdin": "{\"session_id\":\"oh-1\",\"event_type\":\"PostToolUse\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"planning_file_editor\",\"tool_input\":{\"command\":\"str_replace\",\"path\":\"PLAN.md\"}}",
+  "source": "internal/adapters/openhands/adapter_test.go:158"
+ },
+ {
+  "agent": "openhands",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"terminal\",\"tool_input\":{\"command\":[\"go\",\"test\",\"./...\"]}}",
+  "source": "internal/adapters/openhands/adapter_test.go:159"
+ },
+ {
+  "agent": "openhands",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"browser\",\"tool_input\":{\"url\":\"https://example.invalid\"}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "openhands",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:161"
+ },
+ {
+  "agent": "openhands",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:162"
+ },
+ {
+  "agent": "openhands",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"oh-1\",\"event_type\":\"Stop\",\"working_dir\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openhands/adapter_test.go:164 (event_type mismatch)"
+ },
+ {
+  "agent": "openhands",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"oh-1\",\"working_dir\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "openhands",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "kiro",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\"}",
+  "source": "derived (via codexhook)"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\"}",
+  "env": {
+   "USER_PROMPT": "add a test for main"
+  },
+  "source": "internal/adapters/kiro/adapter_test.go:22"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"userPromptSubmit\"}",
+  "env": {
+   "USER_PROMPT": "{\"prompt\":\"fix the file\"}"
+  },
+  "source": "internal/adapters/kiro/adapter_test.go:118"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"userPromptSubmit\"}",
+  "env": {
+   "USER_PROMPT": "{\"toolName\":\"fs_write\",\"toolArgs\":{\"content\":\"private text\"},\"toolSuccess\":true}"
+  },
+  "source": "internal/adapters/kiro/adapter_test.go:119 (tool envelope -> empty prompt)"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"prompt from payload\"}",
+  "env": {
+   "USER_PROMPT": "env prompt"
+  },
+  "source": "derived (payload prompt wins over env)"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"fs_write\",\"tool_input\":{\"path\":\"main.go\"}}",
+  "source": "internal/adapters/kiro/adapter_test.go:84"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"fs_read\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/kiro/adapter_test.go:85"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"execute_bash\",\"tool_input\":{\"command\":\"go build ./...\"}}",
+  "source": "internal/adapters/kiro/adapter_test.go:86"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"execute_cmd\",\"tool_input\":{}}",
+  "source": "internal/adapters/kiro/adapter_test.go:87"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"{{ROOT}}/b.go\"}}",
+  "source": "derived (non-kiro tool falls through to codexhook.Parse)"
+ },
+ {
+  "agent": "kiro",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"web_search\",\"tool_input\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "kiro",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"last_assistant_message\":\"Done.\"}",
+  "source": "derived (via codexhook)"
+ },
+ {
+  "agent": "kiro",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (via codexhook)"
+ },
+ {
+  "agent": "kiro",
+  "event": "Interrupt",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (codexhook handles; not installed for kiro)"
+ },
+ {
+  "agent": "kiro",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (codexhook handles; not installed for kiro)"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"PostToolUse\",\"prompt\":\"wrong\"}",
+  "source": "internal/adapters/kiro/adapter_test.go:107 (hook name mismatch)"
+ },
+ {
+  "agent": "kiro",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"kiro-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "kiro",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "goose",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"goose-1\",\"event\":\"SessionStart\",\"working_dir\":\"{{ROOT}}\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:17"
+ },
+ {
+  "agent": "goose",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"goose-1\",\"event\":\"UserPromptSubmit\",\"working_dir\":\"{{ROOT}}\",\"message\":\"refactor the loop\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:18"
+ },
+ {
+  "agent": "goose",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"goose-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"write\",\"tool_input\":{\"path\":\"x.go\"}}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:19"
+ },
+ {
+  "agent": "goose",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"goose-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"developer__text_editor\",\"tool_input\":{\"path\":\"x.go\"}}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:43"
+ },
+ {
+  "agent": "goose",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"goose-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"developer__shell\",\"tool_input\":{\"command\":\"go test ./...\"}}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "goose",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"goose-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"read\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "goose",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"goose-1\",\"working_dir\":\"{{ROOT}}\",\"tool_name\":\"other__write\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:47 (unhandled tool prefix)"
+ },
+ {
+  "agent": "goose",
+  "event": "Stop",
+  "stdin": "{\"event\":\"Stop\",\"session_id\":\"goose-1\",\"last_assistant_message\":\"done\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:31"
+ },
+ {
+  "agent": "goose",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"goose-1\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "goose",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"goose-1\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "internal/adapters/goose/parse_test.go:39"
+ },
+ {
+  "agent": "goose",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"goose-1\"}",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "goose",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "env": {
+   "PLUGIN_ROOT": "{{ROOT}}/.agents/plugins/trace"
+  },
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "windsurf",
+  "event": "pre_user_prompt",
+  "stdin": "{\"agent_action_name\":\"pre_user_prompt\",\"trajectory_id\":\"conversation-1\",\"timestamp\":\"2026-01-02T03:04:05Z\",\"tool_info\":{\"user_prompt\":\"add search\"}}",
+  "source": "internal/adapters/windsurf/parse_test.go:19"
+ },
+ {
+  "agent": "windsurf",
+  "event": "post_read_code",
+  "stdin": "{\"agent_action_name\":\"post_read_code\",\"trajectory_id\":\"conversation-1\",\"timestamp\":\"2026-01-02T03:04:05Z\",\"tool_info\":{\"file_path\":\"{{ROOT}}/main.go\"}}",
+  "source": "internal/adapters/windsurf/parse_test.go:20"
+ },
+ {
+  "agent": "windsurf",
+  "event": "post_write_code",
+  "stdin": "{\"agent_action_name\":\"post_write_code\",\"trajectory_id\":\"conversation-1\",\"timestamp\":\"2026-01-02T03:04:05Z\",\"tool_info\":{\"file_path\":\"{{ROOT}}/main.go\"}}",
+  "source": "internal/adapters/windsurf/parse_test.go:21"
+ },
+ {
+  "agent": "windsurf",
+  "event": "post_run_command",
+  "stdin": "{\"agent_action_name\":\"post_run_command\",\"trajectory_id\":\"conversation-1\",\"timestamp\":\"2026-01-02T03:04:05Z\",\"tool_info\":{\"command_line\":\"go test ./...\"}}",
+  "source": "internal/adapters/windsurf/parse_test.go:22"
+ },
+ {
+  "agent": "windsurf",
+  "event": "post_cascade_response",
+  "stdin": "{\"agent_action_name\":\"post_cascade_response\",\"trajectory_id\":\"conversation-1\",\"timestamp\":\"2026-01-02T03:04:05Z\",\"tool_info\":{\"response\":\"done\"}}",
+  "source": "internal/adapters/windsurf/parse_test.go:23"
+ },
+ {
+  "agent": "windsurf",
+  "event": "post_write_code",
+  "stdin": "{\"agent_action_name\":\"pre_user_prompt\"}",
+  "source": "internal/adapters/windsurf/parse_test.go:44 (action mismatch -> error)"
+ },
+ {
+  "agent": "windsurf",
+  "event": "other",
+  "stdin": "{\"agent_action_name\":\"other\"}",
+  "source": "internal/adapters/windsurf/parse_test.go:41 (unknown event)"
+ },
+ {
+  "agent": "windsurf",
+  "event": "pre_user_prompt",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "factory",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:19"
+ },
+ {
+  "agent": "factory",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"fix it\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:20"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Create\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:21"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:53"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"ApplyPatch\",\"tool_input\":{\"path\":\"{{ROOT}}/b.go\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Execute\",\"tool_input\":{\"command\":\"make\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived"
+ },
+ {
+  "agent": "factory",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Grep\",\"tool_input\":{}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "factory",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:37"
+ },
+ {
+  "agent": "factory",
+  "event": "Notification",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"notification_type\":\"idle_prompt\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:38"
+ },
+ {
+  "agent": "factory",
+  "event": "Notification",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"notification_type\":\"permission_prompt\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:39"
+ },
+ {
+  "agent": "factory",
+  "event": "SubagentStop",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"task_result\":\"subagent finished\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:60"
+ },
+ {
+  "agent": "factory",
+  "event": "SubagentStop",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\",\"task_result\":{\"status\":\"done\"}}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:64"
+ },
+ {
+  "agent": "factory",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "internal/adapters/factory/parse_test.go:40"
+ },
+ {
+  "agent": "factory",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"fac-1\",\"cwd\":\"{{ROOT}}\"}",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "factory",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "env": {
+   "FACTORY_PROJECT_DIR": "{{ROOT}}"
+  },
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "kilo",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\"}",
+  "source": "internal/adapters/kilo/plugin.ts:72"
+ },
+ {
+  "agent": "kilo",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\",\"prompt\":\"rename the helper\"}",
+  "source": "internal/adapters/kilo/plugin.ts:67"
+ },
+ {
+  "agent": "kilo",
+  "event": "file_read",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "internal/adapters/kilo/plugin.ts:56"
+ },
+ {
+  "agent": "kilo",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\",\"tool_name\":\"edit\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "internal/adapters/kilo/plugin.ts:58"
+ },
+ {
+  "agent": "kilo",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\",\"tool_name\":\"bash\",\"paths\":[]}",
+  "source": "internal/adapters/kilo/plugin.ts:58"
+ },
+ {
+  "agent": "kilo",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\",\"context_type\":\"response\",\"text\":\"Renamed the helper.\"}",
+  "source": "internal/adapters/kilo/plugin.ts:93"
+ },
+ {
+  "agent": "kilo",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\"}",
+  "source": "internal/adapters/kilo/plugin.ts:95"
+ },
+ {
+  "agent": "kilo",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\"}",
+  "source": "internal/adapters/kilo/plugin.ts:96"
+ },
+ {
+  "agent": "kilo",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\"}",
+  "source": "internal/adapters/kilo/plugin.ts:101"
+ },
+ {
+  "agent": "kilo",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"project_loaded\":false,\"session_id\":\"ses_kilo1\"}",
+  "source": "derived (unknown event, passed verbatim as kind)"
+ },
+ {
+  "agent": "kilo",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "pi",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:46"
+ },
+ {
+  "agent": "pi",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\",\"prompt\":\"add logging\"}",
+  "source": "internal/adapters/pi/extension.ts:48"
+ },
+ {
+  "agent": "pi",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\",\"tool_name\":\"write\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "internal/adapters/pi/extension.ts:59"
+ },
+ {
+  "agent": "pi",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\",\"tool_name\":\"bash\",\"paths\":[]}",
+  "source": "internal/adapters/pi/extension.ts:59"
+ },
+ {
+  "agent": "pi",
+  "event": "file_read",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\",\"tool_name\":\"read\",\"paths\":[\"a.go\"]}",
+  "source": "internal/adapters/pi/extension.ts:60"
+ },
+ {
+  "agent": "pi",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\",\"context_type\":\"response\",\"text\":\"Added logging.\"}",
+  "source": "internal/adapters/pi/extension.ts:69"
+ },
+ {
+  "agent": "pi",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:70"
+ },
+ {
+  "agent": "pi",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:71"
+ },
+ {
+  "agent": "pi",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:74"
+ },
+ {
+  "agent": "pi",
+  "event": "tool_execution_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"pi-sess-1\"}",
+  "source": "derived (unknown event: pi-native name, not a Trace kind)"
+ },
+ {
+  "agent": "pi",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "omp",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:46"
+ },
+ {
+  "agent": "omp",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\",\"prompt\":\"add logging\"}",
+  "source": "internal/adapters/pi/extension.ts:48"
+ },
+ {
+  "agent": "omp",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\",\"tool_name\":\"write\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "internal/adapters/pi/extension.ts:59"
+ },
+ {
+  "agent": "omp",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\",\"tool_name\":\"bash\",\"paths\":[]}",
+  "source": "internal/adapters/pi/extension.ts:59"
+ },
+ {
+  "agent": "omp",
+  "event": "file_read",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\",\"tool_name\":\"read\",\"paths\":[\"a.go\"]}",
+  "source": "internal/adapters/pi/extension.ts:60"
+ },
+ {
+  "agent": "omp",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\",\"context_type\":\"response\",\"text\":\"Added logging.\"}",
+  "source": "internal/adapters/pi/extension.ts:69"
+ },
+ {
+  "agent": "omp",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:70"
+ },
+ {
+  "agent": "omp",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:71"
+ },
+ {
+  "agent": "omp",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\"}",
+  "source": "internal/adapters/pi/extension.ts:74"
+ },
+ {
+  "agent": "omp",
+  "event": "tool_execution_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"omp-sess-1\"}",
+  "source": "derived (unknown event: pi-native name, not a Trace kind)"
+ },
+ {
+  "agent": "omp",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "qwen",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\"}",
+  "source": "internal/adapters/qwen/parse_test.go:20"
+ },
+ {
+  "agent": "qwen",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"submitted_prompt\":\"fix it\"}",
+  "source": "internal/adapters/qwen/parse_test.go:21"
+ },
+ {
+  "agent": "qwen",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"internal tool continuation\"}",
+  "source": "internal/adapters/qwen/parse_test.go:39 (no submitted_prompt -> ignored)"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"write_file\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/qwen/parse_test.go:22"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"replace\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/qwen/parse_test.go:48"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"edit\",\"tool_input\":{\"path\":\"b.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"run_shell_command\",\"tool_input\":{\"command\":\"go vet ./...\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"read_file\",\"tool_input\":{\"absolute_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "qwen",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"glob\",\"tool_input\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "qwen",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"last_assistant_message\":\"done\"}",
+  "source": "internal/adapters/qwen/parse_test.go:23"
+ },
+ {
+  "agent": "qwen",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"agent_id\":\"child\"}",
+  "source": "internal/adapters/qwen/parse_test.go:42 (subagent ignored)"
+ },
+ {
+  "agent": "qwen",
+  "event": "StopFailure",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/qwen/parse_test.go:45"
+ },
+ {
+  "agent": "qwen",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/qwen/parse_test.go:24"
+ },
+ {
+  "agent": "qwen",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionEnd\"}",
+  "source": "derived (hook_event_name mismatch -> error)"
+ },
+ {
+  "agent": "qwen",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"qwen-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "qwen",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "gemini",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\",\"transcript_path\":\"{{ROOT}}/.gemini-transcript.json\"}",
+  "source": "internal/adapters/gemini/parse_test.go:14"
+ },
+ {
+  "agent": "gemini",
+  "event": "BeforeAgent",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"BeforeAgent\",\"prompt\":\"hello\"}",
+  "source": "internal/adapters/gemini/parse_test.go:15"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterTool",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"AfterTool\",\"tool_name\":\"write_file\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/gemini/parse_test.go:16"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterTool",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"replace\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/gemini/parse_test.go:43"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterTool",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"run_shell_command\",\"tool_input\":{\"command\":\"go test ./...\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterTool",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"read_file\",\"tool_input\":{\"absolute_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived (read_file not handled)"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterAgent",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"AfterAgent\",\"prompt_response\":\"Done.\"}",
+  "source": "internal/adapters/gemini/parse_test.go:29"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterAgent",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/gemini/parse_test.go:40"
+ },
+ {
+  "agent": "gemini",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/gemini/parse_test.go:41"
+ },
+ {
+  "agent": "gemini",
+  "event": "AfterAgent",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"BeforeAgent\"}",
+  "source": "derived (hook_event_name mismatch -> error)"
+ },
+ {
+  "agent": "gemini",
+  "event": "BeforeTool",
+  "stdin": "{\"session_id\":\"gem-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "gemini",
+  "event": "BeforeAgent",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "cursor",
+  "event": "sessionStart",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"sessionStart\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cursor/parse_test.go:15"
+ },
+ {
+  "agent": "cursor",
+  "event": "beforeSubmitPrompt",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"beforeSubmitPrompt\",\"workspace_roots\":[\"{{ROOT}}\"],\"prompt\":\"hello\",\"transcript_path\":\"{{ROOT}}/.cursor-transcript.jsonl\"}",
+  "source": "internal/adapters/cursor/parse_test.go:16"
+ },
+ {
+  "agent": "cursor",
+  "event": "beforeReadFile",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"beforeReadFile\",\"workspace_roots\":[\"{{ROOT}}\"],\"file_path\":\"{{ROOT}}/a.go\"}",
+  "source": "internal/adapters/cursor/parse_test.go:18"
+ },
+ {
+  "agent": "cursor",
+  "event": "afterFileEdit",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"afterFileEdit\",\"workspace_roots\":[\"{{ROOT}}\"],\"file_path\":\"{{ROOT}}/a.go\"}",
+  "source": "internal/adapters/cursor/parse_test.go:17"
+ },
+ {
+  "agent": "cursor",
+  "event": "afterShellExecution",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"afterShellExecution\",\"workspace_roots\":[\"{{ROOT}}\"],\"command\":\"go test ./...\"}",
+  "source": "derived"
+ },
+ {
+  "agent": "cursor",
+  "event": "afterAgentThought",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"afterAgentThought\",\"workspace_roots\":[\"{{ROOT}}\"],\"text\":\"thinking\"}",
+  "source": "internal/adapters/cursor/parse_test.go:19"
+ },
+ {
+  "agent": "cursor",
+  "event": "afterAgentResponse",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"afterAgentResponse\",\"workspace_roots\":[\"{{ROOT}}\"],\"text\":\"done\"}",
+  "source": "internal/adapters/cursor/parse_test.go:20"
+ },
+ {
+  "agent": "cursor",
+  "event": "subagentStop",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"subagentStop\",\"workspace_roots\":[\"{{ROOT}}\"],\"modified_files\":[\"a.go\"]}",
+  "source": "internal/adapters/cursor/parse_test.go:21"
+ },
+ {
+  "agent": "cursor",
+  "event": "subagentStop",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"subagentStop\",\"workspace_roots\":[\"{{ROOT}}\"],\"summary\":\"subagent found the bug\"}",
+  "source": "internal/adapters/cursor/parse_test.go:34"
+ },
+ {
+  "agent": "cursor",
+  "event": "stop",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"stop\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cursor/parse_test.go:45"
+ },
+ {
+  "agent": "cursor",
+  "event": "sessionEnd",
+  "stdin": "{\"session_id\":\"conv-1\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cursor/parse_test.go:46"
+ },
+ {
+  "agent": "cursor",
+  "event": "stop",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"beforeSubmitPrompt\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "derived (hook_event_name mismatch -> error)"
+ },
+ {
+  "agent": "cursor",
+  "event": "beforeShellExecution",
+  "stdin": "{\"conversation_id\":\"conv-1\",\"hook_event_name\":\"beforeShellExecution\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "cursor",
+  "event": "beforeSubmitPrompt",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskStart",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cline/adapter_test.go:240"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskStart",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"taskStart\":{\"taskMetadata\":{\"initialTask\":\"Fix main\"}}}",
+  "source": "internal/adapters/cline/adapter_test.go:208"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskResume",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cline/adapter_test.go:213"
+ },
+ {
+  "agent": "cline",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"userPromptSubmit\":{\"prompt\":\"hello\"}}",
+  "source": "internal/adapters/cline/adapter_test.go:241"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"write_to_file\",\"success\":true,\"parameters\":{\"path\":\"main.go\"}}}",
+  "source": "internal/adapters/cline/adapter_test.go:169"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"replace_in_file\",\"success\":true,\"parameters\":{\"path\":\"{{ROOT}}/a.go\"}}}",
+  "source": "derived"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"execute_command\",\"success\":true,\"parameters\":{\"command\":\"go test ./...\"}}}",
+  "source": "derived"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"read_file\",\"success\":true,\"parameters\":{\"path\":\"{{ROOT}}/main.go\"}}}",
+  "source": "internal/adapters/cline/adapter_test.go:170"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"read_files\",\"success\":true,\"parameters\":{\"files\":[{\"path\":\"a.go\"},{\"file_path\":\"b.go\"}]}}}",
+  "source": "internal/adapters/cline/adapter_test.go:191"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"write_to_file\",\"success\":false,\"parameters\":{\"path\":\"a.go\"}}}",
+  "source": "internal/adapters/cline/adapter_test.go:222 (failed tool -> scan)"
+ },
+ {
+  "agent": "cline",
+  "event": "PostToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"postToolUse\":{\"toolName\":\"search_files\",\"success\":true,\"parameters\":{}}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskComplete",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"turn\":{\"outputText\":\"Done\"}}",
+  "source": "internal/adapters/cline/adapter_test.go:282"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskComplete",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"],\"parent_agent_id\":\"parent\"}",
+  "source": "internal/adapters/cline/adapter_test.go:256 (subagent ignored)"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskError",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cline/adapter_test.go:265"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskCancel",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/cline/adapter_test.go:265"
+ },
+ {
+  "agent": "cline",
+  "event": "SessionShutdown",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "derived"
+ },
+ {
+  "agent": "cline",
+  "event": "PreToolUse",
+  "stdin": "{\"taskId\":\"task-1\",\"workspaceRoots\":[\"{{ROOT}}\"]}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "cline",
+  "event": "TaskStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "poolside",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/poolside/adapter_test.go:234"
+ },
+ {
+  "agent": "poolside",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"fix the bug\"}",
+  "source": "internal/adapters/poolside/adapter_test.go:235"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"write\",\"tool_input\":{\"path\":\"a.go\"}}",
+  "source": "internal/adapters/poolside/adapter_test.go:236"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"edit\",\"tool_input\":{\"path\":\"{{ROOT}}/b.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"remove\",\"tool_input\":{\"path\":\"old.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"shell\",\"tool_input\":{}}",
+  "source": "derived"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"read\",\"tool_input\":{\"path\":\"a.go\"}}",
+  "source": "internal/adapters/poolside/adapter_test.go:237"
+ },
+ {
+  "agent": "poolside",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"search\",\"tool_input\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "poolside",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"reason\":\"end_turn\"}",
+  "source": "internal/adapters/poolside/adapter_test.go:238"
+ },
+ {
+  "agent": "poolside",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\"}",
+  "source": "internal/adapters/poolside/adapter_test.go:239 (mismatch ignored)"
+ },
+ {
+  "agent": "poolside",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"pool-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event: not handled by poolside)"
+ },
+ {
+  "agent": "poolside",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionStart\",\"transcript_path\":\"{{ROOT}}/.claude-transcript.jsonl\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:20"
+ },
+ {
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"hello\",\"transcript_path\":\"{{ROOT}}/.claude-transcript.jsonl\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:21"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/claudecode/parse_test.go:22"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "derived (relative path joined to cwd)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"MultiEdit\",\"tool_input\":{\"file_path\":\"{{ROOT}}/b.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"NotebookEdit\",\"tool_input\":{\"notebook_path\":\"{{ROOT}}/nb.ipynb\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"go test ./...\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"agent_id\":\"child\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/claudecode/parse_test.go:99 (subagent edit kept)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived (Read not handled)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"Stop\",\"last_assistant_message\":\"Finished the edit.\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:38"
+ },
+ {
+  "agent": "claude-code",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"agent_id\":\"child\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:98 (subagent ignored)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "StopFailure",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"StopFailure\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:95"
+ },
+ {
+  "agent": "claude-code",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/claudecode/parse_test.go:96"
+ },
+ {
+  "agent": "claude-code",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"SessionEnd\"}",
+  "source": "derived (hook_event_name mismatch -> error)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"cc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "openclaude",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:34"
+ },
+ {
+  "agent": "openclaude",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"hello\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:35"
+ },
+ {
+  "agent": "openclaude",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/openclaude/adapter_test.go:64"
+ },
+ {
+  "agent": "openclaude",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oc-1\",\"agent_id\":\"child\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "internal/adapters/openclaude/adapter_test.go:40"
+ },
+ {
+  "agent": "openclaude",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"make\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "openclaude",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"oc-1\",\"agent_id\":\"child\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"internal\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:41 (subagent ignored)"
+ },
+ {
+  "agent": "openclaude",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\",\"last_assistant_message\":\"done\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:57"
+ },
+ {
+  "agent": "openclaude",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:37"
+ },
+ {
+  "agent": "openclaude",
+  "event": "StopFailure",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"StopFailure\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:38"
+ },
+ {
+  "agent": "openclaude",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/openclaude/adapter_test.go:42"
+ },
+ {
+  "agent": "openclaude",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"oc-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "openclaude",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "codex",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"transcript_path\":\"{{ROOT}}/.codex-rollout.jsonl\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:17"
+ },
+ {
+  "agent": "codex",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"do it\",\"transcript_path\":\"{{ROOT}}/.codex-rollout.jsonl\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:18"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"{{ROOT}}/x.go\"}}",
+  "source": "internal/adapters/codexhook/hooks_test.go:19"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"{{ROOT}}/y.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"path\":\"{{ROOT}}/x.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"go test ./...\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"exec_command\",\"tool_input\":{}}",
+  "source": "derived"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"{{ROOT}}/x.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "codex",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"web_search\",\"tool_input\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "codex",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\",\"last_assistant_message\":\"done\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:29"
+ },
+ {
+  "agent": "codex",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:33"
+ },
+ {
+  "agent": "codex",
+  "event": "Interrupt",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:37"
+ },
+ {
+  "agent": "codex",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/codexhook/hooks_test.go:20"
+ },
+ {
+  "agent": "codex",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"cx-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "codex",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "kimi",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:79"
+ },
+ {
+  "agent": "kimi",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"hello\",\"transcript_path\":\"{{ROOT}}/.kimi-context.jsonl\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:80"
+ },
+ {
+  "agent": "kimi",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":[{\"type\":\"text\",\"text\":\"Explain main.txt\"},{\"type\":\"image\",\"text\":\"ignore\"}]}",
+  "source": "internal/adapters/kimi/adapter_test.go:94"
+ },
+ {
+  "agent": "kimi",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"kimi-1\",\"agent_id\":\"subagent\",\"cwd\":\"{{ROOT}}\",\"prompt\":[{\"type\":\"text\",\"text\":\"child\"}]}",
+  "source": "internal/adapters/kimi/adapter_test.go:99 (subagent ignored)"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"WriteFile\",\"tool_input\":{\"file_path\":\"a.go\"}}",
+  "source": "internal/adapters/kimi/adapter_test.go:153"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"StrReplaceFile\",\"tool_input\":{\"path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Shell\",\"tool_input\":{\"command\":\"ls\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Edit\",\"tool_input\":{\"path\":\"a.go\"}}",
+  "source": "internal/adapters/kimi/adapter_test.go:157"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"ReadFile\",\"tool_input\":{\"file_path\":\"{{ROOT}}/other.go\"}}",
+  "source": "internal/adapters/kimi/adapter_test.go:154"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Read\",\"tool_input\":{\"path\":\"a.go\"}}",
+  "source": "internal/adapters/kimi/adapter_test.go:158"
+ },
+ {
+  "agent": "kimi",
+  "event": "PostToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"Glob\",\"tool_input\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "kimi",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\",\"last_assistant_message\":\"done\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:122"
+ },
+ {
+  "agent": "kimi",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:108"
+ },
+ {
+  "agent": "kimi",
+  "event": "StopFailure",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:108"
+ },
+ {
+  "agent": "kimi",
+  "event": "Interrupt",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:108"
+ },
+ {
+  "agent": "kimi",
+  "event": "SessionEnd",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/kimi/adapter_test.go:108"
+ },
+ {
+  "agent": "kimi",
+  "event": "PreToolUse",
+  "stdin": "{\"session_id\":\"kimi-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "kimi",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "zoo",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\",\"prompt\":\"add retries\"}",
+  "source": "internal/adapters/zoo/extension.js:66"
+ },
+ {
+  "agent": "zoo",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\"}",
+  "source": "internal/adapters/zoo/extension.js:70"
+ },
+ {
+  "agent": "zoo",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\",\"text\":\"Added retries.\"}",
+  "source": "internal/adapters/zoo/extension.js:71"
+ },
+ {
+  "agent": "zoo",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\"}",
+  "source": "internal/adapters/zoo/extension.js:80"
+ },
+ {
+  "agent": "zoo",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\"}",
+  "source": "derived (not emitted by zoo extension; generic passthrough)"
+ },
+ {
+  "agent": "zoo",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"zoo-task-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "zoo",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "amp",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\"}",
+  "source": "internal/adapters/amp/plugin.ts:39"
+ },
+ {
+  "agent": "amp",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\",\"prompt\":\"tidy imports\"}",
+  "source": "internal/adapters/amp/plugin.ts:42"
+ },
+ {
+  "agent": "amp",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\",\"tool_name\":\"edit_file\",\"paths\":[\"{{ROOT}}/a.go\",\"{{ROOT}}/b.go\"]}",
+  "source": "internal/adapters/amp/plugin.ts:51"
+ },
+ {
+  "agent": "amp",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\",\"context_type\":\"response\",\"text\":\"Imports tidied.\"}",
+  "source": "internal/adapters/amp/plugin.ts:63"
+ },
+ {
+  "agent": "amp",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\"}",
+  "source": "internal/adapters/amp/plugin.ts:65"
+ },
+ {
+  "agent": "amp",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\"}",
+  "source": "internal/adapters/amp/plugin.ts:66"
+ },
+ {
+  "agent": "amp",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"T-amp-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "amp",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "opencode",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\"}",
+  "source": "internal/adapters/opencode/global.ts:69"
+ },
+ {
+  "agent": "opencode",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"prompt\":\"add a flag\"}",
+  "source": "internal/adapters/opencode/global.ts:70"
+ },
+ {
+  "agent": "opencode",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"context_type\":\"thinking\",\"text\":\"considering flags\"}",
+  "source": "internal/adapters/opencode/global.ts:74"
+ },
+ {
+  "agent": "opencode",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"context_type\":\"response\",\"text\":\"Added the flag.\"}",
+  "source": "internal/adapters/opencode/global.ts:74"
+ },
+ {
+  "agent": "opencode",
+  "event": "file_read",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"paths\":[\"{{ROOT}}/main.go\"]}",
+  "source": "internal/adapters/opencode/global.ts:92"
+ },
+ {
+  "agent": "opencode",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"tool_name\":\"edit\",\"paths\":[\"{{ROOT}}/main.go\"]}",
+  "source": "internal/adapters/opencode/global.ts:94"
+ },
+ {
+  "agent": "opencode",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\",\"tool_name\":\"bash\",\"paths\":[]}",
+  "source": "internal/adapters/opencode/global.ts:94"
+ },
+ {
+  "agent": "opencode",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\"}",
+  "source": "internal/adapters/opencode/global.ts:98"
+ },
+ {
+  "agent": "opencode",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\"}",
+  "source": "internal/adapters/opencode/global.ts:98"
+ },
+ {
+  "agent": "opencode",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\"}",
+  "source": "internal/adapters/opencode/global.ts:101"
+ },
+ {
+  "agent": "opencode",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"ses_oc1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "opencode",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "copilot",
+  "event": "sessionStart",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"timestamp\":1767323045000}",
+  "source": "internal/adapters/copilot/parse_test.go:20"
+ },
+ {
+  "agent": "copilot",
+  "event": "userPromptSubmitted",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"prompt\":\"fix it\"}",
+  "source": "internal/adapters/copilot/parse_test.go:21"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"edit\",\"toolArgs\":{\"path\":\"{{ROOT}}/main.go\"}}",
+  "source": "internal/adapters/copilot/parse_test.go:22"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"create\",\"toolArgs\":\"{\\\"path\\\":\\\"file.go\\\"}\"}",
+  "source": "internal/adapters/copilot/parse_test.go:154 (string-encoded toolArgs)"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"bash\",\"toolArgs\":{\"command\":\"go test ./...\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"view\",\"toolArgs\":{\"file_path\":\"{{ROOT}}/main.go\"}}",
+  "source": "internal/adapters/copilot/parse_test.go:23"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"agentId\":\"child\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"edit\",\"toolArgs\":{\"path\":\"{{ROOT}}/main.go\"}}",
+  "source": "internal/adapters/copilot/parse_test.go:52 (subagent edit kept)"
+ },
+ {
+  "agent": "copilot",
+  "event": "postToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"toolName\":\"grep\"}",
+  "source": "internal/adapters/copilot/parse_test.go:43 (unhandled tool)"
+ },
+ {
+  "agent": "copilot",
+  "event": "agentStop",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/copilot/parse_test.go:35"
+ },
+ {
+  "agent": "copilot",
+  "event": "agentStop",
+  "stdin": "{\"sessionId\":\"cop-1\",\"agentId\":\"child\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "internal/adapters/copilot/parse_test.go:46 (subagent ignored)"
+ },
+ {
+  "agent": "copilot",
+  "event": "sessionEnd",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\",\"reason\":\"abort\"}",
+  "source": "internal/adapters/copilot/parse_test.go:39"
+ },
+ {
+  "agent": "copilot",
+  "event": "preToolUse",
+  "stdin": "{\"sessionId\":\"cop-1\",\"cwd\":\"{{ROOT}}\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "copilot",
+  "event": "sessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "auggie",
+  "event": "SessionStart",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/auggie/adapter_test.go:17"
+ },
+ {
+  "agent": "auggie",
+  "event": "PromptSubmit",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"user_prompt\":\"fix the loop\"}",
+  "source": "internal/adapters/auggie/adapter_test.go:18"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"tool_name\":\"edit\",\"tool_input\":{\"path\":\"src/a.go\"}}",
+  "source": "internal/adapters/auggie/adapter_test.go:51"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"cwd\":\"{{ROOT}}\",\"tool_name\":\"read\",\"tool_input\":{\"path\":\"a.go\"}}",
+  "source": "internal/adapters/auggie/adapter_test.go:70 (cwd root)"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"tool_name\":\"other\",\"tool_is_error\":true,\"tool_input\":{\"path\":\"src/a.go\"},\"file_changes\":[{\"path\":\"src/a.go\"},{\"path\":\"{{ROOT}}/src/b.go\"}]}",
+  "source": "internal/adapters/auggie/adapter_test.go:58"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"tool_name\":\"launch-process\",\"tool_input\":{}}",
+  "source": "derived"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"tool_name\":\"edit\",\"tool_is_error\":true}",
+  "source": "internal/adapters/auggie/adapter_test.go:21 (error ignored)"
+ },
+ {
+  "agent": "auggie",
+  "event": "PostToolUse",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"tool_name\":\"codebase-retrieval\"}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "auggie",
+  "event": "Stop",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"agent_stop_cause\":\"end_turn\"}",
+  "source": "internal/adapters/auggie/adapter_test.go:22"
+ },
+ {
+  "agent": "auggie",
+  "event": "Stop",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"conversation\":{\"agentTextResponse\":\"done\",\"agentCodeResponse\":[{\"content\":\"ignore me\"}]}}",
+  "source": "internal/adapters/auggie/adapter_test.go:47"
+ },
+ {
+  "agent": "auggie",
+  "event": "SessionEnd",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"]}",
+  "source": "internal/adapters/auggie/adapter_test.go:23"
+ },
+ {
+  "agent": "auggie",
+  "event": "Stop",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"hook_event_name\":\"SessionEnd\"}",
+  "source": "internal/adapters/auggie/adapter_test.go:24 (mismatch ignored)"
+ },
+ {
+  "agent": "auggie",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"conversation_id\":\"aug-1\",\"workspace_roots\":[\"{{ROOT}}\"],\"user_prompt\":\"wrong name\"}",
+  "source": "derived (unknown event: auggie uses PromptSubmit)"
+ },
+ {
+  "agent": "auggie",
+  "event": "PromptSubmit",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "hermes",
+  "event": "pre_llm_call",
+  "stdin": "{\"session_id\":\"her-1\",\"user_message\":\"fix the build\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:51"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_llm_call",
+  "stdin": "{\"session_id\":\"her-1\",\"assistant_response\":\"finished\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:52"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_llm_call",
+  "stdin": "{\"session_id\":\"her-1\"}",
+  "source": "derived"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"write_file\",\"path\":\"{{ROOT}}/a.go\",\"status\":\"ok\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:54"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"patch\",\"path\":\"a.go\"}",
+  "source": "derived (relative path, not joined)"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"terminal\",\"status\":\"ok\"}",
+  "source": "derived"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"read_file\",\"path\":\"{{ROOT}}/a.go\",\"status\":\"ok\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:55"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"write_file\",\"status\":\"blocked\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:56 (non-ok status ignored)"
+ },
+ {
+  "agent": "hermes",
+  "event": "post_tool_call",
+  "stdin": "{\"session_id\":\"her-1\",\"tool_name\":\"web_search\",\"status\":\"ok\"}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "hermes",
+  "event": "on_session_end",
+  "stdin": "{\"session_id\":\"her-1\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:53"
+ },
+ {
+  "agent": "hermes",
+  "event": "on_session_finalize",
+  "stdin": "{\"session_id\":\"her-1\"}",
+  "source": "internal/adapters/hermes/adapter_test.go:57"
+ },
+ {
+  "agent": "hermes",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"her-1\"}",
+  "source": "derived (unknown event for hermes)"
+ },
+ {
+  "agent": "hermes",
+  "event": "pre_llm_call",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "agy",
+  "event": "SessionStart",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"workspacePaths\":[\"{{ROOT}}\"],\"transcriptPath\":\"{{ROOT}}/.agy-transcript.jsonl\",\"modelName\":\"gemini-test\"}",
+  "source": "testdata/agy/hooks.jsonl:1"
+ },
+ {
+  "agent": "agy",
+  "event": "PreInvocation",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"workspacePaths\":[\"{{ROOT}}\"],\"transcriptPath\":\"{{ROOT}}/.agy-transcript.jsonl\",\"invocationNum\":0}",
+  "source": "testdata/agy/hooks.jsonl:2"
+ },
+ {
+  "agent": "agy",
+  "event": "PostToolUse",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"toolCall\":{\"name\":\"replace_file_content\",\"args\":{\"TargetFile\":\"{{ROOT}}/main.go\",\"ReplacementContent\":\"package main\"}},\"stepIdx\":2}",
+  "source": "testdata/agy/hooks.jsonl:3"
+ },
+ {
+  "agent": "agy",
+  "event": "PostToolUse",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"toolCall\":{\"name\":\"write_to_file\",\"args\":{\"TargetFile\":\"new.go\"}}}",
+  "source": "derived (relative joined to root)"
+ },
+ {
+  "agent": "agy",
+  "event": "PostToolUse",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"toolCall\":{\"name\":\"multi_replace_file_content\",\"args\":{\"AbsolutePath\":\"{{ROOT}}/a.go\"}}}",
+  "source": "derived"
+ },
+ {
+  "agent": "agy",
+  "event": "PostToolUse",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"toolCall\":{\"name\":\"run_command\",\"args\":{\"CommandLine\":\"go test ./...\"}}}",
+  "source": "derived"
+ },
+ {
+  "agent": "agy",
+  "event": "PostToolUse",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"toolCall\":{\"name\":\"view_file\",\"args\":{\"AbsolutePath\":\"{{ROOT}}/a.go\"}}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "agy",
+  "event": "Stop",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"transcriptPath\":\"{{ROOT}}/.agy-transcript.jsonl\",\"fullyIdle\":true}",
+  "source": "testdata/agy/hooks.jsonl:4"
+ },
+ {
+  "agent": "agy",
+  "event": "Stop",
+  "stdin": "{\"conversationId\":\"fixture-conversation\",\"fullyIdle\":false}",
+  "source": "internal/adapters/agy/parse_test.go:54"
+ },
+ {
+  "agent": "agy",
+  "event": "Stop",
+  "stdin": "{\"fullyIdle\":true}",
+  "source": "derived (missing conversationId -> error, stdout {\"decision\":\"allow\"})"
+ },
+ {
+  "agent": "agy",
+  "event": "PostInvocation",
+  "stdin": "{\"conversationId\":\"fixture-conversation\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "agy",
+  "event": "Stop",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "grok",
+  "event": "SessionStart",
+  "stdin": "{\"sessionId\":\"grok-1\"}",
+  "source": "internal/adapters/grok/parse_test.go:17"
+ },
+ {
+  "agent": "grok",
+  "event": "UserPromptSubmit",
+  "stdin": "{\"sessionId\":\"grok-1\",\"prompt\":\"build\"}",
+  "source": "internal/adapters/grok/parse_test.go:18"
+ },
+ {
+  "agent": "grok",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\",\"toolName\":\"edit\",\"toolInput\":{\"path\":\"main.go\"}}",
+  "source": "internal/adapters/grok/parse_test.go:19"
+ },
+ {
+  "agent": "grok",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\",\"toolName\":\"write\",\"toolInput\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "grok",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\",\"toolName\":\"run_terminal_command\",\"toolInput\":{}}",
+  "source": "derived"
+ },
+ {
+  "agent": "grok",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\",\"toolName\":\"read\",\"toolInput\":{\"path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived"
+ },
+ {
+  "agent": "grok",
+  "event": "PostToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\",\"toolName\":\"search\",\"toolInput\":{}}",
+  "source": "derived (unhandled tool)"
+ },
+ {
+  "agent": "grok",
+  "event": "Stop",
+  "stdin": "{\"sessionId\":\"grok-1\",\"lastAssistantMessage\":\"done\"}",
+  "source": "internal/adapters/grok/parse_test.go:30"
+ },
+ {
+  "agent": "grok",
+  "event": "Stop",
+  "stdin": "{\"sessionId\":\"grok-1\"}",
+  "source": "internal/adapters/grok/parse_test.go:20"
+ },
+ {
+  "agent": "grok",
+  "event": "Stop",
+  "stdin": "{\"subagentType\":\"test\"}",
+  "source": "internal/adapters/grok/parse_test.go:34 (subagent ignored)"
+ },
+ {
+  "agent": "grok",
+  "event": "SessionEnd",
+  "stdin": "{\"sessionId\":\"grok-1\"}",
+  "source": "internal/adapters/grok/parse_test.go:21"
+ },
+ {
+  "agent": "grok",
+  "event": "PreToolUse",
+  "stdin": "{\"sessionId\":\"grok-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "grok",
+  "event": "SessionStart",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "aider",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\",\"prompt\":\"add docstrings\"}",
+  "source": "internal/adapters/aider/bridge.py:70"
+ },
+ {
+  "agent": "aider",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\"}",
+  "source": "internal/adapters/aider/bridge.py:79"
+ },
+ {
+  "agent": "aider",
+  "event": "turn_context",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\",\"context_type\":\"response\",\"text\":\"Added docstrings.\"}",
+  "source": "internal/adapters/aider/bridge.py:81"
+ },
+ {
+  "agent": "aider",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\"}",
+  "source": "internal/adapters/aider/bridge.py:82"
+ },
+ {
+  "agent": "aider",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\"}",
+  "source": "internal/adapters/aider/bridge.py:90"
+ },
+ {
+  "agent": "aider",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"7f0c2a3e-0000-4000-8000-000000000001\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "aider",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "crewai",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\"}",
+  "source": "internal/adapters/crewai/bridge.py:47"
+ },
+ {
+  "agent": "crewai",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\",\"prompt\":\"summarize the repo\"}",
+  "source": "internal/adapters/crewai/bridge.py:48"
+ },
+ {
+  "agent": "crewai",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\"}",
+  "source": "internal/adapters/crewai/bridge.py:69"
+ },
+ {
+  "agent": "crewai",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\"}",
+  "source": "internal/adapters/crewai/bridge.py:70"
+ },
+ {
+  "agent": "crewai",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\"}",
+  "source": "internal/adapters/crewai/bridge.py:71"
+ },
+ {
+  "agent": "crewai",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crew-run-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "crewai",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "langgraph",
+  "event": "session_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\"}",
+  "source": "internal/adapters/langgraph/bridge.py:48"
+ },
+ {
+  "agent": "langgraph",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\",\"prompt\":\"plan the migration\"}",
+  "source": "internal/adapters/langgraph/bridge.py:49"
+ },
+ {
+  "agent": "langgraph",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\"}",
+  "source": "internal/adapters/langgraph/bridge.py:58"
+ },
+ {
+  "agent": "langgraph",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\"}",
+  "source": "internal/adapters/langgraph/bridge.py:59"
+ },
+ {
+  "agent": "langgraph",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\"}",
+  "source": "derived (not emitted by bridge; generic passthrough)"
+ },
+ {
+  "agent": "langgraph",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"lg-run-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "langgraph",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "codebuff",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"cb-sess-1\",\"prompt\":\"write tests\"}",
+  "source": "internal/adapters/codebuff/bridge.mjs:63"
+ },
+ {
+  "agent": "codebuff",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"cb-sess-1\"}",
+  "source": "internal/adapters/codebuff/bridge.mjs:68"
+ },
+ {
+  "agent": "codebuff",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"cb-sess-1\"}",
+  "source": "internal/adapters/codebuff/bridge.mjs:69"
+ },
+ {
+  "agent": "codebuff",
+  "event": "session_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"cb-sess-1\"}",
+  "source": "internal/adapters/codebuff/bridge.mjs:75"
+ },
+ {
+  "agent": "codebuff",
+  "event": "bogus_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"cb-sess-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "codebuff",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "git",
+  "event": "git_commit",
+  "stdin": "{\"git_sha\":\"2222222222222222222222222222222222222222\"}",
+  "source": "internal/cli/githook.go:25"
+ },
+ {
+  "agent": "git",
+  "event": "git_commit",
+  "stdin": "{\"git_sha\":\"not-a-sha\"}",
+  "source": "internal/cli/githook.go:27 (invalid sha -> no event)"
+ },
+ {
+  "agent": "git",
+  "event": "git_rewrite",
+  "stdin": "amend\n1111111111111111111111111111111111111111 2222222222222222222222222222222222222222\n",
+  "source": "internal/cli/githook.go:33"
+ },
+ {
+  "agent": "git",
+  "event": "git_rewrite",
+  "stdin": "rebase\n1111111111111111111111111111111111111111 3333333333333333333333333333333333333333\n2222222222222222222222222222222222222222 4444444444444444444444444444444444444444\n",
+  "source": "internal/cli/githook.go:33"
+ },
+ {
+  "agent": "git",
+  "event": "git_rewrite",
+  "stdin": "rebase\nzzzz 2222222222222222222222222222222222222222\n\n",
+  "source": "internal/cli/githook.go:38 (invalid lines -> event with no rewrites)"
+ },
+ {
+  "agent": "git",
+  "event": "post_checkout",
+  "stdin": "{\"git_sha\":\"2222222222222222222222222222222222222222\"}",
+  "source": "derived (unknown git event -> parseGenericHook)"
+ },
+ {
+  "agent": "git",
+  "event": "git_commit",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "foo",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"foo-1\",\"prompt\":\"hello\",\"transcript_path\":\"{{ROOT}}/.foo.jsonl\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "foo",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"foo-1\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"{{ROOT}}/a.go\"}}",
+  "source": "derived (generic tool_input.file_path)"
+ },
+ {
+  "agent": "foo",
+  "event": "file_read",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"foo-1\",\"paths\":[\"{{ROOT}}/a.go\"],\"at\":1767323045000}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "foo",
+  "event": "whatever_event",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"foo-1\"}",
+  "source": "derived (unknown event)"
+ },
+ {
+  "agent": "foo",
+  "event": "turn_end",
+  "stdin": "",
+  "source": "derived (empty stdin accepted by parseGenericHook)"
+ },
+ {
+  "agent": "foo",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records continue turns in-process)"
+ },
+ {
+  "agent": "continue",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"continue-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "continue",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records vibe turns in-process)"
+ },
+ {
+  "agent": "vibe",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"vibe-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "vibe",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_start",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\",\"prompt\":\"hello\"}",
+  "source": "derived (generic; trace run records crush turns in-process)"
+ },
+ {
+  "agent": "crush",
+  "event": "tool_edit",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\",\"paths\":[\"{{ROOT}}/a.go\"]}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_end",
+  "stdin": "{\"cwd\":\"{{ROOT}}\",\"session_id\":\"crush-1\"}",
+  "source": "derived (generic)"
+ },
+ {
+  "agent": "crush",
+  "event": "turn_start",
+  "stdin": "{\"session_id\":\"s1\",\"prompt\":",
+  "source": "derived (malformed JSON)"
+ }
+]

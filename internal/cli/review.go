@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/spf13/cobra"
@@ -158,8 +159,9 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		}
 		return errors.Join(failures...)
 	}}
-	cmd.Flags().StringVar(&agent, "agent", "claude-code", "reviewer (claude-code or codex)")
-	cmd.Flags().StringSliceVar(&agents, "agents", nil, "independent reviewers, e.g. claude-code,codex")
+	names := reviewerNames()
+	cmd.Flags().StringVar(&agent, "agent", "claude-code", "reviewer ("+orList(names)+")")
+	cmd.Flags().StringSliceVar(&agents, "agents", nil, "independent reviewers, e.g. "+strings.Join(names, ","))
 	cmd.Flags().BoolVar(&noLaunch, "no-launch", false, "print the redacted review plan without invoking providers")
 	cmd.Flags().BoolVar(&staged, "staged", false, "review staged changes instead of unstaged changes")
 	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Minute, "deadline per reviewer (1s–10m)")
@@ -167,12 +169,27 @@ func reviewCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 }
 
 func reviewAgentCommand(agent string) (string, []string, error) {
-	switch agent {
-	case "claude-code":
-		return "claude", []string{"--print", "--output-format", "text", "--tools", "", "--strict-mcp-config", "--no-session-persistence"}, nil
-	case "codex":
-		return "codex", []string{"exec", "--sandbox", "read-only", "--ephemeral", "--color", "never", "-"}, nil
-	default:
-		return "", nil, fmt.Errorf("headless review is not supported for %q; choose claude-code or codex", agent)
+	if a, ok := adapters.Lookup(agent); ok {
+		if reviewer, ok := a.(adapters.Reviewer); ok {
+			name, args := reviewer.ReviewCommand()
+			return name, args, nil
+		}
 	}
+	return "", nil, fmt.Errorf("headless review is not supported for %q; choose %s", agent, orList(reviewerNames()))
+}
+
+func reviewerNames() []string {
+	var names []string
+	for _, reviewer := range adapters.Reviewers() {
+		names = append(names, reviewer.Name())
+	}
+	return names
+}
+
+// orList joins names as "a, b or c".
+func orList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
 }

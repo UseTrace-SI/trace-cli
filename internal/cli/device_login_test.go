@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/event"
 	"github.com/UseTrace-SI/trace-cli/internal/syncclient"
@@ -95,10 +96,7 @@ func TestEnableAllIntegrationsAndDisableKeepLogin(t *testing.T) {
 	jsonOutput := true
 	for i := 0; i < 2; i++ {
 		cmd := enableCommand(&jsonOutput)
-		var selected []string
-		for _, item := range globalIntegrations {
-			selected = append(selected, item.Name)
-		}
+		selected := adapters.GlobalNames()
 		cmd.SetArgs([]string{"--agent", strings.Join(selected, ",")})
 		cmd.SetOut(&bytes.Buffer{})
 		if err := cmd.Execute(); err != nil {

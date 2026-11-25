@@ -290,6 +290,7 @@ hosted installer. The former `usetrace-si/tap` standalone tap is unavailable.
 | [Privacy](docs/privacy.md) | Redaction, exclusions, and local storage |
 | [Optional sync](docs/sync.md) | Encryption, recovery, and server protocol |
 | [Release](docs/release.md) | Maintainer checks and packaging |
+| [Adding an agent](docs/adding-an-agent.md) | Adapter capabilities, registry and golden coverage |
 | [Architecture diagram](output/trace-architecture.html) | Standalone responsive runtime and data-model diagrams |
 
 ## Repository layout
@@ -297,8 +298,12 @@ hosted installer. The former `usetrace-si/tap` standalone tap is unavailable.
 | Path | Purpose |
 | --- | --- |
 | `cmd/trace`, `internal/` | Go CLI, daemon, and local storage |
+| `internal/adapters` | Agent integrations: one adapter file per agent implementing `adapters.Adapter` and its optional capabilities, listed in `registry.go`; parsers, installers and plugin sources live in `internal/adapters/<agent>` |
+| `cmd/trace/testdata/golden` | Recorded hook, install, setup, launch, review and run behaviour of every agent, checked against the built binary |
 | `docs/` | CLI, sync, privacy, and release guides |
 | `scripts/` | Install, end-to-end, performance, and Homebrew tooling |
+
+To add an agent, write its package in `internal/adapters/<agent>`, one adapter file `internal/adapters/<agent>.go` and one entry in `registry.go`, then add its hook payloads and name to the golden tests; `TestGoldenAgentListsMatchRegistry` fails until the golden lists match the registry. The hook, init, agent, uninstall, setup, enable, agents, doctor, run, review, fork and resume commands, the daemon's session readers and the engine's transcript reading pick it up from the registry, so no code outside `internal/adapters` changes; only the golden test data and documentation do. [Adding an agent](docs/adding-an-agent.md) lists the steps and what still names agents outside the adapters. After an intended behaviour change, regenerate the golden results with `go test ./cmd/trace -run Golden -update-golden` and review their diff.
 
 The Go module and project Makefile live at the repository root. Run `make lint test` for the CLI and `make test-sync` for its sync client. When the private `trace-platform` repository is checked out beside this one, `make test-sync-integration` exercises both sides of the protocol.
 

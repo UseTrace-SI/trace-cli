@@ -15,7 +15,7 @@ import (
 
 func TestCodexSourcesPreferHooksPerSession(t *testing.T) {
 	var got []event.Event
-	s := &codexSources{process: func(ev event.Event) error { got = append(got, ev); return nil }}
+	s := newSessionSources(func(ev event.Event) error { got = append(got, ev); return nil })
 	hook := event.Event{Agent: "codex", AgentSessionID: "hooked", Kind: event.SessionStart}
 	if err := s.hook(hook); err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestCodexSourcesPreferHooksPerSession(t *testing.T) {
 
 func TestCodexSourcesAllowUnobservedHookKinds(t *testing.T) {
 	var got []event.Event
-	s := &codexSources{process: func(ev event.Event) error { got = append(got, ev); return nil }}
+	s := newSessionSources(func(ev event.Event) error { got = append(got, ev); return nil })
 	ev := event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.SessionStart}
 	if err := s.hook(ev); err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestCodexSourcesAllowUnobservedHookKinds(t *testing.T) {
 
 func TestCodexSourcesPreserveUnobservedTools(t *testing.T) {
 	var got []event.Event
-	s := &codexSources{process: func(ev event.Event) error { got = append(got, ev); return nil }}
+	s := newSessionSources(func(ev event.Event) error { got = append(got, ev); return nil })
 	ev := event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.ToolEdit, ToolName: "exec_command"}
 	if err := s.hook(ev); err != nil {
 		t.Fatal(err)
@@ -82,14 +82,14 @@ func TestCodexSourcesPreserveUnobservedTools(t *testing.T) {
 func TestFailedHookLeavesTranscriptFallback(t *testing.T) {
 	failed := true
 	count := 0
-	s := &codexSources{process: func(event.Event) error {
+	s := newSessionSources(func(event.Event) error {
 		if failed {
 			failed = false
 			return errors.New("failure")
 		}
 		count++
 		return nil
-	}}
+	})
 	ev := event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.TurnStart}
 	if err := s.hook(ev); err == nil {
 		t.Fatal("expected hook failure")
@@ -102,22 +102,22 @@ func TestFailedHookLeavesTranscriptFallback(t *testing.T) {
 func TestCodexHookedStatePruning(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
-		prepare       func(*codexSources)
+		prepare       func(*sessionSources)
 		wantProcessed bool
 	}{
-		{"active session suppresses fallback", func(*codexSources) {}, false},
-		{"session end clears state", func(s *codexSources) {
+		{"active session suppresses fallback", func(*sessionSources) {}, false},
+		{"session end clears state", func(s *sessionSources) {
 			if err := s.hook(event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.SessionEnd}); err != nil {
 				t.Error(err)
 			}
 		}, true},
-		{"expired session clears state", func(s *codexSources) {
-			s.hookedAt["s"] = time.Now().Add(-2 * hookedTTL)
+		{"expired session clears state", func(s *sessionSources) {
+			s.hookedAt[sessionKey{"codex", "s"}] = time.Now().Add(-2 * hookedTTL)
 		}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			processed := 0
-			s := &codexSources{process: func(event.Event) error { processed++; return nil }}
+			s := newSessionSources(func(event.Event) error { processed++; return nil })
 			if err := s.hook(event.Event{Agent: "codex", AgentSessionID: "s", Kind: event.TurnStart}); err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +134,7 @@ func TestCodexHookedStatePruning(t *testing.T) {
 }
 
 func TestCodexHookedMapDoesNotGrowAcrossSessions(t *testing.T) {
-	s := &codexSources{process: func(event.Event) error { return nil }}
+	s := newSessionSources(func(event.Event) error { return nil })
 	for i := 0; i < 100; i++ {
 		session := strconv.Itoa(i)
 		if err := s.hook(event.Event{Agent: "codex", AgentSessionID: session, Kind: event.TurnStart}); err != nil {
@@ -166,7 +166,7 @@ func TestCodexSourcesDoNotDuplicateTurn(t *testing.T) {
 	if err := e.Baseline(); err != nil {
 		t.Fatal(err)
 	}
-	s := &codexSources{process: e.Process}
+	s := newSessionSources(e.Process)
 	ev := event.Event{Agent: "codex", AgentSessionID: "s", Worktree: root, At: time.Now().UnixMilli(), Kind: event.SessionStart}
 	if err := s.hook(ev); err != nil {
 		t.Fatal(err)
@@ -204,5 +204,25 @@ func TestCodexSourcesDoNotDuplicateTurn(t *testing.T) {
 	}
 	if turns != 1 || operations != 1 {
 		t.Fatalf("turns=%d tool operations=%d", turns, operations)
+	}
+}
+
+// Only agents whose adapter reports HooksSupersedeSessions are deduplicated.
+func TestSessionSourcesSupersedeOnlyHookPreferredAgents(t *testing.T) {
+	s := newSessionSources(func(event.Event) error { return nil })
+	if !s.supersede["codex"] || len(s.supersede) != 1 {
+		t.Fatalf("superseded agents: %v", s.supersede)
+	}
+	var got []event.Event
+	s.process = func(ev event.Event) error { got = append(got, ev); return nil }
+	ev := event.Event{Agent: "opencode", AgentSessionID: "s", Kind: event.TurnStart}
+	if err := s.hook(ev); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.transcript(ev); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || len(s.hooked) != 0 {
+		t.Fatalf("events %+v, state %v", got, s.hooked)
 	}
 }

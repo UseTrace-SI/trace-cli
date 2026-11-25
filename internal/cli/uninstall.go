@@ -10,28 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/aider"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/amp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cline"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/codebuff"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/copilot"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/crewai"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cursor"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/factory"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/gemini"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/goose"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/grok"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kilo"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kiro"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/langgraph"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/omp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openclaude"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openhands"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/pi"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/qwen"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/windsurf"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
 	"github.com/spf13/cobra"
@@ -44,71 +23,10 @@ func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := claudecode.Uninstall(root); err != nil {
-			return err
-		}
-		if err := cline.Uninstall(root); err != nil {
-			return err
-		}
-		if err := openclaude.Uninstall(root); err != nil {
-			return err
-		}
-		if err := openhands.UninstallProject(root); err != nil {
-			return err
-		}
-		if err := cursor.Uninstall(root); err != nil {
-			return err
-		}
-		if err := windsurf.Uninstall(root); err != nil {
-			return err
-		}
-		if err := agy.Uninstall(root); err != nil {
-			return err
-		}
-		if err := gemini.Uninstall(root); err != nil {
-			return err
-		}
-		if err := copilot.Uninstall(root); err != nil {
-			return err
-		}
-		if err := qwen.Uninstall(root); err != nil {
-			return err
-		}
-		if err := factory.Uninstall(root); err != nil {
-			return err
-		}
-		if err := pi.Uninstall(root); err != nil {
-			return err
-		}
-		if err := omp.Uninstall(root); err != nil {
-			return err
-		}
-		if err := grok.Uninstall(root); err != nil {
-			return err
-		}
-		if err := goose.Uninstall(root); err != nil {
-			return err
-		}
-		if err := amp.Uninstall(root); err != nil {
-			return err
-		}
-		if err := kilo.Uninstall(root); err != nil {
-			return err
-		}
-		if err := kiro.Uninstall(root); err != nil {
-			return err
-		}
-		if err := langgraph.Uninstall(root); err != nil {
-			return err
-		}
-		if err := crewai.Uninstall(root); err != nil {
-			return err
-		}
-		if err := aider.Uninstall(root); err != nil {
-			return err
-		}
-		if err := codebuff.Uninstall(root); err != nil {
-			return err
+		for _, agent := range adapters.ProjectRemovers() {
+			if err := agent.RemoveProject(root); err != nil {
+				return err
+			}
 		}
 		if err := uninstallMCP(root); err != nil {
 			return err
@@ -116,7 +34,11 @@ func uninstallCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := gitx.UninstallHook(root); err != nil {
 			return err
 		}
-		_ = os.Remove(filepath.Join(root, ".trace", "codex.enabled"))
+		for _, agent := range adapters.Markers() {
+			if marker := agent.EnableMarker(); marker.RemovedByUninstall {
+				_ = os.Remove(filepath.Join(root, ".trace", marker.File))
+			}
+		}
 		pidBytes, err := os.ReadFile(filepath.Join(root, ".trace", "daemon.pid"))
 		if err == nil {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil && daemon.ProcessIsTraceDaemon(pid, root) {

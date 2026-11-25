@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/redact"
 	"github.com/UseTrace-SI/trace-cli/internal/repo"
@@ -81,41 +82,23 @@ func doctorCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 			}
 			return "run: trace daemon start (or any hook will auto-start it)"
 		}())
-		// Any supported adapter is enough; Claude hooks are optional.
+		// Any supported adapter is enough: an enable marker or a file that
+		// shows the agent's project integration.
 		hooksOK := false
-		hooksPath := filepath.Join(root, ".claude", "settings.local.json")
-		if b, err := os.ReadFile(hooksPath); err == nil {
-			if strings.Contains(string(b), " hook claude-code Stop") {
+		for _, agent := range adapters.Markers() {
+			if _, err := os.Stat(filepath.Join(td, agent.EnableMarker().File)); err == nil {
 				hooksOK = true
 			}
 		}
-		for _, name := range []string{"codex.enabled", "opencode.enabled"} {
-			if _, err := os.Stat(filepath.Join(td, name)); err == nil {
-				hooksOK = true
+		for _, agent := range adapters.All() {
+			evidencer, ok := agent.(adapters.ProjectEvidencer)
+			if !ok {
+				continue
 			}
-		}
-		for path, marker := range map[string]string{
-			filepath.Join(root, ".cline", "hooks", "TaskComplete"):                    "Trace Cline CLI hook",
-			filepath.Join(root, ".openclaude", "settings.local.json"):                 " hook openclaude",
-			filepath.Join(root, ".pi", "extensions", "trace", "index.ts"):             "Trace coding-agent extension",
-			filepath.Join(root, ".omp", "extensions", "trace", "index.ts"):            "Trace coding-agent extension",
-			filepath.Join(root, ".grok", "hooks", "trace.json"):                       " hook grok",
-			filepath.Join(root, ".agents", "plugins", "trace", "hooks", "hooks.json"): " hook goose",
-			filepath.Join(root, ".amp", "plugins", "trace.ts"):                        "Trace Amp plugin",
-			filepath.Join(root, ".kilo", "plugin", "trace.ts"):                        "Trace Kilo plugin",
-			filepath.Join(root, ".kiro", "hooks", "trace.json"):                       "Trace managed hook",
-			filepath.Join(root, ".cursor", "hooks.json"):                              " hook cursor",
-			filepath.Join(root, ".agents", "hooks.json"):                              " hook agy",
-			filepath.Join(root, ".devin", "hooks.json"):                               " hook windsurf",
-			filepath.Join(root, ".windsurf", "hooks.json"):                            " hook windsurf",
-			filepath.Join(root, ".gemini", "settings.json"):                           " hook gemini",
-			filepath.Join(root, ".github", "hooks", "usetrace.json"):                  " hook copilot",
-			filepath.Join(root, ".qwen", "settings.json"):                             " hook qwen",
-			filepath.Join(root, ".factory", "hooks.json"):                             " hook factory",
-			filepath.Join(root, ".factory", "settings.json"):                          " hook factory",
-		} {
-			if b, err := os.ReadFile(path); err == nil && strings.Contains(string(b), marker) {
-				hooksOK = true
+			for _, evidence := range evidencer.InstallEvidence() {
+				if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(evidence.Path))); err == nil && strings.Contains(string(b), evidence.Contains) {
+					hooksOK = true
+				}
 			}
 		}
 		add("agent integration installed", hooksOK, func() string {

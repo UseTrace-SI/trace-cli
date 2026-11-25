@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/restore"
 	"github.com/spf13/cobra"
@@ -34,18 +35,13 @@ func launchAgent(agent, root, context string) error {
 }
 
 func agentLaunchCommand(agent, context string) (string, []string, error) {
-	switch agent {
-	case "claude-code":
-		return "claude", []string{context}, nil
-	case "codex":
-		return "codex", []string{context}, nil
-	case "agy":
-		return "agy", []string{"--prompt-interactive", context}, nil
-	case "cursor":
-		return "agent", []string{context}, nil
-	default:
-		return "", nil, fmt.Errorf("unsupported agent %q", agent)
+	if a, ok := adapters.Lookup(agent); ok {
+		if launcher, ok := a.(adapters.Launcher); ok {
+			name, args := launcher.LaunchCommand(context)
+			return name, args, nil
+		}
 	}
+	return "", nil, fmt.Errorf("unsupported agent %q", agent)
 }
 
 func forkCommand(repoPath *string, jsonOutput *bool) *cobra.Command {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/manifest"
 	tea "github.com/charmbracelet/bubbletea"
@@ -65,7 +66,7 @@ func TestAgentRemoveUninstallsClaudeHooks(t *testing.T) {
 func TestGenericHookRedactsBeforeSpool(t *testing.T) {
 	secret := "sk-abcdefghijklmnopqrstuvwxyz1234567890"
 	body := `{"session_id":"s","prompt":"token ` + secret + `","text":"token ` + secret + `","paths":[".env","src/main.go"]}`
-	ev, err := parseGenericHook("pi", "turn_context", []byte(body), "/repo")
+	ev, err := adapters.ParseGeneric("pi", "turn_context", []byte(body), "/repo")
 	if err != nil {
 		t.Fatal(err)
 	}

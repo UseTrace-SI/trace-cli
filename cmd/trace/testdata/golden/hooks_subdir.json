@@ -1,0 +1,1529 @@
+{
+  "amp-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "amp-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "amp-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "amp-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "amp-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "amp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "amp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "amp",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "amp",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "amp",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "amp",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"amp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "amp",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "amp/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "amp",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"amp\",\"agent_session_id\":\"T-amp-1\",\"worktree\":\"{{BASE}}/subdir-amp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "cline/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "cline",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cline",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "cline",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "cline",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "cline/TaskStart/cwd-root": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cline\",\"agent_session_id\":\"task-1\",\"worktree\":\"{{BASE}}/subdir-cline\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "cline/TaskStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cline",
+      "TaskStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cline\",\"agent_session_id\":\"task-1\",\"worktree\":\"{{BASE}}/subdir-cline\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "copilot-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot-global/sessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cop-1\",\"worktree\":\"{{BASE}}/subdir-copilot\",\"at\":1767323045000}\n"
+    }
+  },
+  "copilot-global/sessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot-global",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cop-1\",\"worktree\":\"{{BASE}}/subdir-copilot\",\"at\":1767323045000}\n"
+    }
+  },
+  "copilot/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "copilot",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "copilot",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "copilot/sessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "copilot",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cop-1\",\"worktree\":\"{{BASE}}/subdir-copilot\",\"at\":1767323045000}\n"
+    }
+  },
+  "copilot/sessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "copilot",
+      "sessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"copilot\",\"agent_session_id\":\"cop-1\",\"worktree\":\"{{BASE}}/subdir-copilot\",\"at\":1767323045000}\n"
+    }
+  },
+  "cursor-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/sessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor-global/sessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor-global",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "cursor",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "cursor",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "cursor/sessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "cursor",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cursor\",\"agent_session_id\":\"conv-1\",\"worktree\":\"{{BASE}}/subdir-cursor\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "cursor/sessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "cursor",
+      "sessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"cursor\",\"agent_session_id\":\"conv-1\",\"worktree\":\"{{BASE}}/subdir-cursor\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "factory-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "factory-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "factory-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "factory-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "factory/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "factory",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"factory\",\"agent_session_id\":\"fac-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "factory/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "factory",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"factory\",\"agent_session_id\":\"fac-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "factory/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "factory",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"factory\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"factory\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "factory/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "factory",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"factory\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"factory\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-factory\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "gemini-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "gemini-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "gemini",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/subdir-gemini\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/subdir-gemini/sub/.gemini-transcript.json\"}\n"
+    }
+  },
+  "gemini/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "gemini",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"gemini\",\"agent_session_id\":\"gem-1\",\"worktree\":\"{{BASE}}/subdir-gemini\",\"at\":\"{{NOW}}\",\"transcript_path\":\"{{BASE}}/subdir-gemini/sub/.gemini-transcript.json\"}\n"
+    }
+  },
+  "gemini/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "gemini",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "gemini/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "gemini",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "kilo-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "kilo",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "kilo",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"kilo\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "kilo",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kilo/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "kilo",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kilo\",\"agent_session_id\":\"ses_kilo1\",\"worktree\":\"{{BASE}}/subdir-kilo\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "kiro-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "kiro",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "kiro",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"kiro\",\"agent_session_id\":\"kiro-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "kiro",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "kiro/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "kiro",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"kiro\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-kiro\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "omp-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "omp-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "omp-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "omp-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "omp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "omp-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "omp",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "omp",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "omp",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "omp",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"omp\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "omp",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "omp/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "omp",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"omp\",\"agent_session_id\":\"omp-sess-1\",\"worktree\":\"{{BASE}}/subdir-omp\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode-v1-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode-v1-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode-v1-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "opencode/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "opencode",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "opencode",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"opencode\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "opencode",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "opencode/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "opencode",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"opencode\",\"agent_session_id\":\"ses_oc1\",\"worktree\":\"{{BASE}}/subdir-opencode\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "pi-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "pi-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "pi-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "pi-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "pi-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi-global/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "pi-global",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "pi",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "pi",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"SessionStart\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "pi",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "pi",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"Stop\",\"agent\":\"pi\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/session_start/cwd-root": {
+    "args": [
+      "hook",
+      "pi",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "pi/session_start/cwd-sub": {
+    "args": [
+      "hook",
+      "pi",
+      "session_start"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"pi\",\"agent_session_id\":\"pi-sess-1\",\"worktree\":\"{{BASE}}/subdir-pi\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "qwen-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "qwen-global",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0
+  },
+  "qwen/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "qwen",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "qwen/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "qwen",
+      "SessionStart"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"session_start\",\"agent\":\"qwen\",\"agent_session_id\":\"qwen-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "qwen/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "qwen",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"qwen\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"qwen\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "qwen/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "qwen",
+      "Stop"
+    ],
+    "stdout": "{}\n",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"tool_edit\",\"agent\":\"qwen\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n{\"kind\":\"turn_end\",\"agent\":\"qwen\",\"agent_session_id\":\"sub-1\",\"worktree\":\"{{BASE}}/subdir-qwen\",\"at\":\"{{NOW}}\"}\n"
+    }
+  },
+  "windsurf-global/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf-global/pre_user_prompt/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"windsurf\",\"agent_session_id\":\"conversation-1\",\"worktree\":\"{{BASE}}/subdir-windsurf\",\"at\":1767323045000,\"prompt\":\"add search\"}\n"
+    }
+  },
+  "windsurf-global/pre_user_prompt/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf-global",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf/SessionStart/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf/SessionStart/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf",
+      "SessionStart"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf/Stop/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf/Stop/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf",
+      "Stop"
+    ],
+    "stdout": "",
+    "exit": 0
+  },
+  "windsurf/pre_user_prompt/cwd-root": {
+    "args": [
+      "hook",
+      "windsurf",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"windsurf\",\"agent_session_id\":\"conversation-1\",\"worktree\":\"{{BASE}}/subdir-windsurf\",\"at\":1767323045000,\"prompt\":\"add search\"}\n"
+    }
+  },
+  "windsurf/pre_user_prompt/cwd-sub": {
+    "args": [
+      "hook",
+      "windsurf",
+      "pre_user_prompt"
+    ],
+    "stdout": "",
+    "exit": 0,
+    "files": {
+      "root/.trace/spool.jsonl": "[0600] {\"kind\":\"turn_start\",\"agent\":\"windsurf\",\"agent_session_id\":\"conversation-1\",\"worktree\":\"{{BASE}}/subdir-windsurf\",\"at\":1767323045000,\"prompt\":\"add search\"}\n"
+    }
+  }
+}

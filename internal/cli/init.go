@@ -10,28 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/agy"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/aider"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/amp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/claudecode"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cline"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/codebuff"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/copilot"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/crewai"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/cursor"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/factory"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/gemini"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/goose"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/grok"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kilo"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/kiro"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/langgraph"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/omp"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openclaude"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/openhands"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/pi"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/qwen"
-	"github.com/UseTrace-SI/trace-cli/internal/adapters/windsurf"
+	"github.com/UseTrace-SI/trace-cli/internal/adapters"
 	"github.com/UseTrace-SI/trace-cli/internal/daemon"
 	"github.com/UseTrace-SI/trace-cli/internal/engine"
 	"github.com/UseTrace-SI/trace-cli/internal/gitx"
@@ -118,7 +97,8 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 	var agent string
 	var ifNeeded bool
 	cmd := &cobra.Command{Use: "init", RunE: func(c *cobra.Command, _ []string) error {
-		if agent != "claude-code" && agent != "codex" && agent != "cursor" && agent != "agy" && agent != "opencode" && agent != "windsurf" && agent != "gemini" && agent != "copilot" && agent != "qwen" && agent != "factory" && agent != "pi" && agent != "omp" && agent != "grok" && agent != "goose" && agent != "amp" && agent != "openclaude" && agent != "openhands" && agent != "kilo" && agent != "kiro" && agent != "langgraph" && agent != "cline" && agent != "crewai" && agent != "aider" && agent != "codebuff" {
+		adapter, ok := adapters.ForProject(agent)
+		if !ok {
 			return fmt.Errorf("unsupported agent %q", agent)
 		}
 		root, err := rootFromFlag(*repoPath)
@@ -137,8 +117,8 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				return err
 			}
 		}
-		if agent == "openhands" {
-			if err := openhands.CheckProject(root); err != nil {
+		if checker, ok := adapter.(adapters.ProjectChecker); ok {
+			if err := checker.CheckProject(root); err != nil {
 				return err
 			}
 		}
@@ -155,102 +135,13 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		defer e.Close()
 		// Create the per-install redaction key now, not in an agent's hook.
 		redact.EnsureMarkerKey()
-		if agent == "claude-code" {
-			if err := claudecode.Install(root); err != nil {
-				return err
+		if m, ok := adapter.(adapters.MarkerEnabled); ok {
+			marker := m.EnableMarker()
+			if err := os.WriteFile(filepath.Join(repo.TraceDir(root), marker.File), []byte("1\n"), 0600); err != nil {
+				return fmt.Errorf("enabling %s adapter: %w", marker.Label, err)
 			}
-		} else if agent == "openclaude" {
-			if err := openclaude.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "openhands" {
-			if err := openhands.InstallProject(root); err != nil {
-				return err
-			}
-		} else if agent == "codex" {
-			if err := os.WriteFile(filepath.Join(repo.TraceDir(root), "codex.enabled"), []byte("1\n"), 0600); err != nil {
-				return fmt.Errorf("enabling Codex adapter: %w", err)
-			}
-		} else if agent == "opencode" {
-			if err := os.WriteFile(filepath.Join(repo.TraceDir(root), "opencode.enabled"), []byte("1\n"), 0600); err != nil {
-				return fmt.Errorf("enabling OpenCode adapter: %w", err)
-			}
-		} else if agent == "cursor" {
-			if err := cursor.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "windsurf" {
-			if err := windsurf.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "gemini" {
-			if err := gemini.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "copilot" {
-			if err := copilot.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "qwen" {
-			if err := qwen.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "factory" {
-			if err := factory.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "pi" {
-			if err := pi.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "omp" {
-			if err := omp.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "grok" {
-			if err := grok.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "goose" {
-			if err := goose.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "cline" {
-			if err := cline.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "codebuff" {
-			if err := codebuff.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "aider" {
-			if err := aider.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "crewai" {
-			if err := crewai.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "langgraph" {
-			if err := langgraph.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "kiro" {
-			if err := kiro.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "kilo" {
-			if err := kilo.Install(root); err != nil {
-				return err
-			}
-		} else if agent == "amp" {
-			if err := amp.Install(root); err != nil {
-				return err
-			}
-		} else {
-			if err := agy.Install(root); err != nil {
-				return err
-			}
+		} else if err := adapter.(adapters.ProjectInstaller).InstallProject(root); err != nil {
+			return err
 		}
 		if err := e.Baseline(); err != nil {
 			return err
@@ -269,12 +160,14 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 		if err := os.WriteFile(filepath.Join(repo.TraceDir(root), "init-complete"), []byte(agent+"\n"), 0600); err != nil {
 			return fmt.Errorf("marking initialization complete: %w", err)
 		}
+		var label, notice string
+		if n, ok := adapter.(adapters.ProjectNoticer); ok {
+			label, notice = n.ProjectNotice()
+		}
 		if *jsonOutput {
 			result := map[string]any{"initialized": true, "repo": root}
-			if agent == "gemini" {
-				result["additional_setup"] = geminiEnableNotice
-			} else if agent == "qwen" {
-				result["additional_setup"] = qwenEnableNotice
+			if notice != "" {
+				result["additional_setup"] = notice
 			}
 			if manualHook != nil {
 				result["git_hook_setup"] = manualHook.Hooks
@@ -291,12 +184,8 @@ func initCommand(repoPath *string, jsonOutput *bool) *cobra.Command {
 				}
 			}
 		}
-		if agent == "gemini" {
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Trace initialized. Gemini hooks installed. %s\n", geminiEnableNotice)
-			return err
-		}
-		if agent == "qwen" {
-			_, err = fmt.Fprintf(c.OutOrStdout(), "Trace initialized. Qwen hooks installed. %s\n", qwenEnableNotice)
+		if notice != "" {
+			_, err = fmt.Fprintf(c.OutOrStdout(), "Trace initialized. %s hooks installed. %s\n", label, notice)
 			return err
 		}
 		_, err = fmt.Fprintf(c.OutOrStdout(), "Trace initialized. %s turns will be recorded here.\n", agent)
