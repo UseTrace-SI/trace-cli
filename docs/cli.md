@@ -174,7 +174,7 @@ Run `trace --help` or `trace <command> --help` for the installed version's full 
 | `trace tui` | Open the local timeline viewer |
 | `trace dashboard [--port N]` | Serve a read-only web view on 127.0.0.1; open the printed URL, whose one-launch token is required for history and is set as a strict HttpOnly cookie. Requests naming any other host are refused |
 | `trace worktree gc` | Remove eligible Trace-created worktrees |
-| `trace gc [--keep-days N] [--dry-run]` | Remove expired history and unused blobs |
+| `trace gc [--keep-days N] [--dry-run]` | Remove expired history and unused blobs. The daemon also runs it automatically with the default 30-day retention at most once a day (hourly while `.trace` exceeds `TRACE_MAX_STORE_BYTES`, default 5 GiB), never while sync is configured; `TRACE_AUTO_GC=0` turns that off |
 | `trace update-check` | Check for a release, at most once per day |
 | `trace export --format agent-trace --out FILE` | Export line attribution as Agent Trace JSONL |
 | `trace login --remote OWNER/REPO --mode pro\|team --endpoint HTTPS_URL [--auto-sync] [--device-auth]` | Sign in with GitHub in a browser; opt into background upload |

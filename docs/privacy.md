@@ -57,6 +57,13 @@ variables `TRACE_MAX_FILE_BYTES`, `TRACE_MAX_CAPTURE_BYTES` and
 process and restart it after changing them. Limit failures preserve the previous
 keyframe and surface as capture errors; hooks remain nonblocking.
 
+The daemon garbage-collects history older than 30 days, as `trace gc` does, at
+most once a day, and hourly while `.trace` exceeds `TRACE_MAX_STORE_BYTES`
+(default 5 GiB). Steps with commits, comments
+or trails and the baseline are kept, and the budget never shortens retention.
+It does not run while sync is configured, so unuploaded history is never
+removed unattended; `TRACE_AUTO_GC=0` turns it off.
+
 Portable handoff bundles contain a consistent SQLite snapshot and referenced
 objects, with mode 0600. Runtime credentials, logs, hook configuration and manual
 companion databases are excluded. Bundles contain exact source bytes and must

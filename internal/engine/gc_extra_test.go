@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -78,5 +80,51 @@ func TestGCCollectsEmptySessions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// An unattended collection keeps unreferenced objects that are still fresh:
+// another process may be storing them for a keyframe it has not recorded.
+func TestGCMinBlobAgeKeepsFreshUnreferencedObjects(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s: %v", out, err)
+	}
+	e, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if err := e.Baseline(); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := e.Blobs.PutBytes([]byte("written by a concurrent rewind\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, err := e.Blobs.PutBytes([]byte("left by a collected keyframe\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalePath := filepath.Join(root, ".trace", "objects", string(stale)[:2], string(stale)[2:])
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(stalePath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.GCWith(GCOptions{KeepDays: 30, MinBlobAge: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Blobs.Get(fresh); err != nil {
+		t.Fatalf("fresh unreferenced object removed: %v", err)
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale unreferenced object kept: %v", err)
+	}
+	// Without a grace period (trace gc), both are collected as before.
+	if _, err := e.GC(30, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Blobs.Get(fresh); err == nil {
+		t.Fatal("trace gc kept an unreferenced object")
 	}
 }

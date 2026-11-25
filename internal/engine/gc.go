@@ -19,9 +19,26 @@ type GCResult struct {
 	DryRun           bool `json:"dry_run"`
 }
 
+// GCOptions selects what GC removes.
+type GCOptions struct {
+	KeepDays int
+	DryRun   bool
+	// MinBlobAge keeps unreferenced objects modified more recently than this.
+	// Another Trace process can be storing objects for a keyframe it has not
+	// recorded yet; an unattended collection must not race it.
+	MinBlobAge time.Duration
+}
+
 func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
+	return e.GCWith(GCOptions{KeepDays: keepDays, DryRun: dryRun})
+}
+
+// GCWith removes expired keyframes and the objects no remaining keyframe or
+// operation references.
+func (e *Engine) GCWith(opts GCOptions) (GCResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	keepDays, dryRun := opts.KeepDays, opts.DryRun
 	if keepDays < 0 {
 		return GCResult{}, fmt.Errorf("keep-days must be nonnegative")
 	}
@@ -215,6 +232,12 @@ func (e *Engine) GC(keepDays int, dryRun bool) (GCResult, error) {
 		hash := blob.Hash(prefix + file)
 		if len(hash) != 64 || marked[hash] {
 			return nil
+		}
+		if opts.MinBlobAge > 0 {
+			info, err := d.Info()
+			if err != nil || time.Since(info.ModTime()) < opts.MinBlobAge {
+				return nil
+			}
 		}
 		if err := os.Remove(p); err != nil {
 			return fmt.Errorf("removing unused blob: %w", err)
