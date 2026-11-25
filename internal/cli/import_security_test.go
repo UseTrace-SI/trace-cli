@@ -313,3 +313,68 @@ func TestBundleRejectsSnapshotPathsIntoGitMetadata(t *testing.T) {
 		})
 	}
 }
+
+// History recorded before a secret exclusion was added can list the file
+// (here a committed .npmrc). Export, handoff bundles and import must still
+// work; a later rewind restores everything else and leaves the file alone.
+func TestBundleCarriesHistoryListingSinceExcludedFiles(t *testing.T) {
+	source := competitiveRepo(t)
+	e, err := engine.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := e.Blobs.PutBytes([]byte("package app\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	npmrc, err := e.Blobs.PutBytes([]byte("registry=https://registry.example/\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mh, err := (manifest.Manifest{"app.go": {Hash: app, Mode: 0644}, ".npmrc": {Hash: npmrc, Mode: 0644}}).Save(e.Blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Exec("INSERT INTO keyframes(id,seq,manifest_hash,tag,created_at) VALUES('k-legacy',1,?,'turn',2)", mh); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := writeBundle(source, archive); err != nil {
+		t.Fatalf("export of history listing .npmrc failed: %v", err)
+	}
+	jsonOutput := false
+	handoff := handoffCommand(&source, &jsonOutput)
+	handoff.SetArgs([]string{"--out", filepath.Join(t.TempDir(), "handoff.tar.gz")})
+	handoff.SetOut(io.Discard)
+	if err := handoff.Execute(); err != nil {
+		t.Fatalf("handoff of history listing .npmrc failed: %v", err)
+	}
+	target := competitiveRepo(t)
+	if err := readBundle(target, archive); err != nil {
+		t.Fatalf("import of history listing .npmrc failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(target, ".npmrc"), []byte("//registry.example/:_authToken=local\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := engine.Open(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Close()
+	if _, _, err := got.Rewind(1, "", false); err != nil {
+		t.Fatalf("rewind to imported step: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(target, "app.go")); err != nil || string(b) != "package app\n" {
+		t.Fatalf("app.go not restored: %q %v", b, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(target, ".npmrc")); err != nil || string(b) != "//registry.example/:_authToken=local\n" {
+		t.Fatalf("rewind touched excluded .npmrc: %q %v", b, err)
+	}
+	dbTarget := competitiveRepo(t)
+	if _, err := importDatabase(context.Background(), dbTarget, filepath.Join(source, ".trace", "trace.db")); err != nil {
+		t.Fatalf("database import of history listing .npmrc failed: %v", err)
+	}
+}

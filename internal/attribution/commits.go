@@ -210,6 +210,12 @@ func decodeRecord(raw string) *commitRecord {
 		if !manifest.Portable(path) {
 			return nil
 		}
+		// A record written before a secret exclusion was added can name the
+		// file; keep the rest of the commit's attribution.
+		if manifest.SecretPath(path) {
+			delete(record.Files, path)
+			continue
+		}
 		for _, run := range runs {
 			if run[0] < 1 || run[1] < run[0] || run[2] < 0 || run[2] >= len(record.Origins) {
 				return nil
@@ -717,7 +723,7 @@ func (r *resolver) recordCommit(info *commitInfo, commit gitx.Commit) (string, e
 	index := map[string]int{}
 	var paths []string
 	for _, change := range changes {
-		if change.Status == 'D' || !manifest.Portable(change.Path) {
+		if change.Status == 'D' || !manifest.Portable(change.Path) || manifest.SecretPath(change.Path) {
 			continue
 		}
 		if len(record.Files) >= maxRecordPaths {

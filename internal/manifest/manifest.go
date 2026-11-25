@@ -87,11 +87,13 @@ func (m Manifest) WithoutExcluded() Manifest {
 }
 
 // Portable reports whether a snapshot path from another history (an imported
-// bundle or a recovery server) is safe to keep: relative, canonical, inside
-// the repository and not excluded.
+// bundle or a recovery server) is structurally safe to keep: relative,
+// canonical, inside the repository and not Git metadata, Trace state or hook
+// configuration. It deliberately accepts secret files: history recorded before
+// a secret exclusion was added can list one, and restores skip them anyway.
 func Portable(rel string) bool {
 	return rel != "" && rel != "." && rel != ".." && !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "../") &&
-		!strings.ContainsAny(rel, "\\\x00") && rel == filepath.ToSlash(filepath.Clean(rel)) && !excluded(rel)
+		!strings.ContainsAny(rel, "\\\x00") && rel == filepath.ToSlash(filepath.Clean(rel)) && !protectedFolded(foldPath(rel))
 }
 
 func gitIgnored(root string, paths []string) (map[string]bool, error) {
